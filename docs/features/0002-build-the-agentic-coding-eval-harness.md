@@ -222,3 +222,17 @@ sweep multiplies it by the config count.
   from the same shell. Egress firewall, proxy env, the /v1 suffix and api vs api_mode are
   all ruled out; a network-isolated sandbox is the leading hypothesis. It is excluded from
   0010 on transport, not on quality, and that distinction has to survive into the write-up.
+- 2026-08-17 — Hermes works; the blocker write-up is replaced by a configuration. It was
+  never a transport fault. The `providers.<name>` map I reverse-engineered from the
+  source is real but is not how a local endpoint is configured, and taking that path
+  produced `Connection error` — which an instrumented listener disproved, since Hermes
+  never opened a connection at all. The documented shape is a top-level `model:` block
+  with `provider: custom`, and it worked immediately.
+  **Hermes refuses any context window under 64,000 tokens**, checked before any request,
+  so the 32k baseline could never have satisfied it. That is a real constraint on 0010:
+  Pi and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all
+  three at 64k — where 0003 measured a cold ingest at 13.1 minutes against 5.4 at 32k.
+  The harness comparison therefore inherits a context cost that is Hermes' requirement.
+  Verified on patch-nil-check with the unseen test passing: Pi 38.5 s at 32k, OpenCode
+  3 m 06 s at 32k, Hermes 4 m 45 s at 64k. Hermes also took 3 m 13 s to answer a trivial
+  prompt, pointing at a large fixed system prompt ingested every turn.

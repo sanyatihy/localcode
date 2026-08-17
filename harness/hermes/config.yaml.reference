@@ -1,0 +1,7 @@
+model:
+  default: bartowski/Qwen3.8-27B-GGUF:Q4_K_M
+  provider: custom
+  base_url: http://127.0.0.1:8080/v1
+  api_key: ''
+  context_length: 65536
+
