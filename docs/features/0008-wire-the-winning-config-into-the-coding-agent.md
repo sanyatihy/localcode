@@ -63,6 +63,18 @@ Three risks, in the order they will bite:
    the server. That is a new surface 0005 never measured, so tool-call validity is checked
    through this path specifically, not assumed to carry over.
 
+**This flow is not offline, and cannot be made so.** Claude Code's documented network
+requirements include `platform.claude.com` for OAuth token exchange and refresh, and
+`api.anthropic.com` for feature-flag fetches — and the fast-mode availability check is
+documented as calling `api.anthropic.com` rather than the configured base URL. Telemetry
+to the Datadog intakes is optional and switches off with
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`; authentication does not.
+
+So this feature delivers **local inference, not an offline harness** — the vision's weaker
+property. That is an honest and probably acceptable outcome, since no prompt or file
+content reaches a remote model. What it may not do is claim the stronger one. The offline
+proof belongs to a harness that needs no vendor reachability, which is 0010's business.
+
 ## Tasks
 
 - [ ] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
@@ -70,15 +82,16 @@ Three risks, in the order they will bite:
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
 - [ ] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
-- [ ] The whole flow is verified with the network disabled, proving nothing depends on a hosted service
-- [ ] The setup is committed as configuration, and `docs/TECH.md` records it plus the rejection of Cursor's built-in assistant with its reason
+- [ ] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
+- [ ] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
+- [ ] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Open questions
 
-- Does the extension flow work with the network fully off, or does Claude Code require
-  reachable Anthropic infrastructure for auth or licence checks even when the model is
-  local? This decides whether "offline" is literal or merely "no inference off-machine",
-  and the network-off task is what answers it.
+- Does an API-key credential via `ANTHROPIC_AUTH_TOKEN` avoid the OAuth refresh path, and
+  if so does anything besides feature flags still require reachability? Leaning: **it
+  narrows the traffic but does not eliminate it**, which is why the task measures observed
+  hosts rather than reasoning from the documentation.
 
 ## Log
 
@@ -87,3 +100,7 @@ Three risks, in the order they will bite:
   extension runs the agent locally, so the vendor backend drops out of the path entirely.
 - 2026-08-17 — dropped `needs: 0010` and `review: human`. The privacy trade that required
   a human call belonged to the tunnel, which is no longer the path.
+- 2026-08-17 — the open question about running network-off is answered from Anthropic's
+  documented network requirements: it cannot. OAuth refresh and feature-flag fetches reach
+  Anthropic regardless of `ANTHROPIC_BASE_URL`. The feature now scopes itself to local
+  inference and hands the offline claim to 0010.

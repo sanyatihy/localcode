@@ -31,9 +31,11 @@ remembered.
 - The harness question is answered the same way: **Pi**, **Hermes Agent** and
   **OpenCode** run the same tasks against the same endpoint, scored against the
   incumbent — Claude Code — and one is the default.
-- **The existing editor flow keeps working, locally.** Claude Code driven from the
-  Cursor/VSCode extension, pointed at the local endpoint, completing a real task with
-  the network off.
+- **The existing editor flow keeps working, with inference local.** Claude Code driven
+  from the Cursor/VSCode extension against the local endpoint, with the traffic it still
+  sends to Anthropic characterised rather than assumed away.
+- **At least one path is genuinely offline.** A harness that needs no vendor
+  reachability completes a real task with the network disabled.
 - Optionally, a flow exists where a frontier model plans and coordinates while local
   models grind features — the roles `kit` already defines, split across two tiers.
 
@@ -63,11 +65,13 @@ remembered.
   ~128 KiB/token at q8_0. Against ~16.4 GB of Q4_K_M weights, 32k context lands near
   22 GB and 64k does not fit. **Context budget is a first-class design parameter in
   every feature, not a flag chosen at the end.**
-- **On-device by default; every exception named and bounded.** The build loop runs
-  locally, and the editor flow qualifies: an extension runs the agent on this machine,
-  so the editor's own backend is not in the request path. What does not qualify is an
-  editor's built-in assistant that proxies through its vendor — ruled out for that
-  reason, not adopted with a caveat. The one deliberate exception is the coordination
+- **Two properties, never conflated.** *Inference is local* — no prompt or file content
+  reaches a model this machine does not run. *The harness is offline* — it needs no vendor
+  reachability at all. The first is required everywhere. The second is stronger, and
+  Claude Code does not have it: it still contacts Anthropic for OAuth refresh and feature
+  flags whatever `ANTHROPIC_BASE_URL` points at. So every setup states which of the two it
+  has. What is ruled out entirely is an editor assistant that proxies prompts through its
+  vendor, which fails even the first. The one deliberate exception is the coordination
   flow, which sends planning context to a frontier model and may never be silent.
 - **Go for anything built.** One static binary, no runtime competing with the model for
   the 32 GB it needs. Where a tool is Python-only — MLX above all — it is confined to
