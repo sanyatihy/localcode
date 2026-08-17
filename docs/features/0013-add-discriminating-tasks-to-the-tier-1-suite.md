@@ -1,0 +1,74 @@
+---
+id: 0013
+title: Add discriminating tasks to the tier-1 suite
+status: Draft
+created: 2026-08-17
+shipped:
+check:
+checked:
+review:
+needs: 0002
+related: 0005, 0004
+---
+
+## Problem
+
+The first matrix returned **21/21 in both thinking modes**. The suite established that
+both configs are adequate for its tasks and could not rank them, so every comparison
+downstream — 0004's quant grid, 0005's sampling sweep, 0007's model A/B — currently has
+an instrument that cannot express "worse". A suite that cannot fail cannot choose.
+
+## Non-goals
+
+- **Not harder for its own sake.** Tasks nothing passes are as useless as tasks everything
+  passes; both produce a flat column. The target is a *spread*, not a low score.
+- **No LLM judging.** Deterministic checks are what make this an instrument, and 0002's
+  reasoning stands.
+- **Not a replacement suite.** The existing tasks stay: they are the floor check that
+  catches a config being broken outright, and their results are already recorded.
+- **No multi-turn tasks.** Those are tier 2, and this stays single-turn and cheap.
+
+## Design
+
+The existing tasks fail to discriminate because a shallow answer is also the correct one.
+Nothing punishes not thinking, so a mode that thinks pays for it and gains nothing —
+which is precisely the result observed.
+
+**A discriminating task needs a plausible trap: an answer that looks right on a shallow
+read and is wrong.** That is the shape thinking should catch and speed-first configs
+should miss. Four kinds, all still deterministic:
+
+| Shape | The trap |
+|---|---|
+| **Fix that breaks a sibling case** | The obvious patch passes the named symptom and fails a second, unnamed test — correctness needs the whole contract, not the reported bug |
+| **Retrieval with distractors** | Several near-identical sentinels; the question names one by a property, so recall alone is not enough and the wrong one is right there |
+| **Tool choice under a constraint** | Two tools are plausible; a stated constraint rules one out, and the more obvious one is the excluded one |
+| **Contradicted specification** | The doc comment and an existing test disagree; the answer requires deciding which is authoritative and saying so |
+
+**Calibration is the deliverable, not the tasks.** A suite is only discriminating if it is
+*shown* to be: the first run must produce a spread across modes, and if it comes back
+21/21 or 0/21 the tasks are wrong and get rewritten. Difficulty is a measured property
+here, not an intention — which is the same standard 0003 applied to the ceiling.
+
+**Aim for a gradient**, not a cliff: some tasks both modes pass, some both fail, some
+split. Only the middle band carries information, and it cannot be found without the ends
+to locate it.
+
+## Tasks
+
+- [ ] Two "fix that breaks a sibling case" patch tasks exist, each with a tempting wrong patch that passes the reported symptom and fails an unnamed test
+- [ ] Two retrieval tasks carry distractor sentinels, so the answer requires discriminating rather than recalling
+- [ ] Two tool-choice tasks make the obvious tool the wrong one under a stated constraint
+- [ ] One task presents a doc comment contradicting a test, with the check accepting either resolution provided it is applied consistently
+- [ ] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them
+- [ ] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
+
+## Open questions
+
+- Should non-discriminating tasks be retired once identified? Leaning **no** — they are the
+  floor check that catches a config broken outright, and they cost seconds. But they should
+  be *labelled*, so a summary is not diluted by columns that cannot move.
+- How hard is too hard? Leaning: a task no config passes after the first calibration run is
+  cut, because it consumes runtime in every future sweep and reports nothing.
+
+## Log
