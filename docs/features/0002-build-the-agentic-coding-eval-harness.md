@@ -87,10 +87,6 @@ sweep multiplies it by the config count.
 - [x] `make eval LABEL=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
 - [x] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
 
-- [ ] Tasks hard enough to discriminate are added — the first matrix returned 21/21 in
-  both modes, so the suite establishes adequacy but cannot rank configs, and a suite that
-  cannot fail cannot choose
-
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
 
 - [ ] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact provider configuration recorded — or the blocker is written up
@@ -211,3 +207,6 @@ sweep multiplies it by the config count.
   at all: thinking's hypothesised benefit is long-horizon multi-step reasoning, and this
   suite contains none. Concluding "thinking does not help" from a suite where nothing fails
   would be the same error as the token-cap one, reached from the opposite direction.
+- 2026-08-17 — the discriminating-tasks box is removed from here: 0013 was drafted for
+  exactly that work after this box was written, and a box one feature owns should not sit
+  in another's list. 0002 keeps the instrument; 0013 makes it able to rank.
