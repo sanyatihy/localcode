@@ -1,0 +1,42 @@
+name: check
+
+# One gate: the same `make check` you run locally. Deployment lives in its own
+# workflow, added when the project has something to deploy.
+#
+# `kit audit --strict` deliberately does not run here. It would mean installing
+# the kit, which is a private module, which means a credential in every project
+# scaffolded from this template — one more secret to store and rotate in each
+# repo, and a first push that fails until someone sets it. Drift is cheap to
+# catch locally, where `kit next` is already being run; it is not worth that.
+# If the kit ever goes public, adding the two steps back costs nothing.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          # Pinned to match .golangci.yml and the version used locally. "latest"
+          # would let a newly-added lint fail a push that was green when written.
+          version: v2.12.2
+
+      - run: make check

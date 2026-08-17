@@ -1,0 +1,20 @@
+{
+  "id": "patch-nil-check",
+  "kind": "patch",
+  "max_tokens": 1024,
+  "patch": {
+    "source": "broken.go.txt",
+    "test_file": "verify_test.go.txt",
+    "package": "main"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a careful Go engineer. Reply with the complete corrected file in a single ```go code block. No explanation."
+    },
+    {
+      "role": "user",
+      "content": "RefreshToken panics when given a nil token. Fix it so a nil token returns ErrNilToken and a nil result, leaving all other behaviour unchanged.\n\n```go\n{{BODY}}\n```"
+    }
+  ]
+}

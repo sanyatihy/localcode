@@ -1,0 +1,28 @@
+{
+  "id": "toolcall-read-file",
+  "kind": "toolcall",
+  "max_tokens": 512,
+  "messages": [
+    {"role": "system", "content": "You are a coding agent. Use the provided tools. Do not explain."},
+    {"role": "user", "content": "The function refreshToken in src/auth/session.go is missing a nil check on its tok parameter. Read that file so you can inspect it."}
+  ],
+  "tools": [
+    {"type": "function", "function": {
+      "name": "read_file",
+      "description": "Read a file from the repository",
+      "parameters": {"type": "object",
+        "properties": {"path": {"type": "string", "description": "Repo-relative path"}},
+        "required": ["path"]}}},
+    {"type": "function", "function": {
+      "name": "edit_file",
+      "description": "Replace an exact string in a file",
+      "parameters": {"type": "object",
+        "properties": {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}},
+        "required": ["path", "old_string", "new_string"]}}}
+  ],
+  "expect": {
+    "tool": "read_file",
+    "required_args": ["path"],
+    "arg_contains": {"path": "session.go"}
+  }
+}

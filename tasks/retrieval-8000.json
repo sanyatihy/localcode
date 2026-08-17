@@ -1,0 +1,10 @@
+{
+  "id": "retrieval-8000",
+  "kind": "retrieval",
+  "max_tokens": 64,
+  "retrieval": {"depth_tokens": 8000, "position": 0.5, "sentinel": "KEY-7F3A-8000",
+                "question": "What is the deployment key mentioned in the dump?"},
+  "messages": [
+    {"role": "user", "content": "{{BODY}}\n\nWhat is the deployment key mentioned above? Reply with the key and nothing else."}
+  ]
+}
