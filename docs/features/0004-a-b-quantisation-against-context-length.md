@@ -76,6 +76,7 @@ answers, or the sweep will blame the model for a budget problem.
 - [ ] Every feasible cell is run 3× and appended to the results file, with free memory and swap recorded per run so a contaminated cell is identifiable rather than silently averaged in
 - [ ] Cells whose cold ingest exceeds the attended threshold are marked unattended-only rather than dropped, since that is a real and useful answer
 - [ ] The larger quants Q5_K_M and Q6_K are measured, since 0003 showed the headroom they need exists and the plan had excluded them on an argument measurement refuted
+- [ ] If a cell does meet a memory wall, the effect of raising `iogpu.wired_limit_mb` is measured there, with the exact revert command recorded — inherited from 0003, where nothing came close enough to the limit for it to mean anything
 - [ ] A winning config is identified per profile by the pre-written rules, with runner-up and margin for each, and it is stated plainly whether one config won both
 - [ ] The winner becomes the default config from 0001 — or two named configs if the profiles diverge — and `docs/TECH.md` records the table and both decisions
 
