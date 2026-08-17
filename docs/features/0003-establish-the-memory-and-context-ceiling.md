@@ -64,9 +64,18 @@ so such a run is void rather than merely poor.
 Measured 2026-08-17 with the 32k/q8_0 baseline loaded, the server *idle*, and ordinary
 desktop apps open: 0.02 GB free, 13.9 GB of 14.3 GB swap in use, 1.32 GB compressed, and
 swap still growing ~74 MB per 8 seconds at idle. `llama-server` alone was 18.45 GB of
-32 GB. So the attended working ceiling at 32k appears to be **exceeded before the context
-is filled**, and the wildly inconsistent prompt-processing rates observed during 0002's
-work — 4.5 to 114 tok/s for comparable operations — are the expected symptom.
+32 GB. That reading led to a prediction that the attended working ceiling at 32k was already
+exceeded. **The first ladder run refuted it**: every cell from 8k to 32k completed a
+genuinely full-context request, 32k/q8_0 included. A machine deep in swap is not the same
+as a machine that cannot serve the config, and the two were conflated.
+
+What the run did establish is that **peak RSS is not a usable ceiling metric under
+saturation**. Free memory sat at 0.01-0.02 GB in *every* cell, so resident size is clamped
+by what physically fits rather than by what the config wants: RSS moved only 18.10 to
+18.92 GB across a fourfold context range, where the KV arithmetic predicts roughly 3.4 GB
+more for the extra 24k tokens. Swap deltas were negative throughout, because tearing down
+an 18 GB process between cells releases more pressure than the next cell creates — so that
+signal is confounded by the ladder's own restarts.
 
 **Measured anchor, from the server already running.** Qwen3.8-27B Q4_K_M at 32k context
 with `q8_0` K and V, all layers on GPU, reports ~19.3 GB resident. That is a starting
@@ -83,7 +92,8 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 ## Tasks
 
 - [ ] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
-- [ ] The ladder (16k/32k/48k/64k × f16/q8_0/q4_0 KV) runs unattended and writes one row per cell, marking each pass, swap, or OOM
+- [ ] The ladder writes one row per cell recording **time to ingest a full context** and the server's prompt rate, not only resident size — under saturation RSS stops discriminating exactly when the answer matters
+- [ ] The ladder runs in both conditions, labelled, and the same cell is compared across them rather than across configs within one
 - [ ] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — hard for unattended with the machine to itself, working for attended with an editor and browser open
 - [ ] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
@@ -104,3 +114,12 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   one. Prompted by measuring the baseline while ordinary apps were open and finding the
   machine already paging at idle, which means the numbers 0002 collected during its build
   were taken outside the envelope this feature exists to establish.
+- 2026-08-17 — first attended ladder run. All five cells (8k/16k/32k q8_0, 16k f16,
+  32k q4_0) completed a full-context request, refuting the earlier prediction that 32k was
+  already past the attended ceiling. The run's real yield was about the instrument: peak
+  RSS does not discriminate when free memory is pinned near zero, and swap delta is
+  confounded by the ladder restarting an 18 GB process between cells. Fill duration and
+  prompt rate added as the metrics that do discriminate.
+- 2026-08-17 — `-hf` also pulls an 888 MB multimodal projector, loaded on every run and
+  never used for coding. Recoverable with `--no-mmproj`, and worth measuring rather than
+  assuming: it is ~0.9 GB of a 32 GB budget.
