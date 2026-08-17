@@ -1,9 +1,9 @@
 ---
 id: 0001
 title: Serve Qwen3.8-27B on llama.cpp
-status: In progress
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-17
 check:
 checked:
 review:

@@ -23,12 +23,13 @@ format. Every rule below is a rule some agent got wrong; none is style.
    - **The round must reach the default branch before anything on it can be claimed.**
      `claim` refuses otherwise; land it at whatever statuses its docs reached.
    - **Leave every doc `Draft`, and never edit `status:` by hand** — `accept`, `ship` and
-     `drop` own it. `kit accept <id>` is the human's, and blesses a design rather than
-     unlocking it: agents work Drafts.
+     `drop` own it, and there is no status for work in flight: the claim branch says that.
+     `kit accept <id>` is the human's, and blesses a design rather than unlocking it.
    - **Unsettled things go in `## Open questions`**; what only a human can answer goes to
      `docs/INBOX.md` via `kit block`, the one thing that still stops a claim.
 2. **One agent per feature. Take it with `kit claim <id>`.** It pushes the branch named after
-   the doc, and creating that ref on the remote is what decides.
+   the doc, and creating that ref on the remote is what decides — and is the whole record
+   that the work started; there is nothing to set in the doc.
    - **0** yours. **1** not yours — somebody was first, or the board would not have offered
      it (unmet `needs:`, a BLOCKING question, a doc nobody wrote, an id that disagrees with
      its filename); run `kit next` and take something else, losing is normal. **2** it could
