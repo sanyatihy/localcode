@@ -22,7 +22,7 @@ testable rather than arguable.
 
 ## Non-goals
 
-- **No fine-tuning of any candidate.** 0009, and only for whatever wins here.
+- **No fine-tuning of any candidate.** Out of scope project-wide; candidates run as they ship.
 - **No quant sweep per model.** Each candidate runs at the quant class 0004 settled on;
   a full grid per model is a combinatorial trap.
 - **No open-ended model survey.** Three named candidates. Others are BACKLOG lines, per

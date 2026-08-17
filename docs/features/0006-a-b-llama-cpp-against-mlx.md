@@ -8,7 +8,7 @@ check:
 checked:
 review:
 needs: 0001, 0002
-related: 0009
+related: 0007
 ---
 
 ## Problem
@@ -16,9 +16,8 @@ related: 0009
 llama.cpp was chosen in 0001 because it was already installed, which is a reason to
 start with it and not a reason to keep it. MLX is built for Apple Silicon and often wins
 on prompt processing — the metric that dominates agentic latency, since every turn
-re-reads a growing context. It is also the only realistic fine-tuning path on this
-machine, so if 0009 ever happens, MLX being viable for serving decides whether training
-and serving share one stack.
+re-reads a growing context. Whether that theoretical advantage survives contact with
+this model at this quantisation on 32 GB is unknown, and it is cheap to settle.
 
 ## Non-goals
 

@@ -22,9 +22,9 @@ expensive to leave broken.
 ## Non-goals
 
 - **No quantisation or context work.** 0004's axis; this runs on whatever baseline exists.
-- **No fine-tuning.** If format adherence survives every sampling and grammar option,
-  that is exactly the named deficit 0009 needs — this feature produces that evidence
-  rather than acting on it.
+- **No fine-tuning.** Out of scope project-wide. If format adherence survives every
+  sampling and grammar option here, the remaining levers are a different model (0007) or
+  a harness that recovers from bad calls (0010) — never the weights.
 - **No prompt engineering of the task suite.** Changing tasks to suit the model would
   invalidate every other feature's numbers.
 
@@ -62,6 +62,6 @@ Because template correctness can invalidate everything downstream of it, it is t
 
 - Adopt constrained decoding as the default even if it only ties on validity? Leaning
   **no** — a tie means the grammar is buying nothing and costing speed, and it hides
-  model deficits that 0009 needs to see.
+  model deficits that 0007 and 0010 need to see.
 
 ## Log
