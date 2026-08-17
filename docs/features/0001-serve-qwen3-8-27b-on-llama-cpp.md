@@ -66,11 +66,6 @@ editing the baseline or inventing their own flags — which is what makes 0003's
 - [x] `docs/TECH.md` records the baseline config, the observed load time, and the arch-support check to repeat after `brew upgrade`
 - [x] `make check` exists and is green — the gate every feature ships through, and 0001 is the first to need it
 
-## Open questions
-
-- Q4_K_M or unsloth's UD-Q4_K_XL? Leaning plain **Q4_K_M** for the baseline: dynamic
-  quants are a variable 0004 should measure, not inherit silently.
-
 ## Log
 
 - 2026-08-17 — box 1 rewritten. It assumed a `make models` download into a gitignored
@@ -82,6 +77,11 @@ editing the baseline or inventing their own flags — which is what makes 0003's
 
 - 2026-08-17 — added a `make check` box: AGENTS.md gates shipping on it and no feature
   had created it. Appended rather than inserted — it blocks shipping, not the boxes above.
+- 2026-08-17 — open question settled by what the machine had: the baseline is
+  `bartowski/Qwen3.8-27B-GGUF:Q4_K_M`, already cached and serving, so no quant was chosen
+  on the merits here at all. The uploader is now itself a variable — bartowski against
+  unsloth's dynamic UD-Q4_K_XL at the same nominal quant — which belongs to 0004 alongside
+  the quant ladder rather than being inherited silently from whoever downloaded first.
 - 2026-08-17 — built and verified against a real restart cycle: stopped the hand-started
   server, relaunched from `config/baseline.env` to an identical process line, launched
   `config/ctx16k-f16.env` to prove a variant needs no edit to either, then restored the
