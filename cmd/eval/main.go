@@ -18,9 +18,10 @@ import (
 func main() {
 	var (
 		endpoint = flag.String("endpoint", "http://127.0.0.1:8080", "OpenAI-compatible endpoint")
-		taskPath = flag.String("task", "", "path to a task fixture (required)")
+		taskPath = flag.String("task", "", "path to a single task fixture")
+		tasksDir = flag.String("tasks", "", "directory of task fixtures to run as a suite")
+		repeats  = flag.Int("n", 1, "passes over the suite")
 		config   = flag.String("config", "unlabelled", "label for the serving config under test")
-		repeat   = flag.Int("repeat", 0, "repeat index, recorded with the row")
 		results  = flag.String("results", "", "append a JSONL row here; empty writes none")
 		thinking = flag.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
 		temp     = flag.Float64("temperature", -1, "temperature; negative leaves it unset")
@@ -31,14 +32,24 @@ func main() {
 	)
 	flag.Parse()
 
-	if *taskPath == "" {
-		fmt.Fprintln(os.Stderr, "eval: -task is required")
+	if (*taskPath == "") == (*tasksDir == "") {
+		fmt.Fprintln(os.Stderr, "eval: give exactly one of -task or -tasks")
 		os.Exit(2)
 	}
-	task, err := eval.LoadTask(*taskPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "eval: %v\n", err)
-		os.Exit(2)
+
+	var paths []string
+	if *taskPath != "" {
+		paths = []string{*taskPath}
+	} else {
+		var err error
+		if paths, err = eval.DiscoverTasks(*tasksDir); err != nil {
+			fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+			os.Exit(2)
+		}
+		if len(paths) == 0 {
+			fmt.Fprintf(os.Stderr, "eval: no fixtures under %s\n", *tasksDir)
+			os.Exit(2)
+		}
 	}
 
 	var think *bool
@@ -80,32 +91,46 @@ func main() {
 		os.Exit(2)
 	}
 
-	res, err := client.Run(ctx, task, sampling, think)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "eval: %s: %v\n", task.ID, err)
-		os.Exit(2)
-	}
-
-	if *results != "" {
-		row := eval.NewRow(*config, *repeat, *thinking, sampling, props, task.Kind, res)
-		if err := eval.AppendRow(*results, row); err != nil {
-			fmt.Fprintf(os.Stderr, "eval: cannot append result: %v\n", err)
-			os.Exit(2)
+	// Sequential on purpose: the server runs one slot, so concurrent requests would
+	// queue and every timing would measure the queue instead of the model.
+	failures := 0
+	for rep := 0; rep < *repeats; rep++ {
+		for _, p := range paths {
+			task, err := eval.LoadTask(p)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+				os.Exit(2)
+			}
+			res, err := client.Run(ctx, task, sampling, think)
+			if err != nil {
+				// A transport failure is recorded and the suite continues: losing four
+				// hours of sweep to one dropped connection would be worse than a gap.
+				fmt.Fprintf(os.Stderr, "eval: %s: %v\n", task.ID, err)
+				failures++
+				continue
+			}
+			if *results != "" {
+				row := eval.NewRow(*config, rep, *thinking, sampling, props, task.Kind, res)
+				if err := eval.AppendRow(*results, row); err != nil {
+					fmt.Fprintf(os.Stderr, "eval: cannot append result: %v\n", err)
+					os.Exit(2)
+				}
+			}
+			status := "PASS"
+			if !res.Passed() {
+				status = "FAIL"
+				failures++
+			}
+			fmt.Printf("%-4s [%d] %-24s %s %s\n", status, rep, res.TaskID, res.Outcome, res.Detail)
+			fmt.Printf("          ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
+				props.NCtx, res.PromptTokens, res.CachedTokens, res.PromptPerSecond,
+				res.CompletionTokens, res.GenPerSecond, res.ReasoningChars, res.WallSeconds)
 		}
 	}
 
-	status := "PASS"
-	if !res.Passed() {
-		status = "FAIL"
-	}
-	fmt.Printf("%-4s %-24s %s %s\n", status, res.TaskID, res.Outcome, res.Detail)
-	fmt.Printf("     ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
-		props.NCtx, res.PromptTokens, res.CachedTokens, res.PromptPerSecond,
-		res.CompletionTokens, res.GenPerSecond, res.ReasoningChars, res.WallSeconds)
-
 	// Exit code is the contract: a sweep must tell pass from fail without parsing
-	// output. 1 is a failed task, 2 is a broken run.
-	if !res.Passed() {
+	// output. 1 means at least one task failed, 2 means the run itself broke.
+	if failures > 0 {
 		os.Exit(1)
 	}
 }

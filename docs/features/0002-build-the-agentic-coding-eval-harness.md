@@ -84,7 +84,7 @@ sweep multiplies it by the config count.
 - [x] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
 - [x] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
 - [x] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
-- [ ] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
+- [x] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
 - [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
 
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
@@ -137,3 +137,10 @@ sweep multiplies it by the config count.
   human typed. When the sweep starts varying server-level flags, a label is a claim, and
   a row carrying the served n_ctx is what stops one config's numbers being attributed to
   another after a restart that did not take.
+- 2026-08-17 — suite mode, `make eval CONFIG=… N=…`, and a reporter grouping by config
+  and thinking mode. Spread is min-max rather than a standard deviation: three passes is
+  already a multi-hour job here, and a deviation over three samples claims precision the
+  data does not have. Runs are sequential because the server has one slot — concurrent
+  requests would queue and every timing would measure the queue. A transport failure
+  records and continues rather than aborting, since losing hours of sweep to one dropped
+  connection is worse than a gap in the data.
