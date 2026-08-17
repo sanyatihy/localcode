@@ -1,6 +1,6 @@
 ---
 id: 0005
-title: Tune sampling and tool-call adherence
+title: Sweep thinking and sampling per profile
 status: Draft
 created: 2026-08-17
 shipped:
@@ -30,12 +30,26 @@ expensive to leave broken.
 
 ## Design
 
+**Thinking mode is the primary axis, and it is the one most likely to split the two
+profiles.** Measured on the live baseline: the same tool call cost 70 completion tokens
+with thinking and 28 without, and both produced a correct call with valid JSON. At 7-14
+tok/s that difference is tens of seconds per turn, which attended use pays directly and
+unattended use barely notices — while the reasoning it buys is exactly what an unattended
+run needs, since nobody is there to catch a wrong step. So the hypothesis this feature
+tests is **thinking off for attended, thinking on for unattended**, and it is a hypothesis,
+not a finding: the 28-vs-70 probe showed a trivial call surviving, not hard reasoning.
+
+**Thinking and sampling are coupled and must move together.** The model card gives
+`temperature 1.0 / top_p 0.95 / top_k 20` for thinking mode and `temperature 0.7 /
+top_p 0.80 / top_k 20 / presence_penalty 1.5` for non-thinking. A sweep that holds
+temperature fixed across the toggle is measuring the pair. Each mode is therefore swept
+at its own recommended values, with greedy as a floor case for both.
+
 Three levers, measured in increasing order of intrusiveness so the cheapest sufficient
 one wins:
 
-1. **Sampling** — temperature, top-p, top-k, min-p, repetition penalty. Qwen models ship
-   recommended values; those are the starting point, not the answer, and greedy decoding
-   is included as the floor case.
+1. **Thinking and sampling, per profile** — the two modes at their own recommended
+   settings, then temperature and top-p varied within each.
 2. **Chat template correctness** — whether `llama-server` applies the model's own template
    and tool-call format exactly. A wrong template looks like a bad model and is the first
    thing to rule out, so it is verified before any sampling is swept.
@@ -46,14 +60,17 @@ one wins:
 
 Tool-call validity rate is the primary metric here; task success is the guard against
 optimising format at the expense of reasoning — a config that emits perfect JSON and
-solves nothing has lost.
+solves nothing has lost. **Every result is reported per profile**, and "the same setting
+won both" is a finding worth stating explicitly rather than an assumption to start from.
 
 Because template correctness can invalidate everything downstream of it, it is task one.
 
 ## Tasks
 
 - [ ] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed
-- [ ] A sampling sweep — including greedy and the Qwen-recommended defaults — is scored on tool-call validity and task success
+- [ ] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
+- [ ] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
+- [ ] Results are reported per profile, and the recommendation says which setting won attended and which won unattended
 - [ ] Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config, including its speed cost
 - [ ] Failures are classified by cause (unparseable, schema-invalid, wrong-but-valid) so the remaining deficit is named rather than counted
 - [ ] The chosen sampling config is committed, and `docs/TECH.md` records the validity rate before and after
@@ -65,3 +82,10 @@ Because template correctness can invalidate everything downstream of it, it is t
   model deficits that 0007 and 0010 need to see.
 
 ## Log
+
+## Log
+
+- 2026-08-17 — retitled and rescoped around thinking mode after live probes on the
+  baseline: 70 completion tokens with thinking vs 28 without for an identical, correct
+  tool call. Also recorded the coupling — each mode has its own recommended sampling, so
+  the toggle cannot be swept at a fixed temperature.

@@ -25,9 +25,14 @@ remembered.
 - A committed scorer reports, per config: **task success rate**, tool-call validity
   rate, generation tok/s, prompt-processing tok/s, peak memory, context headroom.
   Re-running it reproduces the numbers.
+- **Two profiles are settled, not one.** *Attended* is the interactive loop with a human
+  watching, where per-turn latency is the binding cost and a person catches mistakes
+  cheaply. *Unattended* is the long autonomous grind, where latency barely matters and
+  errors compound because nobody is watching. They may want opposite settings — thinking
+  above all — so every sweep reports per profile and the project may ship two configs.
 - The serving A/Bs are settled by that scorer and the winners recorded in `docs/TECH.md`
   with the numbers that beat the alternatives: **quantisation × context**, **sampling
-  and tool-call format**, **llama.cpp vs MLX**, **model vs model**.
+  and tool-call format**, **llama.cpp vs MLX**, **model vs model** — each per profile.
 - The harness question is answered the same way: **Pi**, **Hermes Agent** and
   **OpenCode** run the same tasks against the same endpoint, scored against the
   incumbent — Claude Code — and one is the default.
@@ -80,3 +85,8 @@ remembered.
   lives in the repo. A number nobody can regenerate is not evidence.
 - **Measurement before tuning.** No optimisation is adopted without a before/after on
   the committed scorer.
+- **One toggle at a time, and never one that moves two things.** Thinking mode carries its
+  own recommended sampling — `temp 1.0 / top_p 0.95 / top_k 20` with thinking, `temp 0.7 /
+  top_p 0.80 / top_k 20 / presence_penalty 1.5` without. Comparing thinking on against
+  thinking off at a single fixed temperature measures the pair, not the toggle, and any
+  result that does so is void.

@@ -53,6 +53,18 @@ a cost, not the new baseline.
 Swap is a **failure**, not a slow pass. A config that swaps has left the envelope
 regardless of what it scores.
 
+**Measured anchor, from the server already running.** Qwen3.8-27B Q4_K_M at 32k context
+with `q8_0` K and V, all layers on GPU, reports ~19.3 GB resident. That is a starting
+point and explicitly **not** a ceiling: it was observed at low context occupancy, and KV is
+not fully allocated until it is used. It is recorded here because the ladder should start
+from a real number, and because the gap between it and this feature's filled-context
+measurement is the whole reason the feature exists.
+
+Cold prompt processing on that same server measured **91.8 tok/s** over 7,024 uncached
+tokens. At that rate a full 32k ingest is roughly six minutes, so **prompt-cache reuse is
+not an optimisation here but the thing that makes the context usable at all** — which makes
+cache-invalidating behaviour a first-class risk for 0010 to score.
+
 ## Tasks
 
 - [ ] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
