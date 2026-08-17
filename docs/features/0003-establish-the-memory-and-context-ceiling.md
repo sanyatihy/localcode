@@ -123,3 +123,9 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 - 2026-08-17 — `-hf` also pulls an 888 MB multimodal projector, loaded on every run and
   never used for coding. Recoverable with `--no-mmproj`, and worth measuring rather than
   assuming: it is ~0.9 GB of a 32 GB budget.
+- 2026-08-17 — corrected: the first attended run is kept, not discarded. A reboot destroys
+  the very state it captured — hours of uptime with swap already allocated — so it is the
+  only reading of a genuinely worked-in machine this project will have until the next long
+  session. It is relabelled `attended-worked-in` and carries `instrument: pre-timing`,
+  so its outcomes stay usable while its missing timings stay visible. That makes three real
+  conditions rather than two: unattended, attended-fresh, attended-worked-in.
