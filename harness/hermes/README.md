@@ -1,51 +1,60 @@
-# Hermes — blocked
+# Hermes — working
 
-Hermes Agent is configured and **recognised**, but cannot reach a loopback endpoint.
-Recorded here so the next attempt starts from what was established rather than repeating it.
+Hermes Agent completes the same fixture as Pi and OpenCode, verified by the unseen test.
+It took the longest route to get there, and the reasons are worth keeping.
 
-## The configuration, which is correct as far as it goes
+## The configuration
 
-`hermes config set` writes `~/.hermes/config.yaml`. There is no project-local config, so
-this is global state on the machine — unlike Pi and OpenCode, whose settings live in this
-repo.
+Hermes has **no project-local config**. This is global machine state at
+`~/.hermes/config.yaml`; the reference copy here is a record, not something loaded.
 
-    hermes config set providers.local.base_url     http://127.0.0.1:8080/v1
-    hermes config set providers.local.api          openai
-    hermes config set providers.local.api_mode     chat
-    hermes config set providers.local.key_env      LOCAL_OPENAI_API_KEY
-    hermes config set providers.local.default_model bartowski/Qwen3.8-27B-GGUF:Q4_K_M
+```yaml
+model:
+  default: bartowski/Qwen3.8-27B-GGUF:Q4_K_M
+  provider: custom          # first-class; routes to any OpenAI-compatible endpoint
+  base_url: http://127.0.0.1:8080/v1
+  api_key: ''               # llama-server checks nothing
+  context_length: 65536
+```
 
-## What is established
+    hermes --yolo --cli --in <workdir> -z "<task>"
 
-**Hermes reads the provider.** Proven by control: `--provider does-not-exist-xyz` fails
-with *"Unknown provider"*, while `--provider local` fails with *"Connection error"*. It
-resolves our entry and then cannot connect.
+## Hermes requires a 64k minimum context
 
-**The endpoint is reachable from the same shell**, at the same moment: `curl` to
-`/v1/models` returns HTTP 200, and both Pi and OpenCode complete the same task against it.
+    Model ... has a context window of 32,768 tokens, which is below the
+    minimum 64,000 required by Hermes Agent.
 
-**llama-server logs no incoming request**, so the failure is before the wire.
+This is a hard refusal, checked before any request is made. **It is the reason the
+32k baseline could never have worked**, and it has a cost 0003 already measured: a cold
+64k ingest is 13.1 minutes against 5.4 at 32k.
 
-## Ruled out
+That matters for 0010. Pi and OpenCode run happily at 32k; Hermes cannot. A like-for-like
+comparison must put **all three at 64k**, which is the expensive end of the range for
+every one of them — so the harness comparison inherits a context cost that is Hermes'
+requirement rather than anyone's choice.
 
-- Egress firewall — `hermes egress status` reports it disabled, binary missing, not listening.
-- Proxy environment — no `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` set.
-- The `/v1` suffix — fails identically with and without it.
-- `api` versus `api_mode` — fails with either.
+## What the wrong path cost, and why it looked like a network fault
 
-## Not ruled out
+The `providers.<name>` map in `~/.hermes/config.yaml` is real — the source normalises it,
+and an unknown provider name is rejected differently from a configured one — but it is
+**not** how a local endpoint is configured. Going down it produced
+`API call failed after 3 retries: Connection error`, which reads as a transport problem
+and is not one: an instrumented listener confirmed Hermes never opened a connection at
+all, and the only hit was curl's own probe.
 
-- A sandbox around the runtime. Hermes advertises "sandboxed code execution via Unix
-  socket RPC", and a network-isolated sandbox would make `127.0.0.1` inside it a different
-  host from the one serving the model. This is the leading hypothesis and the cheapest
-  next test: bind the server to a LAN address and point Hermes at that. It is not tried
-  here because the vision binds serving to loopback, so it needs a deliberate exception.
-- `hermes config set` storing a JSON list as a string — `providers.local.models` came back
-  as `'["..."]'`. Unrelated to the connection failure, but it means list-valued keys have
-  to be written into the YAML by hand.
+The lesson is that Hermes reports a configuration refusal as a connection error. Reading
+the source was what suggested `providers.*`; reading the *documentation* gave the `model:`
+block in one step.
 
-## Consequence
+## Measured
 
-0010's comparison runs with the harnesses that work. Hermes is excluded on a *transport*
-problem rather than on any quality result, and that distinction has to survive into the
-write-up: "not measured" is not "worse".
+| harness | patch-nil-check | context served |
+|---|---|---|
+| Pi | 38.5 s | 32k |
+| OpenCode | 3 m 06 s | 32k |
+| Hermes | **4 m 45 s** | 64k |
+
+Hermes also took **3 m 13 s to answer "reply with ready"**, a trivial prompt, which points
+at a large fixed system prompt being ingested every turn. At 64k that is expensive, and it
+is exactly the per-turn context overhead 0010 exists to measure. These are single runs on
+different context sizes and are not a ranking.

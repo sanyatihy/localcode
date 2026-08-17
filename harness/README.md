@@ -6,7 +6,7 @@ How each candidate harness is pointed at the local endpoint. Two work, one is bl
 |---|---|---|---|
 | **Pi** | extension registering a provider | [`pi/local-provider.js`](pi/local-provider.js), loaded with `pi -e` | works |
 | **OpenCode** | `provider` block using `@ai-sdk/openai-compatible` | [`opencode/opencode.json`](opencode/opencode.json), copied into the working dir | works |
-| **Hermes** | `providers.<name>` in `~/.hermes/config.yaml` | global, not repo-local | [blocked](hermes/README.md) |
+| **Hermes** | top-level `model:` block with `provider: custom` | global, not repo-local | [works](hermes/README.md), needs 64k |
 
 None of them takes a local endpoint through an environment variable. Pi ignores
 `OPENAI_BASE_URL` and calls `api.openai.com` (401); OpenCode ignores `LOCAL_ENDPOINT` —
@@ -19,10 +19,11 @@ Each "works" above means the harness completed the `patch-nil-check` fixture in 
 Go module and the **unseen test passed afterwards** — not that it started, and not that it
 claimed success.
 
-    Pi        38.5 s
-    OpenCode  3 m 06 s
+    Pi        38.5 s     at 32k
+    OpenCode  3 m 06 s    at 32k
+    Hermes    4 m 45 s    at 64k — it refuses anything under 64k
 
-Both produced a correct fix. The gap is behavioural rather than model-related: OpenCode
+All three produced a correct fix. The gap is behavioural rather than model-related: OpenCode
 spent turns running `go build` and `go vet` where Pi went straight to the edit. That is
 0010's context-frugality question showing up before 0010 runs, and it is one task, so it
 is a signal and not a result.
@@ -36,3 +37,6 @@ is a signal and not a result.
     # OpenCode — needs opencode.json in the working directory
     cp harness/opencode/opencode.json <workdir>/
     opencode run -m 'local/bartowski/Qwen3.8-27B-GGUF:Q4_K_M' "<task>"
+
+    # Hermes — global config only, and the server must serve >= 64k
+    hermes --yolo --cli --in <workdir> -z "<task>"
