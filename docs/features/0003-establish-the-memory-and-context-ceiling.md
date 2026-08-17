@@ -91,11 +91,12 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 
 ## Tasks
 
-- [ ] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
-- [ ] The ladder writes one row per cell recording **time to ingest a full context** and the server's prompt rate, not only resident size — under saturation RSS stops discriminating exactly when the answer matters
-- [ ] The ladder runs in both conditions, labelled, and the same cell is compared across them rather than across configs within one
+- [x] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
+- [x] The ladder writes one row per cell recording **time to ingest a full context** and the server's prompt rate, not only resident size — under saturation RSS stops discriminating exactly when the answer matters
+- [x] The ladder runs in both conditions, labelled, and the same cell is compared across them rather than across configs within one
+- [ ] The ladder is extended upward — 48k and 64k — because no cell from 8k to 32k failed in either condition, so the ceiling is above everything measured so far and remains unbounded
 - [ ] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — hard for unattended with the machine to itself, working for attended with an editor and browser open
-- [ ] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
+- [x] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
 - [ ] `docs/TECH.md` states the measured envelope, what happens past it, and the ladder for 0007 to reuse
 
@@ -129,3 +130,25 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   session. It is relabelled `attended-worked-in` and carries `instrument: pre-timing`,
   so its outcomes stay usable while its missing timings stay visible. That makes three real
   conditions rather than two: unattended, attended-fresh, attended-worked-in.
+- 2026-08-17 — unattended ladder, clean boot, swap at zero. **Every cell passed and not one
+  swapped**: 8k/16k/32k at q8_0, 16k at f16, 32k at q4_0, swap delta 0.0 MB throughout. The
+  ceiling is therefore above 32k/q8_0 and this ladder never found it — the boxes now include
+  extending to 48k and 64k, because a ladder whose every rung holds has not measured a
+  ceiling.
+- 2026-08-17 — **the free-memory reading was misinterpreted, twice.** Free sat at
+  0.01-0.02 GB in every unattended cell *with zero swap and no pressure at all*. macOS keeps
+  almost nothing free by design, so "0.02 GB free" was never evidence of saturation, and the
+  argument built on it was wrong. Swap used, swap delta and compressor size are the pressure
+  signals; free memory is noise.
+- 2026-08-17 — **fill time is bound by context size, not by memory pressure.** 8k took 68 s,
+  16k 139-149 s, 32k 325-326 s — very close to linear, at 109 down to 91 tok/s as depth
+  grows. So the real cost of a large context on this machine is *time*, not memory: a cold
+  32k ingest is ~5.5 minutes. That is an attended-profile problem and not a ceiling problem,
+  and it makes prompt-cache preservation (0010) the thing that decides whether 32k is usable
+  interactively.
+- 2026-08-17 — peak RSS came out *higher* unattended than worked-in for four of five cells
+  (+0.16 to +0.34 GB), which supports RSS having been clamped by eviction under pressure
+  rather than reflecting demand. RSS also scales with context far more weakly than the KV
+  arithmetic predicts — 93 KB/token from 8k to 16k, 31 KB/token from 16k to 32k, against a
+  predicted ~139 KB/token — so some of the KV allocation is not attributed to process RSS on
+  this platform. Recorded as an open limitation rather than explained away.
