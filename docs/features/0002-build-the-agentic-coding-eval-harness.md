@@ -81,7 +81,7 @@ sweep multiplies it by the config count.
 
 **Tier 1 — direct to the endpoint, no harness involved:**
 
-- [ ] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
+- [x] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
 - [ ] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
 - [ ] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
 - [ ] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
@@ -107,3 +107,10 @@ sweep multiplies it by the config count.
 - 2026-08-17 — stack settled as Go, per `docs/INBOX.md`; question answered and cleared.
 - 2026-08-17 — rescoped: the harness is chosen (Pi/Hermes), not written. Only the scorer
   is built here, which is a fraction of the original scope.
+- 2026-08-17 — tier-1 scorer runs. Verified against the live baseline both ways and,
+  more importantly, against two negative controls: expecting the wrong tool and an
+  unsatisfiable argument each fail with a distinct outcome and exit 1. Outcomes are
+  classified rather than boolean (no call / wrong tool / invalid JSON / wrong args /
+  server error) because 0005 needs to know *how* a config fails, and because a server
+  error must never be scored as model quality. Checker failure paths are covered by an
+  offline test so the instrument does not depend on a server behaving.
