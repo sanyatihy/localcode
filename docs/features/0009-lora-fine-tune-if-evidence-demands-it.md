@@ -1,7 +1,7 @@
 ---
 id: 0009
 title: LoRA fine-tune if evidence demands it
-status: Draft
+status: Dropped
 created: 2026-08-17
 shipped:
 check: 2026-11-17
@@ -76,3 +76,4 @@ held-out tasks is discarded, however good its training curve looked.
   training result — but this is the human call this feature most needs, hence `review: human`.
 
 ## Log
+- 2026-08-17 — dropped: No fine-tuning in scope: the goal is tuning how the model is launched and served, not touching its weights.

@@ -8,66 +8,87 @@ check:
 checked:
 review:
 needs:
-related: 0001
+related: 0010, 0001
 ---
 
 ## Problem
 
-"Which config is best for coding" cannot be answered by vibes or by perplexity, and
-every A/B in this project (0004, 0005, 0006, 0007) plus the entire fine-tune decision
-(0009) is scored by this harness. Without it they are all opinion, and the vision's
-"measurement before tuning" constraint is unenforceable.
+Every A/B here — quant against context, sampling, llama.cpp against MLX, model against
+model, Pi against Hermes — needs one instrument that says which side won. Without it
+they are all opinion, and the vision's "measurement before tuning" constraint is
+unenforceable. What is missing is not an agent: Pi and Hermes already are agents. What
+is missing is the thing that runs fixed tasks through one of them and records numbers.
 
 ## Non-goals
 
-- **Not a general LLM benchmark.** No MMLU, no leaderboard reproduction. This measures
-  one thing: does a local model drive an agentic coding loop on this hardware.
-- **Not a coding agent.** It drives an endpoint with a fixed tool schema; it does not
-  implement planning or editing. The vision rules that out.
-- **No comparison runs.** Building the instrument is this feature; running the sweeps
-  is 0004 onward. Shipping this means it can score a config, not that anything is scored.
+- **Not a coding agent, and not a custom harness.** The single most expensive mistake
+  available here. Pi (`earendil-works/pi`) and Hermes (`NousResearch/hermes-agent`) are
+  model-agnostic and already speak OpenAI-compatible endpoints. This feature drives one;
+  it does not reimplement one. If neither can be driven headlessly, that is a finding for
+  `## Open questions`, not a licence to start writing an agent loop.
+- **Not a general LLM benchmark.** No MMLU, no leaderboard reproduction.
+- **No comparison runs.** Building the instrument is this feature. Running sweeps with it
+  is 0004 onward; shipping this means it *can* score a config, not that anything is scored.
+- **No reimplementation of throughput benchmarking.** `llama-bench` and the server's own
+  timings already measure tok/s. Wrapping beats rewriting.
 - **No cloud baseline.** Scoring against a hosted model would send code off the machine.
 
 ## Design
 
-The harness runs **N fixed tasks** against an OpenAI-compatible endpoint, each a real
-repo-shaped job — locate a symbol and edit it, add a test, fix a failing build — run in
-a scratch git checkout so success is checked by running the repo's own tests, not by
-judging prose. Deterministic scoring is what makes it a measuring instrument; an
-LLM-judge would add a second model's noise to every number.
+Two things the original plan conflated, kept separate here because they change at
+different rates:
 
-Five metrics per config, because they trade against each other and a single score hides it:
+- **The harness** is the agent loop — Pi, Hermes, Cursor. Chosen, not written (0010).
+- **The scorer** is this feature: a Go binary that runs fixed tasks through a harness
+  against an endpoint and records what happened.
 
-| Metric | Why it decides something |
+The scorer drives a harness through a **thin adapter**: how to invoke it non-interactively
+with a task prompt in a given directory, and how to tell when it has stopped. Two adapters
+at first, Pi and Hermes, because 0010 has to compare them and an adapter interface with a
+single implementation is an abstraction inventing itself. Everything else — task
+definitions, scoring, metrics, results — is shared.
+
+Each task runs in a **scratch git checkout**, and passing means the repo's own tests pass
+afterwards. Deterministic checks are what make this an instrument; an LLM judge would add
+a second model's noise to every number this project rests on.
+
+Metrics come from the cheapest honest source rather than from new code:
+
+| Metric | Source |
 |---|---|
-| Task success rate | The only quality number that matters here |
-| Tool-call validity rate | Malformed JSON is the dominant local-model failure, and it is invisible in success rate alone when a retry saves it |
-| Generation tok/s | Whether the loop is usable interactively |
-| Prompt-processing tok/s | Dominates agentic latency — every turn re-reads a growing context |
-| Peak memory + context high-water | Whether the config survives a long session (0003 owns the ceiling) |
+| Task success | The repo's tests, in the scratch checkout |
+| Tool-call validity | Harness logs plus the server's request log |
+| Generation / prompt-processing tok/s | `llama-server` timings; `llama-bench` for isolated throughput |
+| Peak memory, context high-water | Sampled during the run (0003 owns the envelope) |
 
-Results are written as one row per (config, task, run) to a committed results file, so
-sweeps append and nothing is recomputed to be compared. Runs are repeated **3×** —
-sampling makes a single run unfalsifiable — and the harness reports spread, not just mean.
+Results append as one row per (config, harness, task, run) to a committed file, so sweeps
+accumulate and nothing is recomputed to be compared. Runs repeat **3×** — sampling makes a
+single run unfalsifiable — and the scorer reports spread, not just the mean.
 
-Task count is deliberately small and fixed. A suite too slow to re-run is one that stops
-being re-run, and every sweep multiplies it by the config count.
+Six to ten tasks, fixed and small. A suite too slow to re-run stops being re-run, and every
+sweep multiplies it by the config count.
 
 ## Tasks
 
-- [ ] A runner takes an endpoint URL and a config label, executes one task in a scratch checkout, and exits non-zero on failure
-- [ ] Tool-call transport: a fixed tool schema, plus per-turn recording of whether the model's call parsed and validated
+- [ ] Pi and Hermes are confirmed to run non-interactively against a local OpenAI-compatible endpoint, with the exact invocation recorded — or the blocker is written up before any scorer code exists
+- [ ] A Go binary runs one task through one harness in a scratch checkout and exits non-zero on failure
+- [ ] Adapters for both Pi and Hermes satisfy the same interface, each proven on the same task
 - [ ] Six to ten fixed tasks exist as committed fixtures, each with a deterministic pass check that runs the repo's own tests
-- [ ] The runner records all five metrics per run and appends rows to a results file in a stable schema
-- [ ] A `make eval CONFIG=<label>` runs the suite 3× and prints a per-metric summary with spread
-- [ ] The harness scores 0001's baseline end to end, and that first row is committed as the reference
+- [ ] All five metrics are recorded per run and appended to a results file in a stable schema
+- [ ] `make eval CONFIG=<label> HARNESS=<name>` runs the suite 3× and prints a per-metric summary with spread
+- [ ] The scorer scores 0001's baseline end to end, and that first row is committed as the reference
 
 ## Open questions
 
-- Nothing here is settled until the stack is: see `docs/INBOX.md`. Leaning **Go** —
-  `kit` is Go, `kit help go-checklist` exists, and a single static binary avoids a Python
-  environment competing with the model for memory during a run.
-- How many repeats is enough? Leaning 3 to start, revisited once the observed spread on
-  the baseline is known — if it is wide, the suite is measuring noise.
+- Do Pi and Hermes both expose a scriptable non-interactive mode? This is the assumption
+  the whole design rests on, hence task one. If only one does, it wins 0010 by default and
+  that should be recorded as the reason rather than presented as a quality result.
+- Is a fixed task suite representative of real agentic work? Leaning: **no, not fully** —
+  which is why 0008 exists and why divergence between live use and this suite is a finding
+  the suite has to answer for.
 
 ## Log
+
+- 2026-08-17 — stack settled as Go, per `docs/INBOX.md`; question answered and cleared.
+- 2026-08-17 — rescoped: the harness is chosen (Pi/Hermes), not written. Only the scorer
+  is built here, which is a fraction of the original scope.

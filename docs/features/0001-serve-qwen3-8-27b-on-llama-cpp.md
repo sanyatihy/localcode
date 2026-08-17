@@ -13,9 +13,9 @@ related: 0003
 
 ## Problem
 
-Nothing serves a model yet. Every later feature — the harness, all three A/Bs, the
-fine-tune decision — measures against a running endpoint, so until one exists and is
-reproducible from the repo, no number this project produces can be regenerated.
+Nothing serves a model yet. Every later feature — the scorer, every A/B, the harness
+choice — measures against a running endpoint, so until one exists and is reproducible
+from the repo, no number this project produces can be regenerated.
 
 ## Non-goals
 
