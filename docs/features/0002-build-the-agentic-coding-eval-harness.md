@@ -85,7 +85,11 @@ sweep multiplies it by the config count.
 - [x] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
 - [x] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
 - [x] `make eval LABEL=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
-- [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
+- [x] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
+
+- [ ] Tasks hard enough to discriminate are added — the first matrix returned 21/21 in
+  both modes, so the suite establishes adequacy but cannot rank configs, and a suite that
+  cannot fail cannot choose
 
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
 
@@ -183,3 +187,27 @@ sweep multiplies it by the config count.
   so a mode spending more of it is a measured cost rather than a disqualification — and
   `fail_truncated_at_cap` now separates a capped answer from a wrong one, checked before
   any per-kind check.
+- 2026-08-17 — **first clean matrix. 42 runs, zero truncations, every task 3/3 in both
+  modes.** Thinking costs 3.06x the completion tokens (1089 to 3333) and 1.67x the wall
+  time (384 s to 641 s), and buys nothing this suite can detect. The wall ratio is smaller
+  than the token ratio because retrieval tasks are ingest-dominated, so extra generation is
+  diluted by prompt processing.
+
+  | task | off: pass / tok / s | on: pass / tok / s |
+  |---|---|---|
+  | patch-nil-check | 3/3 · 137 · 15.0 | 3/3 · 221 · 23.9 |
+  | patch-off-by-one | 3/3 · 100 · 10.7 | 3/3 · 438 · 46.6 |
+  | retrieval-2000 | 3/3 · 12 · 7.7 | 3/3 · 73 · 14.8 |
+  | retrieval-8000 | 3/3 · 12 · 26.9 | 3/3 · 93 · 37.4 |
+  | retrieval-16000 | 3/3 · 13 · 55.4 | 3/3 · 70 · 64.4 |
+  | toolcall-read-file | 3/3 · 28 · 4.4 | 3/3 · 64 · 8.6 |
+  | toolcall-edit-file | 3/3 · 61 · 8.0 | 3/3 · 152 · 18.0 |
+
+- 2026-08-17 — **the result's real limit is a ceiling effect, and it must not be reported
+  as a quality verdict.** Both modes scored 21/21, so the suite did not discriminate: it
+  showed both configs are adequate for these tasks and said nothing about which is better
+  where they are not. For the attended profile that is still decisive — thinking is 1.67x
+  slower at no measured gain, so off wins on cost alone. For unattended it is no evidence
+  at all: thinking's hypothesised benefit is long-horizon multi-step reasoning, and this
+  suite contains none. Concluding "thinking does not help" from a suite where nothing fails
+  would be the same error as the token-cap one, reached from the opposite direction.
