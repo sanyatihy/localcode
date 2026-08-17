@@ -54,11 +54,16 @@ alongside its scores. A challenger that runs fully offline holds something the i
 cannot, and that is the vision's "at least one path is genuinely offline" outcome — so it
 can win on this axis even while losing on quality, and the write-up must say which it won on.
 
-They are scored on 0002's suite at the identical serving config, on its existing metrics
-plus two this comparison specifically needs:
+They are scored on 0002's suite at the identical serving config, **per profile**, on its
+existing metrics plus three this comparison specifically needs:
 
 - **Tokens consumed per completed task** — the direct measure of context frugality, and on
   this hardware the number most likely to decide it.
+- **Prompt-cache preservation** — whether the harness keeps a stable prefix across turns, or
+  rewrites history (compaction, reordering, re-summarising) and forces a re-ingest. Measured
+  at 91.8 tok/s cold, a full 32k re-ingest costs about six minutes, so a harness that
+  invalidates the cache mid-task is not slightly worse but unusable for the attended
+  profile. Measured as cache-hit rate per turn, not inferred from documentation.
 - **Turns to completion, and turns spent on failed tool calls** — a harness that recovers
   gracefully from a malformed call is worth more locally than one assuming a frontier model.
 
