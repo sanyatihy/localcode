@@ -122,3 +122,37 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 	out.Wall = time.Since(start)
 	return &out, nil
 }
+
+// ServerProps is what the endpoint reports about itself. Recording it beside every
+// result is a guard against the sweep's most damaging silent failure: mislabelling.
+// When a run varies server-level flags, a config label is a human's claim about what
+// was launched, and a row that carries the served n_ctx cannot quietly attribute one
+// config's numbers to another.
+type ServerProps struct {
+	NCtx      int    `json:"n_ctx"`
+	ModelPath string `json:"model_path"`
+}
+
+func (c *Client) Props(ctx context.Context) (ServerProps, error) {
+	var out ServerProps
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Endpoint+"/props", nil)
+	if err != nil {
+		return out, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+
+	var raw struct {
+		ModelPath string `json:"model_path"`
+		Gen       struct {
+			NCtx int `json:"n_ctx"`
+		} `json:"default_generation_settings"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return out, err
+	}
+	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath}, nil
+}

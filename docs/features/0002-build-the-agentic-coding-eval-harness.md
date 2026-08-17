@@ -83,7 +83,7 @@ sweep multiplies it by the config count.
 
 - [x] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
 - [x] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
-- [ ] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
+- [x] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
 - [ ] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
 - [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
 
@@ -132,3 +132,8 @@ sweep multiplies it by the config count.
   module, so `go test ./...` compiled and ran the deliberately-broken fixtures and the
   repo gate was red for exactly the reason the fixtures are correct. The scratch module
   writes them back under real .go names.
+- 2026-08-17 — results are JSONL, one row per (config, task, repeat). Each row records
+  what the server reported serving — n_ctx and model file — not only the config label a
+  human typed. When the sweep starts varying server-level flags, a label is a claim, and
+  a row carrying the served n_ctx is what stops one config's numbers being attributed to
+  another after a restart that did not take.
