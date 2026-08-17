@@ -45,6 +45,24 @@ wait_healthy() { # seconds
   return 1
 }
 
+# Record what else is resident before any cell runs. A condition label is a claim about
+# the machine; this is the evidence for it. It also captures the measuring apparatus — an
+# editor driving the ladder sits inside the footprint it is measuring, so a "hard ceiling"
+# taken with an IDE open is conservative by however much that IDE holds.
+#
+# Values reach python through the environment rather than string interpolation: process
+# names contain characters that would otherwise terminate the quoting and corrupt the row.
+APPARATUS=$(ps -Ao rss,comm | awk '$1 > 102400 && $2 !~ /llama-server/ && $2 != "COMM" {
+    n=split($2,p,"/"); printf "%s%.2fGB %s", (c++?"; ":""), $1/1048576, p[n]}')
+APPARATUS_TOTAL=$(ps -Ao rss,comm | awk '$2 !~ /llama-server/ {s+=$1} END {printf "%.2f", s/1048576}')
+export APPARATUS APPARATUS_TOTAL CONDITION
+echo "apparatus resident before any cell: ${APPARATUS_TOTAL} GB" >&2
+python3 -c '
+import json, os
+print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
+                  "resident_gb": float(os.environ["APPARATUS_TOTAL"]),
+                  "processes": os.environ["APPARATUS"]}))' >> "$OUT"
+
 for cfg in config/ladder-*.env; do
   name=$(basename "$cfg" .env)
   ctx=$(grep '^CTX_SIZE=' "$cfg" | cut -d'"' -f2)

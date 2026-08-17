@@ -5,6 +5,13 @@ nothing else on it, and opening a browser first spends the measurement.
 
 ## 1. Unattended ceiling (clean machine)
 
+The editor driving this is itself resident — Cursor plus the Claude Code extension
+measured ~1.4 GB of a 6.4 GB non-model footprint on the last check. The ladder records
+that automatically as an `apparatus` row, so the hard ceiling is known to be
+conservative by a stated amount rather than by an unstated one. For a truly bare
+reading, start the ladder and quit the editor: it is a detached script and does not
+need supervision.
+
     cd ~/Devel/github.com/sanyatihy/localcode-0003
     CONDITION=unattended ./scripts/ladder.sh
 
@@ -35,7 +42,7 @@ would merge them into a ceiling describing neither.
 
 | Condition | Machine state | What it bounds |
 |---|---|---|
-| `unattended` | fresh boot, nothing else running | the hard ceiling — the grind profile |
+| `unattended` | fresh boot, only the editor driving the run | the hard ceiling — the grind profile |
 | `attended-fresh` | fresh boot, apps just opened | best-case interactive use |
 | `attended-worked-in` | hours of uptime, swap already allocated | interactive use as it actually is by afternoon |
 
