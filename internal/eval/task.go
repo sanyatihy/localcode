@@ -172,7 +172,7 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (
 	case "toolcall":
 		res.Outcome, res.Detail = checkToolCall(t.Expect, msg.ToolCalls, msg.Content)
 	case "patch":
-		res.Outcome, res.Detail = runPatch(*t.Patch, extractCode(msg.Content))
+		res.Outcome, res.Detail = runPatch(ctx, *t.Patch, extractCode(msg.Content))
 	case "retrieval":
 		res.Outcome, res.Detail = checkRetrieval(*t.Retrieval, msg.Content)
 	default:

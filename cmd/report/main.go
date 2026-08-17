@@ -28,14 +28,24 @@ type agg struct {
 }
 
 func main() {
-	path := flag.String("results", "results/tier1.jsonl", "results file to summarise")
-	only := flag.String("config", "", "summarise only this config label")
-	flag.Parse()
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "report: %v\n", err)
+		os.Exit(2)
+	}
+}
+
+func run(args []string, stdout, stderr *os.File) error {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	path := fs.String("results", "results/tier1.jsonl", "results file to summarise")
+	only := fs.String("config", "", "summarise only this config label")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	f, err := os.Open(*path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "report: %v\n", err)
-		os.Exit(2)
+		return err
 	}
 	defer f.Close()
 
@@ -50,7 +60,7 @@ func main() {
 		}
 		var r eval.Row
 		if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
-			fmt.Fprintf(os.Stderr, "report: skipping unparseable row: %v\n", err)
+			fmt.Fprintf(stderr, "report: skipping unparseable row: %v\n", err)
 			continue
 		}
 		if *only != "" && r.Config != *only {
@@ -85,17 +95,16 @@ func main() {
 		served[r.Config] = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
 	}
 	if err := sc.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "report: %v\n", err)
-		os.Exit(2)
+		return err
 	}
 	if len(byConfig) == 0 {
-		fmt.Println("no rows matched")
-		return
+		fmt.Fprintln(stdout, "no rows matched")
+		return nil
 	}
 
 	for _, cfg := range sortedKeys(byConfig) {
-		fmt.Printf("\n%s  [%s]\n", cfg, served[cfg])
-		fmt.Printf("  %-12s %-8s %-16s %-18s %-18s %s\n",
+		fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
+		fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
 			"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
 		for _, th := range sortedKeys(byConfig[cfg]) {
 			a := byConfig[cfg][th]
@@ -103,15 +112,16 @@ func main() {
 			if a.tcSeen > 0 {
 				tc = fmt.Sprintf("%d/%d", a.tcValid, a.tcSeen)
 			}
-			fmt.Printf("  %-12s %-8s %-16s %-18s %-18s %s\n",
+			fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
 				th, fmt.Sprintf("%d/%d", a.pass, a.total), tc,
 				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
 			if s := failSummary(a.outcomes); s != "" {
-				fmt.Printf("  %-12s %s\n", "", s)
+				fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
 			}
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(stdout)
+	return nil
 }
 
 func failSummary(m map[eval.Outcome]int) string {

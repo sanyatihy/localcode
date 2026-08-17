@@ -152,3 +152,14 @@ sweep multiplies it by the config count.
   shipped meaning stands. Both also defined `check`, one as unit tests and one as the
   live smoke; `check` is the ship gate in AGENTS.md, so it now runs both, with `test`
   and `smoke` available separately.
+- 2026-08-17 — audited the Go against `kit help go-checklist`, which I had not read before
+  writing it. Real defects, not style: runPatch used a hand-rolled timer that killed the
+  process but left its reader goroutine blocked and ignored the caller's context, now
+  `exec.CommandContext`; both commands did their work in `main` with scattered
+  `os.Exit`, bypassing deferred cleanup, now `run() error` with one exit point and
+  documented codes; `time.Now()` was uninjected, now a package-level `Now` a test can
+  set; `go.mod` had no toolchain pin. `make check` gated on tests alone — it now runs
+  fmt, vet and `-race`, and the live smoke moved to `make smoke` because
+  `kit init --stack go` wired CI to `make check`, and CI has no server or weights.
+  Tests moved to the public boundary (Client.Run against an httptest double), which also
+  reaches failure paths a real model cannot be asked to produce on demand.
