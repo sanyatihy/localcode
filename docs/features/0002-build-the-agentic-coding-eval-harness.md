@@ -89,7 +89,7 @@ sweep multiplies it by the config count.
 
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
 
-- [ ] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact provider configuration recorded — or the blocker is written up
+- [x] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact provider configuration recorded — or the blocker is written up
 - [ ] An adapter interface drives at least two harnesses through the same tier-2 task in a scratch checkout, pass checked by the repo's own tests
 
 ## Open questions
@@ -210,3 +210,15 @@ sweep multiplies it by the config count.
 - 2026-08-17 — the discriminating-tasks box is removed from here: 0013 was drafted for
   exactly that work after this box was written, and a box one feature owns should not sit
   in another's list. 0002 keeps the instrument; 0013 makes it able to rank.
+- 2026-08-17 — harness configuration solved for two of three, and each needed its own
+  mechanism: Pi an extension registering a provider, OpenCode a `provider` block using
+  `@ai-sdk/openai-compatible`. Both are repo-local, so a run is reproducible from a
+  checkout. Both were verified by completing patch-nil-check in a scratch module with the
+  unseen test passing — Pi in 38.5 s, OpenCode in 3 m 06 s, the gap being OpenCode
+  spending turns on `go build` and `go vet` where Pi went straight to the edit.
+  Hermes is blocked and written up in `harness/hermes/README.md`: it resolves the
+  provider — proven by control, since an unknown provider name fails differently — and
+  then cannot reach loopback, while curl and both other harnesses reach the same server
+  from the same shell. Egress firewall, proxy env, the /v1 suffix and api vs api_mode are
+  all ruled out; a network-isolated sandbox is the leading hypothesis. It is excluded from
+  0010 on transport, not on quality, and that distinction has to survive into the write-up.
