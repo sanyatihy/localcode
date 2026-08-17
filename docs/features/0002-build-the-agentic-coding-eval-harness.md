@@ -84,7 +84,7 @@ sweep multiplies it by the config count.
 - [x] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
 - [x] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
 - [x] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
-- [x] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
+- [x] `make eval LABEL=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
 - [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
 
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
@@ -144,3 +144,11 @@ sweep multiplies it by the config count.
   requests would queue and every timing would measure the queue. A transport failure
   records and continues rather than aborting, since losing hours of sweep to one dropped
   connection is worse than a gap in the data.
+- 2026-08-17 — merging 0001 collided on the Makefile in two ways that mattered more than
+  the textual conflict. Both branches defined `CONFIG`: 0001 as the path to the env file
+  scripts/serve.sh consumes, documented in docs/TECH.md, and 0002 as the label written
+  into every results row. Either silently taking the other's value would have mislabelled
+  results or launched the wrong server, so the eval knob is renamed `LABEL` and 0001's
+  shipped meaning stands. Both also defined `check`, one as unit tests and one as the
+  live smoke; `check` is the ship gate in AGENTS.md, so it now runs both, with `test`
+  and `smoke` available separately.
