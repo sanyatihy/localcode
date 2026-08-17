@@ -104,3 +104,9 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   one. Prompted by measuring the baseline while ordinary apps were open and finding the
   machine already paging at idle, which means the numbers 0002 collected during its build
   were taken outside the envelope this feature exists to establish.
+- 2026-08-17 — scope correction. This feature measured *one* envelope: Qwen3.8-27B at
+  Q4_K_M, contexts to 64k, on 32 GB. Memory not binding there does not rule memory out —
+  Q6_K weights are roughly 6 GB heavier, and larger models and longer contexts are
+  untested. 0004's quant sweep is where memory gets its next real chance to bind, and the
+  planned 128 GB machine moves every rung at once, which makes the hardcoded ladder a
+  defect rather than a setting.
