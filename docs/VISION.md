@@ -67,20 +67,30 @@ remembered.
 
 ## Constraints
 
-- **Hardware is fixed and is the design.** M2 Max, 32 GB unified memory, 30 GPU cores,
-  ~249 GB free. No config may make the machine unusable for the editor and browser the
-  developer is running while the agent works.
-- **Time is the binding constraint, not memory.** This replaces the opposite claim, which
-  0003 measured and refuted. The full ladder — 8k, 16k, 32k, 48k, 64k at q8_0 — ran with
-  swap delta 0.0 MB, peak resident 17.91 to 20.27 GB of 32 GB, and marginal cost settling
-  at 31-37 KB/token. What binds is ingest: the prompt rate decays with depth, 109 tok/s at
-  8k down to 75 at 64k, so a cold 32k context costs 5.4 minutes and a cold 64k costs 13.1.
-  **Context budget is still a first-class design parameter, but it is spent in seconds
-  rather than gigabytes**, which is why it falls almost entirely on the attended profile.
-- **There is memory headroom, and it should be spent deliberately.** 64k/q8_0 leaves
-  roughly a third of the machine unused. Weight quality is the obvious buyer — Q5_K_M and
-  Q6_K were excluded on a memory argument that measurement does not support — and choosing
-  between more context and better weights is a real trade rather than a foregone one.
+- **Hardware is the current envelope, not a permanent one.** M2 Max, 32 GB unified memory,
+  30 GPU cores. A 128 GB machine is planned, and it moves every ceiling at once: quants
+  that do not fit today, models that cannot load, contexts that cost too much. So
+  **measured numbers are always recorded with the machine they came from**, and anything
+  that hardcodes this machine's limits — ladder rungs above all — is a defect to fix rather
+  than a value to update. No config may make the machine unusable for the editor and
+  browser the developer is running while the agent works.
+- **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
+  quality, and whatever else emerges are candidates, and which one binds depends on the
+  envelope — model, quant, context, and the machine. A constraint asserted in advance is
+  what sends a sweep looking in the wrong place, which has already happened once here.
+- **What has been measured so far, and its exact scope.** In the envelope
+  *Qwen3.8-27B · Q4_K_M · contexts to 64k · 32 GB*, **time bound before memory did**: the
+  full ladder ran with swap delta 0.0 MB at peak resident 17.91-20.27 GB, while ingest cost
+  rose to 13.1 minutes at 64k as the prompt rate decayed from 109 to 75 tok/s.
+  **This does not rule memory out.** Only one quant was tested. Q6_K weights are roughly
+  6 GB heavier, larger models and longer contexts are untested, and each moves the envelope.
+  The finding is that memory did not bind *here*, not that it does not bind.
+- **Headroom exists at this quant and should be spent deliberately.** 64k/Q4_K_M left
+  roughly a third of the machine unused, which is why Q5_K_M and Q6_K belong in 0004's
+  sweep — and why that sweep is also where memory gets its next chance to bind.
+- **The optimum is expected to differ by task, not just by profile.** A short tool-calling
+  turn, a long refactor and a repo-wide search have different context and latency needs, so
+  "one winning config" is an assumption the results have to earn rather than a goal.
 - **Two properties, never conflated.** *Inference is local* — no prompt or file content
   reaches a model this machine does not run. *The harness is offline* — it needs no vendor
   reachability at all. The first is required everywhere. The second is stronger, and
