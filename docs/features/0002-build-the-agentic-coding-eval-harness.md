@@ -163,3 +163,14 @@ sweep multiplies it by the config count.
   `kit init --stack go` wired CI to `make check`, and CI has no server or weights.
   Tests moved to the public boundary (Client.Run against an httptest double), which also
   reaches failure paths a real model cannot be asked to produce on demand.
+- 2026-08-17 — golangci-lint found 12 issues the earlier gate missed, because `make check`
+  did not run it. Two were substantive: `AppendRow` deferred-and-dropped `Close` on a
+  *write* path, so a row that never reached disk would have silently shortened a
+  multi-hour sweep — Close is now checked and returned; and the haystack determinism test
+  compared one expression to itself, which proves almost nothing, so it now builds from
+  two independently constructed equal inputs and additionally asserts the sentinel appears
+  exactly once and that a deeper haystack is larger. The rest were unchecked writes to
+  stdout, now explicitly discarded at the call site. `lint` is wired into `make check`
+  so this cannot regress silently, `.golangci.yml` is pinned, and the CI action is pinned
+  to the same version rather than `latest`, which would fail a push for a lint that did
+  not exist when the code was written.

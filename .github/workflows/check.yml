@@ -35,6 +35,8 @@ jobs:
 
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # Pinned to match .golangci.yml and the version used locally. "latest"
+          # would let a newly-added lint fail a push that was green when written.
+          version: v2.12.2
 
       - run: make check

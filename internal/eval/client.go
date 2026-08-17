@@ -113,7 +113,7 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 	if err != nil {
 		return nil, fmt.Errorf("post: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var out Response
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -143,7 +143,7 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 	if err != nil {
 		return out, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var raw struct {
 		ModelPath string `json:"model_path"`

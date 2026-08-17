@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -118,9 +119,19 @@ func TestRunRetrievalOutcomes(t *testing.T) {
 // The haystack must be byte-identical across runs, or configs get compared against
 // different prompts and the sweep measures noise.
 func TestHaystackIsDeterministic(t *testing.T) {
-	r := Retrieval{DepthTokens: 500, Position: 0.5, Sentinel: "KEY-1"}
-	if buildHaystack(r) != buildHaystack(r) {
-		t.Fatal("haystack differs between builds for identical input")
+	// Two independently constructed but equal inputs, not one expression compared to
+	// itself: the property that matters is that equal inputs give equal prompts across
+	// separate runs, which is what lets two configs be compared at all.
+	a := buildHaystack(Retrieval{DepthTokens: 500, Position: 0.5, Sentinel: "KEY-1"})
+	b := buildHaystack(Retrieval{DepthTokens: 500, Position: 0.5, Sentinel: "KEY-1"})
+	if a != b {
+		t.Fatal("haystack differs between builds for equal input")
+	}
+	if strings.Count(a, "KEY-1") != 1 {
+		t.Errorf("sentinel appears %d times, want exactly 1", strings.Count(a, "KEY-1"))
+	}
+	if c := buildHaystack(Retrieval{DepthTokens: 900, Position: 0.5, Sentinel: "KEY-1"}); len(c) <= len(a) {
+		t.Errorf("deeper haystack is not larger: %d vs %d", len(c), len(a))
 	}
 }
 
