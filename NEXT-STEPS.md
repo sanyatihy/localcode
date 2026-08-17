@@ -14,23 +14,37 @@ fills the context genuinely full, and records memory plus **time to ingest**.
 
 Takes 30-50 min and needs no supervision. Results append to `results/ceiling.jsonl`.
 
-## 2. Attended ceiling (your normal desktop)
+## 2. Read the unattended numbers before deciding to run anything else
 
-Open what you normally work with — browser, editor, Spotify — then:
+If the timing spread across cells is flat, timing does not discriminate either and a
+third run buys nothing. If it is wide, it is the metric, and an attended run on the
+same instrument is worth the 30-50 minutes. Decide from the data rather than in
+advance.
 
-    CONDITION=attended ./scripts/ladder.sh
+## 3. Attended, only if step 2 says so
 
-Same cells, same instrument, different machine state. `CONDITION` is what keeps the
-two apart in the results file; without it they would average into one ceiling that
-describes neither.
+Open what you normally work with, then:
 
-## Why the earlier attended run does not count
+    CONDITION=attended-fresh ./scripts/ladder.sh
 
-It ran before the ladder recorded fill duration, and duration is the metric that
-discriminates: under saturation `ps rss` is clamped by what physically fits rather
-than by what the config wants, so it stopped telling configs apart exactly where the
-answer mattered. That run is kept outside the repo as
-`.localcode-preboot/ceiling-attended-no-timing.jsonl`.
+Note the label. A machine rebooted minutes ago with apps just opened is **not** the
+same condition as one that has been worked on all day, and calling both "attended"
+would merge them into a ceiling describing neither.
+
+## The three conditions, and why all of them are real
+
+| Condition | Machine state | What it bounds |
+|---|---|---|
+| `unattended` | fresh boot, nothing else running | the hard ceiling — the grind profile |
+| `attended-fresh` | fresh boot, apps just opened | best-case interactive use |
+| `attended-worked-in` | hours of uptime, swap already allocated | interactive use as it actually is by afternoon |
+
+`attended-worked-in` is already collected (5 cells, all completing a full-context
+request) and **cannot be reproduced after a reboot** — that is precisely what a reboot
+destroys. It predates the fill-duration metric, so it carries `"instrument":
+"pre-timing"` and its outcome column is comparable while its timings do not exist.
+Keeping it is why the reboot does not throw away the most realistic reading taken so
+far.
 
 ## Then
 
