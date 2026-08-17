@@ -1,7 +1,7 @@
 {
   "id": "patch-nil-check",
   "kind": "patch",
-  "max_tokens": 1024,
+  "max_tokens": 2048,
   "patch": {
     "source": "broken.go.txt",
     "test_file": "verify_test.go.txt",

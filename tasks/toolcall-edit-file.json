@@ -1,19 +1,73 @@
 {
   "id": "toolcall-edit-file",
   "kind": "toolcall",
-  "max_tokens": 512,
+  "max_tokens": 1024,
   "messages": [
-    {"role": "system", "content": "You are a coding agent. Use the provided tools. Do not explain."},
-    {"role": "user", "content": "Here is the complete content of config/app.yaml:\n\n```yaml\nservice: api\ntimeout: 30\nretries: 3\n```\n\nYou have the full file above, so there is nothing left to read. Change the timeout to 60."}
+    {
+      "role": "system",
+      "content": "You are a coding agent. Use the provided tools. Do not explain."
+    },
+    {
+      "role": "user",
+      "content": "Here is the complete content of config/app.yaml:\n\n```yaml\nservice: api\ntimeout: 30\nretries: 3\n```\n\nYou have the full file above, so there is nothing left to read. Change the timeout to 60."
+    }
   ],
   "tools": [
-    {"type": "function", "function": {"name": "read_file", "description": "Read a file",
-      "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
-    {"type": "function", "function": {"name": "edit_file", "description": "Replace an exact string in a file",
-      "parameters": {"type": "object",
-        "properties": {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}},
-        "required": ["path", "old_string", "new_string"]}}}
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "edit_file",
+        "description": "Replace an exact string in a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "old_string": {
+              "type": "string"
+            },
+            "new_string": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "old_string",
+            "new_string"
+          ]
+        }
+      }
+    }
   ],
-  "expect": {"tool": "edit_file", "required_args": ["path", "old_string", "new_string"],
-             "arg_contains": {"path": "app.yaml", "new_string": "60"}}
+  "expect": {
+    "tool": "edit_file",
+    "required_args": [
+      "path",
+      "old_string",
+      "new_string"
+    ],
+    "arg_contains": {
+      "path": "app.yaml",
+      "new_string": "60"
+    }
+  }
 }
