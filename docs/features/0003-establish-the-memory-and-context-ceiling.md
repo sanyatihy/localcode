@@ -94,8 +94,9 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 - [x] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
 - [x] The ladder writes one row per cell recording **time to ingest a full context** and the server's prompt rate, not only resident size — under saturation RSS stops discriminating exactly when the answer matters
 - [x] The ladder runs in both conditions, labelled, and the same cell is compared across them rather than across configs within one
-- [ ] The ladder is extended upward — 48k and 64k — because no cell from 8k to 32k failed in either condition, so the ceiling is above everything measured so far and remains unbounded
-- [ ] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — hard for unattended with the machine to itself, working for attended with an editor and browser open
+- [x] The ladder is extended upward — 48k and 64k — because no cell from 8k to 32k failed in either condition, so the ceiling is above everything measured so far and remains unbounded
+- [x] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — **answered by refutation: neither is reached at any context this model supports in practice.** 64k/q8_0 runs at 20.27 GB with zero swap, and marginal cost above 16k is a steady 31-37 KB/token, so exhausting the remaining headroom would take hundreds of thousands more tokens. Memory does not bound context on this machine
+- [ ] `docs/TECH.md` records the ingest-time curve as the real constraint, and states the headroom that memory turned out to have — which is what lets 0004 sweep quants it had assumed were infeasible
 - [x] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
 - [ ] `docs/TECH.md` states the measured envelope, what happens past it, and the ladder for 0007 to reuse
@@ -152,3 +153,27 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   arithmetic predicts — 93 KB/token from 8k to 16k, 31 KB/token from 16k to 32k, against a
   predicted ~139 KB/token — so some of the KV allocation is not attributed to process RSS on
   this platform. Recorded as an open limitation rather than explained away.
+- 2026-08-17 — **the feature's premise is refuted, which is the most useful thing it could
+  have produced.** The full q8_0 ladder — 8k, 16k, 32k, 48k, 64k — passed with swap delta
+  0.0 MB at every rung. Peak RSS ran 17.91 to 20.27 GB, and marginal cost settles at
+  31-37 KB/token above the first step against a predicted ~139. Memory is not the binding
+  constraint on this machine, and no ceiling exists in the range that matters.
+
+  | ctx | peak RSS | ingest | prompt t/s |
+  |---|---|---|---|
+  | 8k | 17.91 GB | 68 s | 109.4 |
+  | 16k | 18.64 GB | 149 s | 99.7 |
+  | 32k | 19.13 GB | 326 s | 90.7 |
+  | 48k | 19.72 GB | 543 s | 81.5 |
+  | 64k | 20.27 GB | 788 s | 75.0 |
+
+- 2026-08-17 — **time is the constraint memory was assumed to be.** Ingest grows faster
+  than context because the prompt rate decays with depth — 109 tok/s at 8k down to 75 at
+  64k — so a cold 64k context costs **13.1 minutes** and a cold 32k costs 5.4. That is what
+  makes a large window impractical here, and it is a latency budget rather than a memory
+  budget, so it lands almost entirely on the attended profile.
+- 2026-08-17 — consequence for 0004: memory headroom exists that the plan assumed away.
+  64k/q8_0 sits at 20.27 GB of 32 GB, so **larger quants are worth sweeping** — Q5_K_M and
+  Q6_K were excluded on a memory argument that the measurement does not support. Spending
+  the headroom on weight quality rather than on context length is now a live option, and it
+  is the trade 0004 should actually be testing.
