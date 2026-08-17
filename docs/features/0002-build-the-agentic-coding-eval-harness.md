@@ -128,3 +128,7 @@ sweep multiplies it by the config count.
   quantised cache is not visibly costing recall at the context this config serves. That is a
   single sentinel per depth, not a rate — it establishes the probe works, and 0004 is what
   turns it into evidence about KV types.
+- 2026-08-17 — fixture Go files renamed to .go.txt. Left as .go they sit inside this
+  module, so `go test ./...` compiled and ran the deliberately-broken fixtures and the
+  repo gate was red for exactly the reason the fixtures are correct. The scratch module
+  writes them back under real .go names.

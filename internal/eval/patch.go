@@ -14,10 +14,14 @@ import (
 // running a test it never sees. That is the strongest deterministic signal available
 // here: no string matching against a reference solution, so any correct fix passes
 // and a plausible-looking wrong one does not.
+// Fixture sources carry a .txt suffix so the go tool does not compile them as part
+// of this module. They are deliberately broken — left as .go, `go test ./...` on this
+// repo would build and fail them, and the gate that proves the scorer works would be
+// permanently red for the wrong reason.
 type Patch struct {
 	Dir      string `json:"-"`         // fixture directory, filled in at load
-	Source   string `json:"source"`    // file the model must rewrite, e.g. broken.go
-	TestFile string `json:"test_file"` // test copied in beside the answer, e.g. verify_test.go
+	Source   string `json:"source"`    // file the model must rewrite, e.g. broken.go.txt
+	TestFile string `json:"test_file"` // unseen test run against the answer, e.g. verify_test.go.txt
 	Package  string `json:"package"`   // package name both files declare
 }
 
@@ -51,10 +55,12 @@ func runPatch(p Patch, code string) (Outcome, string) {
 		return FailServer, fmt.Sprintf("fixture test unreadable: %v", err)
 	}
 	gomod := fmt.Sprintf("module localcodepatch\n\ngo 1.26\n")
+	// Written under fixed .go names: the fixture keeps a .txt suffix to stay out of
+	// this module, but the scratch module needs real Go filenames to compile.
 	writes := map[string][]byte{
-		"go.mod":    []byte(gomod),
-		"answer.go": []byte(code),
-		p.TestFile:  testSrc,
+		"go.mod":         []byte(gomod),
+		"answer.go":      []byte(code),
+		"verify_test.go": testSrc,
 	}
 	for name, data := range writes {
 		if err := os.WriteFile(filepath.Join(work, name), data, 0o644); err != nil {
