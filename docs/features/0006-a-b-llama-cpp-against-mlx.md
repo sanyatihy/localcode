@@ -7,7 +7,7 @@ shipped:
 check:
 checked:
 review:
-needs: 0001, 0002
+needs: 0002, 0012
 related: 0007
 ---
 
@@ -58,3 +58,6 @@ loses at 16k has lost the case that matters.
   but this is close enough that the numbers should decide it in the open.
 
 ## Log
+- 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
+  llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
+  itself, under time pressure, in a comparison whose numbers then rest on it.
