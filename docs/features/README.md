@@ -7,8 +7,9 @@ Run `kit next` to be told which feature and task to pick up.
 
 ## Conventions
 
-- **`Draft → Accepted → In progress → Shipped`** (exits: `Dropped` / `Superseded`).
-  `status:` in the frontmatter is canonical.
+- **`Draft → Accepted → Shipped`** (exits: `Dropped` / `Superseded`). `status:` in the
+  frontmatter is canonical. There is no "in progress": the claim branch says that, and a
+  second copy in the doc could only disagree with it.
 - **List order is the order of work.** Do the topmost unticked `## Tasks` box. If two
   boxes can genuinely happen in either order, it does not matter which is first.
 - **A branch named after the doc is the claim on it** (`0009-ton-payment-rail`).

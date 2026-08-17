@@ -1,7 +1,7 @@
 ---
 id: NNNN
 title: <short imperative name>
-status: Draft        # Draft | Accepted | In progress | Shipped | Dropped | Superseded
+status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
 created: YYYY-MM-DD
 shipped:             # fill the date when status flips to Shipped
 check:               # optional — date to check whether this worked. Only for bets.
