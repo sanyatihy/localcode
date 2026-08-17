@@ -1,7 +1,7 @@
 ---
 id: 0002
 title: Build the agentic coding eval harness
-status: Draft
+status: In progress
 created: 2026-08-17
 shipped:
 check:
@@ -49,8 +49,16 @@ an abstraction inventing itself — and Claude Code's is the one that must exist
 it is 0010's baseline and 0008's flow. Everything else — task
 definitions, scoring, metrics, results — is shared.
 
-Each task runs in a **scratch git checkout**, and passing means the repo's own tests pass
-afterwards. Deterministic checks are what make this an instrument; an LLM judge would add
+**The suite is two tiers, because they cost different amounts and answer different
+questions.** Tier 1 talks straight to the endpoint over HTTP: no harness, no agent loop,
+seconds per task. It measures single-turn quality — does it call the right tool with valid
+arguments, does its patch compile and pass, does it still retrieve correctly at depth — and
+that is enough to sweep a toggle matrix. Tier 2 drives a real harness through a multi-turn
+task, which is the only way to see coherence and recovery, and costs minutes per run.
+
+Tier 1 comes first because it is what the serving sweeps actually need, and because it is
+independent of the harness question. Tier 2 tasks run in a **scratch git checkout**, and
+passing means the repo's own tests pass Deterministic checks are what make this an instrument; an LLM judge would add
 a second model's noise to every number this project rests on.
 
 Metrics come from the cheapest honest source rather than from new code:
@@ -71,13 +79,18 @@ sweep multiplies it by the config count.
 
 ## Tasks
 
-- [ ] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact invocation recorded — or the blocker is written up before any scorer code exists
-- [ ] A Go binary runs one task through one harness in a scratch checkout and exits non-zero on failure
-- [ ] Adapters for the 0010 candidates satisfy the same interface, each proven on the same task
-- [ ] Six to ten fixed tasks exist as committed fixtures, each with a deterministic pass check that runs the repo's own tests
-- [ ] All five metrics are recorded per run and appended to a results file in a stable schema
-- [ ] `make eval CONFIG=<label> HARNESS=<name>` runs the suite 3× and prints a per-metric summary with spread
-- [ ] The scorer scores 0001's baseline end to end, and that first row is committed as the reference
+**Tier 1 — direct to the endpoint, no harness involved:**
+
+- [ ] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
+- [ ] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
+- [ ] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
+- [ ] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
+- [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
+
+**Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
+
+- [ ] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact provider configuration recorded — or the blocker is written up
+- [ ] An adapter interface drives at least two harnesses through the same tier-2 task in a scratch checkout, pass checked by the repo's own tests
 
 ## Open questions
 
