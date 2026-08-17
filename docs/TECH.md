@@ -63,11 +63,15 @@ can therefore point at this server with `ANTHROPIC_BASE_URL` and no proxy — se
 
 ## Checks
 
-`make check` runs `scripts/smoke.sh` against a running endpoint: health, a chat
-completion that must return non-empty content, and a tool call that must return
-valid JSON containing the schema's required field. It disables thinking for speed and
-determinism — whether thinking helps is [0005](features/0005-tune-sampling-and-tool-call-adherence.md)'s
-axis, not a gate's business.
+`make check` is the offline gate and is what CI runs: `gofmt` cleanliness, `go vet`,
+and `go test -race`. It needs no server and no model weights, because CI has neither.
 
-It needs a server up. That is deliberate: the thing worth checking in this repo is
-that the endpoint works, and a check that passes without one would be checking nothing.
+`make smoke` runs `scripts/smoke.sh` against a *running* endpoint: health, a chat
+completion that must return non-empty content, and a tool call that must return valid
+JSON containing the schema's required field. It disables thinking for speed and
+determinism — whether thinking helps is
+[0005](features/0005-tune-sampling-and-tool-call-adherence.md)'s axis, not a gate's.
+
+`make verify` is both, and is the gate to run before shipping anything that touches
+serving. The split exists because the two answer different questions: `check` asks
+whether the code holds, `smoke` asks whether this machine is actually serving.
