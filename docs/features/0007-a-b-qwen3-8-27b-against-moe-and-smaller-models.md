@@ -7,7 +7,7 @@ shipped:
 check:
 checked:
 review:
-needs: 0002, 0003
+needs: 0002, 0003, 0012
 related: 0004
 ---
 
@@ -64,3 +64,6 @@ The decision rule from 0004 applies unchanged, so results are comparable across 
   model that fails the task is not cheaper.
 
 ## Log
+- 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
+  llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
+  itself, under time pressure, in a comparison whose numbers then rest on it.

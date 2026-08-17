@@ -30,6 +30,11 @@ remembered.
   cheaply. *Unattended* is the long autonomous grind, where latency barely matters and
   errors compound because nobody is watching. They may want opposite settings — thinking
   above all — so every sweep reports per profile and the project may ship two configs.
+- **The profiles have different memory budgets, not only different latency tolerances.**
+  Attended means an editor and a browser are open *by definition*, so the model gets what
+  is left; unattended can have the machine. That is the same split as 0003's working and
+  hard ceilings, and binding them is what stops a config being recommended for attended
+  use on numbers measured with nothing else running.
 - The serving A/Bs are settled by that scorer and the winners recorded in `docs/TECH.md`
   with the numbers that beat the alternatives: **quantisation × context**, **sampling
   and tool-call format**, **llama.cpp vs MLX**, **model vs model** — each per profile.
@@ -85,6 +90,11 @@ remembered.
   lives in the repo. A number nobody can regenerate is not evidence.
 - **Measurement before tuning.** No optimisation is adopted without a before/after on
   the committed scorer.
+- **A swapping machine is not a slow machine, it is an invalid measurement.** On 32 GB
+  the model plus normal desktop apps can exhaust memory before the context is full, and
+  every timing taken in that state measures paging rather than inference. Runs record
+  free memory and swap so contamination is detected rather than assumed, and a run that
+  swapped is reported as void, not as a slow pass.
 - **One toggle at a time, and never one that moves two things.** Thinking mode carries its
   own recommended sampling — `temp 1.0 / top_p 0.95 / top_k 20` with thinking, `temp 0.7 /
   top_p 0.80 / top_k 20 / presence_penalty 1.5` without. Comparing thinking on against
