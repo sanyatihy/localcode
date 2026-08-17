@@ -59,12 +59,12 @@ editing the baseline or inventing their own flags — which is what makes 0003's
 
 ## Tasks
 
-- [ ] A committed config file names the model repo:quant, context, KV type, flash-attn, parallelism and port; a `serve` script takes a config path and starts `llama-server` from it and nothing else
-- [ ] `make serve` runs that script against the baseline config, and a second config file proves a variant launches without editing the first
-- [ ] `make serve` answers an OpenAI-compatible `/v1/chat/completions` request with a correct response, proven by a committed smoke script
-- [ ] The smoke script also asserts a tool-call round-trip returns valid JSON matching the requested schema
-- [ ] `docs/TECH.md` records the baseline config, the observed load time, and the arch-support check to repeat after `brew upgrade`
-- [ ] `make check` exists and is green — the gate every feature ships through, and 0001 is the first to need it
+- [x] A committed config file names the model repo:quant, context, KV type, flash-attn, parallelism and port; a `serve` script takes a config path and starts `llama-server` from it and nothing else
+- [x] `make serve` runs that script against the baseline config, and a second config file proves a variant launches without editing the first
+- [x] `make serve` answers an OpenAI-compatible `/v1/chat/completions` request with a correct response, proven by a committed smoke script
+- [x] The smoke script also asserts a tool-call round-trip returns valid JSON matching the requested schema
+- [x] `docs/TECH.md` records the baseline config, the observed load time, and the arch-support check to repeat after `brew upgrade`
+- [x] `make check` exists and is green — the gate every feature ships through, and 0001 is the first to need it
 
 ## Open questions
 
@@ -82,3 +82,8 @@ editing the baseline or inventing their own flags — which is what makes 0003's
 
 - 2026-08-17 — added a `make check` box: AGENTS.md gates shipping on it and no feature
   had created it. Appended rather than inserted — it blocks shipping, not the boxes above.
+- 2026-08-17 — built and verified against a real restart cycle: stopped the hand-started
+  server, relaunched from `config/baseline.env` to an identical process line, launched
+  `config/ctx16k-f16.env` to prove a variant needs no edit to either, then restored the
+  baseline. Load ~4.2 s warm-page-cache, ~18.8 GB resident at low occupancy. Smoke runs
+  in ~6.5 s, which is cheap enough to gate on.
