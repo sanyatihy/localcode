@@ -24,5 +24,8 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
 - **Warm prompt-cache reuse across agent turns** — llama-server can hold KV across
   requests; agent loops resend a near-identical prefix every turn. Promote when: 0008
   or 0010 shows prompt processing dominating real session latency.
+- **Cursor's built-in assistant via an HTTPS tunnel** — rejected in 0008 because it
+  routes through Cursor's backend, so code leaves the machine. Promote when: Cursor
+  supports calling a base URL from the client, which would remove the entire objection.
 - **docs/TECH.md as-built** — the vision expects durable facts to land there; it does not
   exist yet. Promote when: 0001 ships and there is a first fact to record.

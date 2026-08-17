@@ -28,10 +28,12 @@ remembered.
 - The serving A/Bs are settled by that scorer and the winners recorded in `docs/TECH.md`
   with the numbers that beat the alternatives: **quantisation × context**, **sampling
   and tool-call format**, **llama.cpp vs MLX**, **model vs model**.
-- The harness question is answered the same way: **Pi** and **Hermes Agent** run the
-  same tasks against the same endpoint, and one is the default.
-- **Cursor** is tested against the local endpoint, with its cost to the on-device
-  property measured and stated rather than discovered later.
+- The harness question is answered the same way: **Pi**, **Hermes Agent** and
+  **OpenCode** run the same tasks against the same endpoint, scored against the
+  incumbent — Claude Code — and one is the default.
+- **The existing editor flow keeps working, locally.** Claude Code driven from the
+  Cursor/VSCode extension, pointed at the local endpoint, completing a real task with
+  the network off.
 - Optionally, a flow exists where a frontier model plans and coordinates while local
   models grind features — the roles `kit` already defines, split across two tiers.
 
@@ -62,10 +64,11 @@ remembered.
   22 GB and 64k does not fit. **Context budget is a first-class design parameter in
   every feature, not a flag chosen at the end.**
 - **On-device by default; every exception named and bounded.** The build loop runs
-  locally. Two exceptions are deliberate and must always be labelled as such: Cursor
-  routes requests through its own backend and cannot reach loopback, so any Cursor
-  setup sends code off the machine; and the coordination flow, if built, sends planning
-  context to a frontier model. Neither may be the silent default.
+  locally, and the editor flow qualifies: an extension runs the agent on this machine,
+  so the editor's own backend is not in the request path. What does not qualify is an
+  editor's built-in assistant that proxies through its vendor — ruled out for that
+  reason, not adopted with a caveat. The one deliberate exception is the coordination
+  flow, which sends planning context to a frontier model and may never be silent.
 - **Go for anything built.** One static binary, no runtime competing with the model for
   the 32 GB it needs. Where a tool is Python-only — MLX above all — it is confined to
   its own environment and called, never merged into the Go code.

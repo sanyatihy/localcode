@@ -6,69 +6,84 @@ created: 2026-08-17
 shipped:
 check:
 checked:
-review: human
-needs: 0004, 0010
-related: 0002
+review:
+needs: 0004
+related: 0010, 0005
 ---
 
 ## Problem
 
-The winning config has to survive a real editor session, not just the fixed suite. Cursor
-is the specific target, and it carries a constraint that changes what "local" means here —
-one that should be measured and stated rather than discovered halfway through a workday.
+The working flow today is Claude Code driven from the Cursor/VSCode extension against a
+hosted model. The goal is that exact flow with the local endpoint underneath — same
+editor, same agent, same habits, different backend. Until that runs, the project has
+produced benchmark numbers and no change to how work actually gets done.
 
 ## Non-goals
 
-- **No further config tuning.** If live use contradicts the scorer, that is a finding worth
-  a new feature and evidence the suite is unrepresentative, not a quiet re-tune.
-- **No CLI harness comparison.** 0010 settles Pi against Hermes; this is the editor.
-- **Not making Cursor offline.** It cannot be, per the design below. Pretending otherwise
-  by burying the tunnel in a setup script is the failure mode this feature exists to avoid.
+- **Not Cursor's built-in assistant.** Rejected in the design below on architecture, not
+  preference. It is recorded there so nobody re-opens it.
+- **No CLI harness comparison.** 0010 settles Pi, Hermes and OpenCode; this is the editor.
+- **No further config tuning.** If live use contradicts the scorer, that is a finding and
+  evidence the suite is unrepresentative, not a quiet re-tune.
+- **No proxy or translation layer.** The design below shows none is needed; adding one
+  would insert a component nobody measured between the agent and the server.
 
 ## Design
 
-**Cursor cannot reach a loopback endpoint.** It routes model requests through its own
-backend rather than calling the base URL from the machine, and it rejects plain HTTP. A
-local model therefore requires a public HTTPS tunnel, and the request path becomes:
-Cursor client → Cursor's backend → tunnel → this Mac.
+**The extension runs the agent on this machine.** Claude Code executes locally and the
+editor hosts it, so the editor's own backend is never in the request path. That is what
+makes this flow compatible with the vision, and it is the whole reason it beats the
+alternative below.
 
-Three consequences, all of which belong in the result rather than in a footnote:
+**No proxy is needed.** The installed `llama-server` (build 10450) already serves
+`/v1/messages` and `/v1/messages/count_tokens` — the Anthropic Messages API — converting
+to its chat-completions path internally. Confirmed in the shipped binary, not inferred
+from release notes. So `ANTHROPIC_BASE_URL` pointed at the local server is the entire
+integration, and the LiteLLM / claude-code-router layer that most write-ups reach for is
+dead weight here.
 
-1. **The on-device property is gone in this mode.** Prompts and file context leave the
-   machine even though inference is local. The vision permits this only as a named,
-   bounded exception — so the exposure is what this feature measures, alongside the
-   performance.
-2. **Latency gains a round trip** through Cursor's backend and the tunnel, on every turn.
-   Compared against the same config under a local CLI harness, that is the real cost, and
-   0010's numbers are the baseline it is measured against.
-3. **The tunnel is an open ingress** to a server on this machine while it runs. It must be
-   authenticated and torn down with the session, never left running.
+**Rejected: Cursor's built-in assistant.** It does not call the configured base URL from
+this machine; it routes model requests through its own backend and rejects plain HTTP, so
+a local model requires a public HTTPS tunnel and the request path becomes Cursor → its
+backend → tunnel → here. Code leaves the machine even though inference does not, and it
+adds a round trip per turn. The extension flow gets the same editor without any of that.
 
-So the feature's honest output may be **"Cursor is not the right front-end for this
-project"** — a supported conclusion, recorded with its numbers. `review: human` because
-accepting the privacy trade is not an agent's call to make.
+Three risks, in the order they will bite:
 
-A verified local-CLI comparison runs in the same sitting: the same task through Pi or
-Hermes with the network disabled, proving the on-device path still works and giving the
-Cursor numbers something to mean.
+1. **Background model calls.** Claude Code makes non-essential calls — conversation
+   titles, small-model checks — beyond the main completion. Against a single-slot local
+   server these contend with or block the real request. The exact environment variables
+   that redirect or disable them must be read from Claude Code's own documentation at
+   build time rather than copied from a blog post, and this is task one because
+   everything else is unusable until it is settled.
+2. **Context ceiling.** Claude Code assumes a large window; 0003's measured ceiling is far
+   smaller. Auto-compaction behaviour at a 16–32k limit is the thing most likely to make
+   the flow feel broken, and it must be made visible rather than silently truncating.
+3. **Translation fidelity.** Tool calls now cross an Anthropic→OpenAI conversion inside
+   the server. That is a new surface 0005 never measured, so tool-call validity is checked
+   through this path specifically, not assumed to carry over.
 
 ## Tasks
 
-- [ ] The tunnel is set up authenticated, HTTPS, and torn down with the session, with the exact commands committed
-- [ ] Cursor completes a real task in this repo against the local endpoint, and the transcript is recorded
-- [ ] What Cursor's backend receives is characterised — prompts, file context, repo metadata — and written down plainly
-- [ ] Per-turn latency is measured against the same task run through the 0010 winner locally
-- [ ] Context exhaustion is made visible rather than silently truncating history
-- [ ] The same task is completed through the local CLI harness with the network disabled, proving the offline path
-- [ ] A recommendation is recorded in `docs/TECH.md`, including "do not use Cursor for this" if that is what the numbers say
+- [ ] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
+- [ ] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
+- [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
+- [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
+- [ ] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
+- [ ] The whole flow is verified with the network disabled, proving nothing depends on a hosted service
+- [ ] The setup is committed as configuration, and `docs/TECH.md` records it plus the rejection of Cursor's built-in assistant with its reason
 
 ## Open questions
 
-- Is the privacy cost acceptable given inference stays local? A human call, hence
-  `review: human`. Leaning: **acceptable for exploratory editing, not for the unattended
-  grind**, which is what 0011 would send to local agents anyway.
+- Does the extension flow work with the network fully off, or does Claude Code require
+  reachable Anthropic infrastructure for auth or licence checks even when the model is
+  local? This decides whether "offline" is literal or merely "no inference off-machine",
+  and the network-off task is what answers it.
 
 ## Log
 
-- 2026-08-17 — retargeted from "some OpenAI-compatible agent" to Cursor specifically, and
-  the loopback limitation moved into the design where it changes the tasks.
+- 2026-08-17 — retargeted from Cursor's built-in assistant to the Claude-Code-in-editor
+  flow already in use. The earlier tunnel design is kept as a rejected alternative: the
+  extension runs the agent locally, so the vendor backend drops out of the path entirely.
+- 2026-08-17 — dropped `needs: 0010` and `review: human`. The privacy trade that required
+  a human call belonged to the tunnel, which is no longer the path.

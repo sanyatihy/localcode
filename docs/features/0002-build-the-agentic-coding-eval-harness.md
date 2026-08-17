@@ -38,14 +38,15 @@ is missing is the thing that runs fixed tasks through one of them and records nu
 Two things the original plan conflated, kept separate here because they change at
 different rates:
 
-- **The harness** is the agent loop — Pi, Hermes, Cursor. Chosen, not written (0010).
+- **The harness** is the agent loop — Claude Code, Pi, Hermes, OpenCode. Chosen, not written (0010).
 - **The scorer** is this feature: a Go binary that runs fixed tasks through a harness
   against an endpoint and records what happened.
 
 The scorer drives a harness through a **thin adapter**: how to invoke it non-interactively
-with a task prompt in a given directory, and how to tell when it has stopped. Two adapters
-at first, Pi and Hermes, because 0010 has to compare them and an adapter interface with a
-single implementation is an abstraction inventing itself. Everything else — task
+with a task prompt in a given directory, and how to tell when it has stopped. Adapters for the
+candidates 0010 compares, written together because an interface with one implementation is
+an abstraction inventing itself — and Claude Code's is the one that must exist first, since
+it is 0010's baseline and 0008's flow. Everything else — task
 definitions, scoring, metrics, results — is shared.
 
 Each task runs in a **scratch git checkout**, and passing means the repo's own tests pass
@@ -70,9 +71,9 @@ sweep multiplies it by the config count.
 
 ## Tasks
 
-- [ ] Pi and Hermes are confirmed to run non-interactively against a local OpenAI-compatible endpoint, with the exact invocation recorded — or the blocker is written up before any scorer code exists
+- [ ] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact invocation recorded — or the blocker is written up before any scorer code exists
 - [ ] A Go binary runs one task through one harness in a scratch checkout and exits non-zero on failure
-- [ ] Adapters for both Pi and Hermes satisfy the same interface, each proven on the same task
+- [ ] Adapters for the 0010 candidates satisfy the same interface, each proven on the same task
 - [ ] Six to ten fixed tasks exist as committed fixtures, each with a deterministic pass check that runs the repo's own tests
 - [ ] All five metrics are recorded per run and appended to a results file in a stable schema
 - [ ] `make eval CONFIG=<label> HARNESS=<name>` runs the suite 3× and prints a per-metric summary with spread
@@ -80,9 +81,10 @@ sweep multiplies it by the config count.
 
 ## Open questions
 
-- Do Pi and Hermes both expose a scriptable non-interactive mode? This is the assumption
-  the whole design rests on, hence task one. If only one does, it wins 0010 by default and
-  that should be recorded as the reason rather than presented as a quality result.
+- Does every candidate expose a scriptable non-interactive mode? This is the assumption
+  the whole design rests on, hence task one. If one cannot be driven headlessly it leaves
+  0010 by default, and that should be recorded as the reason rather than presented as a
+  quality result.
 - Is a fixed task suite representative of real agentic work? Leaning: **no, not fully** —
   which is why 0008 exists and why divergence between live use and this suite is a finding
   the suite has to answer for.
