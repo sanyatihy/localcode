@@ -1,0 +1,70 @@
+---
+id: 0003
+title: Establish the memory and context ceiling
+status: Draft
+created: 2026-08-17
+shipped:
+check:
+checked:
+review:
+needs: 0001
+related: 0004
+---
+
+## Problem
+
+On 32 GB, context is the scarce resource and agentic coding is what spends it: every
+turn re-reads files and tool output. Q4_K_M weights are ~16.4 GB and KV costs ~256
+KiB/token at f16, so the arithmetic says 32k context lands near 22 GB and 64k does not
+fit — but that is arithmetic, not measurement, and 0004 cannot sweep a range whose top
+is a guess. Guessing high means discovering the ceiling as an OOM or a swap storm
+mid-sweep.
+
+## Non-goals
+
+- **No quality judgement.** Which context is *best* is 0004. This finds what is *possible*.
+- **No model comparison.** Other models' envelopes belong to 0007, using this method.
+- **No permanent system modification.** Any `sysctl` change must be reversible and
+  recorded; a machine that needs undocumented tuning to boot into a working state is a
+  worse outcome than a smaller context.
+
+## Design
+
+Measure rather than model, because the arithmetic omits compute buffers, the graph, and
+macOS's own reservation. For each context in a ladder — 16k, 32k, 48k, 64k — with KV at
+f16, q8_0 and q4_0, load the baseline and drive the context genuinely full, then record
+peak wired memory, peak resident, whether the GPU wired limit was hit, and whether the
+system swapped.
+
+**Filling the context is the point.** Allocation at load time understates the true peak,
+and a config that loads and then dies at 30k is the exact failure this feature exists to
+prevent.
+
+Two ceilings get recorded, and they are different numbers:
+
+- **Hard ceiling** — the largest config that runs at all.
+- **Working ceiling** — the largest that leaves the machine usable with an editor and a
+  browser running, which is the vision's constraint and the one 0004 should sweep under.
+
+`iogpu.wired_limit_mb` is measured at its default first. Raising it is tested as a
+separate, explicitly reversible step, and reported as a distinct result — an option with
+a cost, not the new baseline.
+
+Swap is a **failure**, not a slow pass. A config that swaps has left the envelope
+regardless of what it scores.
+
+## Tasks
+
+- [ ] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
+- [ ] The ladder (16k/32k/48k/64k × f16/q8_0/q4_0 KV) runs unattended and writes one row per cell, marking each pass, swap, or OOM
+- [ ] Hard ceiling and working ceiling are both identified, the second measured with an editor and browser running
+- [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
+- [ ] `docs/TECH.md` states the measured envelope, what happens past it, and the ladder for 0007 to reuse
+
+## Open questions
+
+- Is q4_0 KV worth carrying forward? It halves KV again, but long-context retrieval is
+  precisely what agentic coding depends on. Leaning: **measure it here, let 0004 judge
+  the quality cost** — cheap to include now, expensive to re-run later.
+
+## Log
