@@ -116,6 +116,22 @@ Apple Silicon; treat RSS as a lower bound.
 | Smoke gate | 6.5 s |
 | Thinking mode | 3.06× completion tokens, 1.67× wall, on tier-1 tasks |
 
+### Ladder rungs are derived, not written down
+
+`scripts/rungs.sh` computes which contexts to ladder over from the machine: total memory,
+the weights file's actual size, a reserve for the desktop, the measured KB/token, and an
+ingest-time budget. It reports **which of memory or time binds**, which is the ladder's
+whole question.
+
+On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
+hand — and reports ingest time as the binding constraint. Modelling 128 GB with
+`TOTAL_GB=128` gives **the same rungs**, and so does a 70 GB model: memory allows ~262k
+tokens in every case while a 20-minute ingest budget allows ~64k.
+
+That is worth stating plainly: **more RAM does not buy more context for this model.** It
+buys larger quants and larger models. Context is bounded by ingest time, and ingest time
+does not care how much memory is spare.
+
 ## Gotchas
 
 Each of these has already caused a wrong number in this repo.
@@ -139,6 +155,9 @@ Each of these has already caused a wrong number in this repo.
 - **`-hf` downloads more than the weights.** It pulls and loads an 888 MB multimodal
   projector when the repo ships one, costing 1.02 GB resident that text-only coding never
   uses.
+- **The HuggingFace cache stores snapshots as symlinks into `blobs/`.** BSD `stat -f%z`
+  does not follow them and reports the link's own size, which reads as a 0 GB model and
+  silently inflates any headroom estimate built on it. Use `stat -L -f%z`.
 - **zsh does not word-split unquoted variables.** Scripts here run under `bash` via
   shebang; a loop written interactively in zsh can produce config filenames with the value
   glued in, which the ladder will then glob and parse.

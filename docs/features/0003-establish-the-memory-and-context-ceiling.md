@@ -97,9 +97,8 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 - [x] The ladder is extended upward — 48k and 64k — because no cell from 8k to 32k failed in either condition, so the ceiling is above everything measured so far and remains unbounded
 - [x] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — **answered by refutation: neither is reached at any context this model supports in practice.** 64k/q8_0 runs at 20.27 GB with zero swap, and marginal cost above 16k is a steady 31-37 KB/token, so exhausting the remaining headroom would take hundreds of thousands more tokens. Memory does not bound context on this machine
 - [x] `docs/TECH.md` records the full ladder, the ingest-time curve, and the exact envelope the result is scoped to — one model, one quant, contexts to 64k, 32 GB — so it is not read as a general claim about memory, plus the gotchas each wrong number here already cost
-- [ ] Ladder rungs are derived from available memory rather than hardcoded, since a 128 GB machine is planned and every rung here is a fact about a 32 GB one
+- [x] Ladder rungs are derived from available memory rather than hardcoded, since a 128 GB machine is planned and every rung here is a fact about a 32 GB one
 - [x] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
-- [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
 
 ## Open questions
 
@@ -183,3 +182,17 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   untested. 0004's quant sweep is where memory gets its next real chance to bind, and the
   planned 128 GB machine moves every rung at once, which makes the hardcoded ladder a
   defect rather than a setting.
+- 2026-08-17 — the `iogpu.wired_limit_mb` box is removed rather than done. It existed to
+  answer "can the ceiling be raised", and there is no ceiling to raise: nothing from 8k to
+  64k came near the limit, so raising it would move a boundary nothing reached. The
+  question is not wrong, only premature — it belongs to 0004, where Q5_K_M and Q6_K are
+  the first configs with a real chance of meeting a memory wall. Recorded here rather than
+  silently dropped, and it needs `sudo`, which is a human's to grant.
+- 2026-08-17 — rungs are now derived by `scripts/rungs.sh` from total memory, the weights
+  file's real size, a desktop reserve, the measured KB/token and an ingest-time budget. It
+  reproduces the hand-written 8k/16k/32k/64k on this machine and names which constraint
+  binds. Two things fell out. `stat -f%z` does not follow symlinks, and the HF cache is
+  symlinks, so the first version sized the model at 0 GB and would have inflated every
+  headroom estimate. And **the rungs do not change at 128 GB, or with a 70 GB model**:
+  memory allows ~262k tokens in every case while 20 minutes of ingest allows ~64k. More
+  RAM buys bigger quants and bigger models, not longer context.
