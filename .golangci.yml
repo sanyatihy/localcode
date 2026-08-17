@@ -1,0 +1,22 @@
+# Pinned so CI and a laptop agree. The workflow pins the binary version to match;
+# an unpinned `latest` there would fail a push for a lint that did not exist when
+# the code was written.
+version: "2"
+
+linters:
+  default: standard   # errcheck, govet, ineffassign, staticcheck, unused
+  settings:
+    errcheck:
+      # Writes to stdout/stderr in a CLI are deliberately unchecked at the call
+      # site; the ones that matter (a results row reaching disk) are checked.
+      check-type-assertions: true
+  exclusions:
+    generated: lax
+    rules:
+      # Fixture sources are deliberately broken Go kept as .txt; nothing to lint.
+      - path: tasks/
+        linters: [errcheck, staticcheck, govet, ineffassign, unused]
+
+formatters:
+  enable:
+    - gofmt

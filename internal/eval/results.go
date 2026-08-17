@@ -94,18 +94,23 @@ func AppendRow(path string, r Row) error {
 			return err
 		}
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	b, err := json.Marshal(r)
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(f, "%s\n", b); err != nil {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
 		return err
 	}
-	return f.Sync()
+	// Close is checked rather than deferred-and-dropped: this is a write path, and a
+	// row that never reached disk would silently shorten a multi-hour sweep's results.
+	if _, err := fmt.Fprintf(f, "%s\n", b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }

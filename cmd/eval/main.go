@@ -113,7 +113,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			if err != nil {
 				// A transport failure is recorded and the suite continues: losing hours
 				// of sweep to one dropped connection would be worse than a gap.
-				fmt.Fprintf(stderr, "eval: %s: %v\n", task.ID, err)
+				_, _ = fmt.Fprintf(stderr, "eval: %s: %v\n", task.ID, err)
 				failures++
 				continue
 			}
@@ -128,8 +128,8 @@ func run(args []string, stdout, stderr *os.File) error {
 				status = "FAIL"
 				failures++
 			}
-			fmt.Fprintf(stdout, "%-4s [%d] %-24s %s %s\n", status, rep, res.TaskID, res.Outcome, res.Detail)
-			fmt.Fprintf(stdout, "          ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
+			_, _ = fmt.Fprintf(stdout, "%-4s [%d] %-24s %s %s\n", status, rep, res.TaskID, res.Outcome, res.Detail)
+			_, _ = fmt.Fprintf(stdout, "          ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
 				props.NCtx, res.PromptTokens, res.CachedTokens, res.PromptPerSecond,
 				res.CompletionTokens, res.GenPerSecond, res.ReasoningChars, res.WallSeconds)
 		}

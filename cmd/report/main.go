@@ -47,7 +47,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
@@ -60,7 +60,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		}
 		var r eval.Row
 		if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
-			fmt.Fprintf(stderr, "report: skipping unparseable row: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "report: skipping unparseable row: %v\n", err)
 			continue
 		}
 		if *only != "" && r.Config != *only {
@@ -98,13 +98,13 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 	if len(byConfig) == 0 {
-		fmt.Fprintln(stdout, "no rows matched")
+		_, _ = fmt.Fprintln(stdout, "no rows matched")
 		return nil
 	}
 
 	for _, cfg := range sortedKeys(byConfig) {
-		fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
-		fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+		_, _ = fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
+		_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
 			"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
 		for _, th := range sortedKeys(byConfig[cfg]) {
 			a := byConfig[cfg][th]
@@ -112,15 +112,15 @@ func run(args []string, stdout, stderr *os.File) error {
 			if a.tcSeen > 0 {
 				tc = fmt.Sprintf("%d/%d", a.tcValid, a.tcSeen)
 			}
-			fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
 				th, fmt.Sprintf("%d/%d", a.pass, a.total), tc,
 				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
 			if s := failSummary(a.outcomes); s != "" {
-				fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
+				_, _ = fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
 			}
 		}
 	}
-	fmt.Fprintln(stdout)
+	_, _ = fmt.Fprintln(stdout)
 	return nil
 }
 

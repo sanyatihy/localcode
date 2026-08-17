@@ -49,13 +49,13 @@ func runPatch(ctx context.Context, p Patch, code string) (Outcome, string) {
 	if err != nil {
 		return FailServer, fmt.Sprintf("tempdir: %v", err)
 	}
-	defer os.RemoveAll(work)
+	defer func() { _ = os.RemoveAll(work) }()
 
 	testSrc, err := os.ReadFile(filepath.Join(p.Dir, p.TestFile))
 	if err != nil {
 		return FailServer, fmt.Sprintf("fixture test unreadable: %v", err)
 	}
-	gomod := fmt.Sprintf("module localcodepatch\n\ngo 1.26\n")
+	const gomod = "module localcodepatch\n\ngo 1.26\n"
 	// Written under fixed .go names: the fixture keeps a .txt suffix to stay out of
 	// this module, but the scratch module needs real Go filenames to compile.
 	writes := map[string][]byte{

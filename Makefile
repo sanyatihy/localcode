@@ -10,7 +10,7 @@ RESULTS  ?= results/tier1.jsonl
 N        ?= 1
 THINKING ?=
 
-.PHONY: build check fmt vet test smoke verify serve eval report
+.PHONY: build check fmt vet lint test smoke verify serve eval report
 
 ## build: compile everything
 build:
@@ -18,13 +18,18 @@ build:
 
 ## check: the offline gate — formatting, vet, and tests under the race detector.
 ## Runs in CI, so it must need no server and no model weights.
-check: fmt vet test
+check: fmt vet lint test
 
 fmt:
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
 
 vet:
 	@go vet ./...
+
+## lint: golangci-lint, pinned by .golangci.yml. Skipped with a loud note if the
+## binary is absent, so a laptop without it still runs the rest — CI always has it.
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 		&& golangci-lint run ./... 		|| echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"
 
 test:
 	@go test -race ./...
