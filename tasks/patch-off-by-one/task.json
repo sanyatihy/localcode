@@ -1,0 +1,10 @@
+{
+  "id": "patch-off-by-one",
+  "kind": "patch",
+  "max_tokens": 1024,
+  "patch": {"source": "broken.go", "test_file": "verify_test.go", "package": "main"},
+  "messages": [
+    {"role": "system", "content": "You are a careful Go engineer. Reply with the complete corrected file in a single ```go code block. No explanation."},
+    {"role": "user", "content": "Window has an off-by-one bug: it drops one more element than it should. Fix it so the documented behaviour holds for every input, including empty slices.\n\n```go\n{{BODY}}\n```"}
+  ]
+}

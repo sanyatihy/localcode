@@ -82,7 +82,7 @@ sweep multiplies it by the config count.
 **Tier 1 — direct to the endpoint, no harness involved:**
 
 - [x] A Go binary sends one fixed task straight to the endpoint, applies a deterministic check, and exits non-zero on failure
-- [ ] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
+- [x] Six to ten tier-1 tasks exist as committed fixtures: tool-call correctness against an expected call, patch tasks checked by compiling and running the result, and retrieval probes at increasing context depth
 - [ ] Metrics are recorded per run — success, tool-call validity, tok/s generated, tok/s prompt, cached-token share — and appended to a results file in a stable schema
 - [ ] `make eval CONFIG=<label>` runs the suite N× against a named config and prints a per-metric summary with spread
 - [ ] The request-level toggle matrix runs end to end: thinking on and off, each at its own model-card sampling defaults, reported per profile
@@ -114,3 +114,17 @@ sweep multiplies it by the config count.
   server error) because 0005 needs to know *how* a config fails, and because a server
   error must never be scored as model quality. Checker failure paths are covered by an
   offline test so the instrument does not depend on a server behaving.
+- 2026-08-17 — seven tier-1 fixtures land and all run end to end. Both patch fixtures were
+  confirmed to fail their own unseen tests before any model saw them; a fixture that passes
+  out of the box would score every config correct and mean nothing.
+- 2026-08-17 — the first suite run caught a defect in the instrument rather than the model.
+  toolcall-edit-file failed with the model calling read_file when told to make an edit — but
+  reading before editing is defensible agent behaviour, so the fixture was scoring a style
+  preference as a wrong answer, and would have failed every config identically. Rewritten to
+  include the file content inline, making a read provably unnecessary; the model then calls
+  edit_file correctly. The general rule this teaches: a tier-1 task must have exactly one
+  defensible action, or it is measuring the fixture author, not the model.
+- 2026-08-17 — retrieval passes at 2k, 8k and 16k depth on the q8_0 KV baseline, so the
+  quantised cache is not visibly costing recall at the context this config serves. That is a
+  single sentinel per depth, not a rate — it establishes the probe works, and 0004 is what
+  turns it into evidence about KV types.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,12 +14,14 @@ import (
 // noise to every number this project rests on.
 type Task struct {
 	ID        string    `json:"id"`
-	Kind      string    `json:"kind"` // toolcall — more kinds arrive with the next box
+	Kind      string    `json:"kind"` // toolcall | patch | retrieval
 	Messages  []Message `json:"messages"`
 	Tools     []Tool    `json:"tools,omitempty"`
 	MaxTokens int       `json:"max_tokens"`
 
-	Expect Expect `json:"expect"`
+	Expect    Expect     `json:"expect"`
+	Patch     *Patch     `json:"patch,omitempty"`
+	Retrieval *Retrieval `json:"retrieval,omitempty"`
 }
 
 type Expect struct {
@@ -39,6 +42,11 @@ const (
 	FailBadJSON   Outcome = "fail_invalid_json"
 	FailArgs      Outcome = "fail_wrong_args"
 	FailServer    Outcome = "fail_server_error"
+
+	FailEmpty     Outcome = "fail_empty_answer"
+	FailCompile   Outcome = "fail_does_not_compile"
+	FailTest      Outcome = "fail_test_failed"
+	FailRetrieval Outcome = "fail_sentinel_not_recalled"
 )
 
 type Result struct {
@@ -72,15 +80,58 @@ func LoadTask(path string) (*Task, error) {
 	if t.MaxTokens == 0 {
 		t.MaxTokens = 512
 	}
+	switch t.Kind {
+	case "toolcall":
+	case "patch":
+		if t.Patch == nil {
+			return nil, fmt.Errorf("%s: patch task needs a patch block", path)
+		}
+		t.Patch.Dir = filepath.Dir(path)
+	case "retrieval":
+		if t.Retrieval == nil {
+			return nil, fmt.Errorf("%s: retrieval task needs a retrieval block", path)
+		}
+	default:
+		return nil, fmt.Errorf("%s: unknown kind %q", path, t.Kind)
+	}
 	return &t, nil
+}
+
+// expand substitutes the generated body of a task into its prompt. Patch and
+// retrieval tasks are templates: the fixture holds the instruction, and the bulk
+// of the prompt is built here so it is identical across configs.
+func (t *Task) expand() ([]Message, error) {
+	var body string
+	switch t.Kind {
+	case "patch":
+		src, err := os.ReadFile(filepath.Join(t.Patch.Dir, t.Patch.Source))
+		if err != nil {
+			return nil, fmt.Errorf("fixture source unreadable: %w", err)
+		}
+		body = string(src)
+	case "retrieval":
+		body = buildHaystack(*t.Retrieval)
+	default:
+		return t.Messages, nil
+	}
+	out := make([]Message, len(t.Messages))
+	copy(out, t.Messages)
+	for i := range out {
+		out[i].Content = strings.ReplaceAll(out[i].Content, "{{BODY}}", body)
+	}
+	return out, nil
 }
 
 // Run executes one task and scores it. thinking is passed through to the model's
 // own chat template; nil leaves the template default alone, which is not the same
 // as setting it false.
 func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (Result, error) {
+	msgs, err := t.expand()
+	if err != nil {
+		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
+	}
 	req := chatRequest{
-		Messages:  t.Messages,
+		Messages:  msgs,
 		Tools:     t.Tools,
 		MaxTokens: t.MaxTokens,
 		Sampling:  s,
@@ -120,6 +171,10 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (
 	switch t.Kind {
 	case "toolcall":
 		res.Outcome, res.Detail = checkToolCall(t.Expect, msg.ToolCalls, msg.Content)
+	case "patch":
+		res.Outcome, res.Detail = runPatch(*t.Patch, extractCode(msg.Content))
+	case "retrieval":
+		res.Outcome, res.Detail = checkRetrieval(*t.Retrieval, msg.Content)
 	default:
 		res.Outcome, res.Detail = FailServer, "unknown task kind "+t.Kind
 	}
