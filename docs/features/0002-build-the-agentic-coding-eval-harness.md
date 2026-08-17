@@ -174,3 +174,12 @@ sweep multiplies it by the config count.
   so this cannot regress silently, `.golangci.yml` is pinned, and the CI action is pinned
   to the same version rather than `latest`, which would fail a push for a lint that did
   not exist when the code was written.
+- 2026-08-17 — the fixtures were starving thinking mode, and the aborted matrix proves it:
+  **8 of 8 failures under thinking=on hit their token cap exactly**, and none was a quality
+  failure. Retrieval allowed 64 tokens, which thinking spends on reasoning before it can
+  answer. Left unfixed the matrix would have reported thinking on at 13/21 against thinking
+  off at 21/21 and concluded thinking hurts quality, when the entire gap was a budget set
+  while testing with thinking off. Caps raised to 512/1024/2048 — the same for both modes,
+  so a mode spending more of it is a measured cost rather than a disqualification — and
+  `fail_truncated_at_cap` now separates a capped answer from a wrong one, checked before
+  any per-kind check.

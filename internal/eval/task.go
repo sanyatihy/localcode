@@ -47,6 +47,12 @@ const (
 	FailCompile   Outcome = "fail_does_not_compile"
 	FailTest      Outcome = "fail_test_failed"
 	FailRetrieval Outcome = "fail_sentinel_not_recalled"
+
+	// FailTruncated is not a quality failure. It means the answer was cut off at
+	// max_tokens, which measures the budget the fixture granted rather than anything
+	// about the model. Kept distinct because thinking mode spends the same budget on
+	// reasoning first, so a shared cap silently penalises it.
+	FailTruncated Outcome = "fail_truncated_at_cap"
 )
 
 type Result struct {
@@ -167,6 +173,15 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (
 	}
 	msg := resp.Choices[0].Message
 	res.ReasoningChars = len(msg.ReasoningContent)
+
+	// Checked before the per-kind check: a truncated reply can fail any of them for a
+	// reason that is not the model's, and attributing it to quality would be wrong.
+	if resp.Choices[0].FinishReason == "length" {
+		res.Outcome = FailTruncated
+		res.Detail = fmt.Sprintf("hit max_tokens=%d after %d reasoning chars",
+			t.MaxTokens, res.ReasoningChars)
+		return res, nil
+	}
 
 	switch t.Kind {
 	case "toolcall":
