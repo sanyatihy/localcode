@@ -100,12 +100,6 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 - [x] Ladder rungs are derived from available memory rather than hardcoded, since a 128 GB machine is planned and every rung here is a fact about a 32 GB one
 - [x] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 
-## Open questions
-
-- Is q4_0 KV worth carrying forward? It halves KV again, but long-context retrieval is
-  precisely what agentic coding depends on. Leaning: **measure it here, let 0004 judge
-  the quality cost** — cheap to include now, expensive to re-run later.
-
 ## Log
 
 ## Log
@@ -196,3 +190,11 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   headroom estimate. And **the rungs do not change at 128 GB, or with a 70 GB model**:
   memory allows ~262k tokens in every case while 20 minutes of ingest allows ~64k. More
   RAM buys bigger quants and bigger models, not longer context.
+- 2026-08-17 — open question settled by the measurement it asked for. At 32k, q4_0 KV used
+  18.66 GB against q8_0's 19.13 GB and filled in 325 s against 326 s: it saves 0.47 GB and
+  no time at all. Since memory does not bind in this envelope, **q4_0 buys nothing here**
+  and q8_0 is the better default — same speed, less cache quantisation. It is worth
+  carrying into 0004 only if a larger quant makes memory bind, which is exactly the case
+  that feature exists to find. No quality comparison was run, and none is needed to reach
+  this: a config that costs quality for a saving nobody needs loses regardless of how small
+  the quality cost turns out to be.
