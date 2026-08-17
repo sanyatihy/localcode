@@ -30,11 +30,11 @@ remembered.
   cheaply. *Unattended* is the long autonomous grind, where latency barely matters and
   errors compound because nobody is watching. They may want opposite settings — thinking
   above all — so every sweep reports per profile and the project may ship two configs.
-- **The profiles have different memory budgets, not only different latency tolerances.**
-  Attended means an editor and a browser are open *by definition*, so the model gets what
-  is left; unattended can have the machine. That is the same split as 0003's working and
-  hard ceilings, and binding them is what stops a config being recommended for attended
-  use on numbers measured with nothing else running.
+- **The profiles differ mainly in what a minute is worth.** Attended pays ingest time out
+  of a human's attention, so a 13-minute cold context is disqualifying there and merely
+  slow unattended. They differ in memory too — attended has an editor and browser resident
+  by definition — but 0003 measured that difference as not binding at any context this
+  model serves, so latency is the axis that actually separates them.
 - The serving A/Bs are settled by that scorer and the winners recorded in `docs/TECH.md`
   with the numbers that beat the alternatives: **quantisation × context**, **sampling
   and tool-call format**, **llama.cpp vs MLX**, **model vs model** — each per profile.
@@ -70,11 +70,17 @@ remembered.
 - **Hardware is fixed and is the design.** M2 Max, 32 GB unified memory, 30 GPU cores,
   ~249 GB free. No config may make the machine unusable for the editor and browser the
   developer is running while the agent works.
-- **Memory is the binding constraint, and context is what it buys.** Qwen3.8-27B is
-  dense: 64 layers, 4 KV heads, head_dim 256 — so KV cache costs ~256 KiB/token at f16,
-  ~128 KiB/token at q8_0. Against ~16.4 GB of Q4_K_M weights, 32k context lands near
-  22 GB and 64k does not fit. **Context budget is a first-class design parameter in
-  every feature, not a flag chosen at the end.**
+- **Time is the binding constraint, not memory.** This replaces the opposite claim, which
+  0003 measured and refuted. The full ladder — 8k, 16k, 32k, 48k, 64k at q8_0 — ran with
+  swap delta 0.0 MB, peak resident 17.91 to 20.27 GB of 32 GB, and marginal cost settling
+  at 31-37 KB/token. What binds is ingest: the prompt rate decays with depth, 109 tok/s at
+  8k down to 75 at 64k, so a cold 32k context costs 5.4 minutes and a cold 64k costs 13.1.
+  **Context budget is still a first-class design parameter, but it is spent in seconds
+  rather than gigabytes**, which is why it falls almost entirely on the attended profile.
+- **There is memory headroom, and it should be spent deliberately.** 64k/q8_0 leaves
+  roughly a third of the machine unused. Weight quality is the obvious buyer — Q5_K_M and
+  Q6_K were excluded on a memory argument that measurement does not support — and choosing
+  between more context and better weights is a real trade rather than a foregone one.
 - **Two properties, never conflated.** *Inference is local* — no prompt or file content
   reaches a model this machine does not run. *The harness is offline* — it needs no vendor
   reachability at all. The first is required everywhere. The second is stronger, and
@@ -88,8 +94,12 @@ remembered.
   its own environment and called, never merged into the Go code.
 - **Reproducible over convenient.** Every server invocation, quant and sampling setting
   lives in the repo. A number nobody can regenerate is not evidence.
-- **Measurement before tuning.** No optimisation is adopted without a before/after on
-  the committed scorer.
+- **Measurement before tuning, and measurement over reasoning.** No optimisation is
+  adopted without a before/after on the committed scorer. Arithmetic about this machine has
+  now been wrong three times — predicted KV cost was ~4x the measured figure, free memory
+  was read as saturation when macOS keeps it near zero regardless, and the memory ceiling
+  did not exist at all. **A number that was derived rather than observed is a hypothesis,
+  and it is labelled as one until a run confirms it.**
 - **A swapping machine is not a slow machine, it is an invalid measurement.** On 32 GB
   the model plus normal desktop apps can exhaust memory before the context is full, and
   every timing taken in that state measures paging rather than inference. Runs record
