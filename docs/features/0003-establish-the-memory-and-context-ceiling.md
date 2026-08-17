@@ -40,18 +40,33 @@ system swapped.
 and a config that loads and then dies at 30k is the exact failure this feature exists to
 prevent.
 
-Two ceilings get recorded, and they are different numbers:
+Two ceilings get recorded, and **each belongs to one profile**:
 
-- **Hard ceiling** — the largest config that runs at all.
+- **Hard ceiling** — the largest config that runs at all, with the machine to itself.
+  This is the *unattended* budget: nobody is using the desktop, so the model may have it.
 - **Working ceiling** — the largest that leaves the machine usable with an editor and a
-  browser running, which is the vision's constraint and the one 0004 should sweep under.
+  browser open. This is the *attended* budget, because attended use means those are
+  running by definition.
+
+Binding them to profiles is the point rather than a labelling nicety: a config
+recommended for attended work on numbers measured with nothing else running is a
+recommendation that will swap the first time it is used for real.
 
 `iogpu.wired_limit_mb` is measured at its default first. Raising it is tested as a
 separate, explicitly reversible step, and reported as a distinct result — an option with
 a cost, not the new baseline.
 
 Swap is a **failure**, not a slow pass. A config that swaps has left the envelope
-regardless of what it scores.
+regardless of what it scores — and every timing taken while paging measures the pager,
+so such a run is void rather than merely poor.
+
+**This is already happening at the baseline, which is why the feature is not theoretical.**
+Measured 2026-08-17 with the 32k/q8_0 baseline loaded, the server *idle*, and ordinary
+desktop apps open: 0.02 GB free, 13.9 GB of 14.3 GB swap in use, 1.32 GB compressed, and
+swap still growing ~74 MB per 8 seconds at idle. `llama-server` alone was 18.45 GB of
+32 GB. So the attended working ceiling at 32k appears to be **exceeded before the context
+is filled**, and the wildly inconsistent prompt-processing rates observed during 0002's
+work — 4.5 to 114 tok/s for comparable operations — are the expected symptom.
 
 **Measured anchor, from the server already running.** Qwen3.8-27B Q4_K_M at 32k context
 with `q8_0` K and V, all layers on GPU, reports ~19.3 GB resident. That is a starting
@@ -69,7 +84,8 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 
 - [ ] A script drives a served config to genuinely full context and records peak wired memory, peak resident, and swap activity
 - [ ] The ladder (16k/32k/48k/64k × f16/q8_0/q4_0 KV) runs unattended and writes one row per cell, marking each pass, swap, or OOM
-- [ ] Hard ceiling and working ceiling are both identified, the second measured with an editor and browser running
+- [ ] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — hard for unattended with the machine to itself, working for attended with an editor and browser open
+- [ ] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
 - [ ] `docs/TECH.md` states the measured envelope, what happens past it, and the ladder for 0007 to reuse
 
@@ -80,3 +96,11 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   the quality cost** — cheap to include now, expensive to re-run later.
 
 ## Log
+
+## Log
+
+- 2026-08-17 — the two ceilings are now bound to the two profiles rather than being
+  presented as a pair of numbers: hard is the unattended budget, working is the attended
+  one. Prompted by measuring the baseline while ordinary apps were open and finding the
+  machine already paging at idle, which means the numbers 0002 collected during its build
+  were taken outside the envelope this feature exists to establish.
