@@ -96,10 +96,10 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
 - [x] The ladder runs in both conditions, labelled, and the same cell is compared across them rather than across configs within one
 - [x] The ladder is extended upward — 48k and 64k — because no cell from 8k to 32k failed in either condition, so the ceiling is above everything measured so far and remains unbounded
 - [x] Hard ceiling and working ceiling are both identified and each named with the profile it bounds — **answered by refutation: neither is reached at any context this model supports in practice.** 64k/q8_0 runs at 20.27 GB with zero swap, and marginal cost above 16k is a steady 31-37 KB/token, so exhausting the remaining headroom would take hundreds of thousands more tokens. Memory does not bound context on this machine
-- [ ] `docs/TECH.md` records the ingest-time curve as the real constraint, and states the headroom that memory turned out to have — which is what lets 0004 sweep quants it had assumed were infeasible
+- [x] `docs/TECH.md` records the full ladder, the ingest-time curve, and the exact envelope the result is scoped to — one model, one quant, contexts to 64k, 32 GB — so it is not read as a general claim about memory, plus the gotchas each wrong number here already cost
+- [ ] Ladder rungs are derived from available memory rather than hardcoded, since a 128 GB machine is planned and every rung here is a fact about a 32 GB one
 - [x] The baseline 32k/q8_0 config is re-measured under both conditions, since it is already observed swapping at idle with apps open, and the result says plainly whether it is viable for attended use at all
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured separately, with the exact revert command recorded
-- [ ] `docs/TECH.md` states the measured envelope, what happens past it, and the ladder for 0007 to reuse
 
 ## Open questions
 
@@ -177,3 +177,9 @@ cache-invalidating behaviour a first-class risk for 0010 to score.
   Q6_K were excluded on a memory argument that the measurement does not support. Spending
   the headroom on weight quality rather than on context length is now a live option, and it
   is the trade 0004 should actually be testing.
+- 2026-08-17 — scope correction. This feature measured *one* envelope: Qwen3.8-27B at
+  Q4_K_M, contexts to 64k, on 32 GB. Memory not binding there does not rule memory out —
+  Q6_K weights are roughly 6 GB heavier, and larger models and longer contexts are
+  untested. 0004's quant sweep is where memory gets its next real chance to bind, and the
+  planned 128 GB machine moves every rung at once, which makes the hardcoded ladder a
+  defect rather than a setting.

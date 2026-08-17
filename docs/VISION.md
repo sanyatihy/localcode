@@ -30,11 +30,11 @@ remembered.
   cheaply. *Unattended* is the long autonomous grind, where latency barely matters and
   errors compound because nobody is watching. They may want opposite settings — thinking
   above all — so every sweep reports per profile and the project may ship two configs.
-- **The profiles have different memory budgets, not only different latency tolerances.**
-  Attended means an editor and a browser are open *by definition*, so the model gets what
-  is left; unattended can have the machine. That is the same split as 0003's working and
-  hard ceilings, and binding them is what stops a config being recommended for attended
-  use on numbers measured with nothing else running.
+- **The profiles differ mainly in what a minute is worth.** Attended pays ingest time out
+  of a human's attention, so a 13-minute cold context is disqualifying there and merely
+  slow unattended. They differ in memory too — attended has an editor and browser resident
+  by definition — but 0003 measured that difference as not binding at any context this
+  model serves, so latency is the axis that actually separates them.
 - The serving A/Bs are settled by that scorer and the winners recorded in `docs/TECH.md`
   with the numbers that beat the alternatives: **quantisation × context**, **sampling
   and tool-call format**, **llama.cpp vs MLX**, **model vs model** — each per profile.
@@ -67,14 +67,30 @@ remembered.
 
 ## Constraints
 
-- **Hardware is fixed and is the design.** M2 Max, 32 GB unified memory, 30 GPU cores,
-  ~249 GB free. No config may make the machine unusable for the editor and browser the
-  developer is running while the agent works.
-- **Memory is the binding constraint, and context is what it buys.** Qwen3.8-27B is
-  dense: 64 layers, 4 KV heads, head_dim 256 — so KV cache costs ~256 KiB/token at f16,
-  ~128 KiB/token at q8_0. Against ~16.4 GB of Q4_K_M weights, 32k context lands near
-  22 GB and 64k does not fit. **Context budget is a first-class design parameter in
-  every feature, not a flag chosen at the end.**
+- **Hardware is the current envelope, not a permanent one.** M2 Max, 32 GB unified memory,
+  30 GPU cores. A 128 GB machine is planned, and it moves every ceiling at once: quants
+  that do not fit today, models that cannot load, contexts that cost too much. So
+  **measured numbers are always recorded with the machine they came from**, and anything
+  that hardcodes this machine's limits — ladder rungs above all — is a defect to fix rather
+  than a value to update. No config may make the machine unusable for the editor and
+  browser the developer is running while the agent works.
+- **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
+  quality, and whatever else emerges are candidates, and which one binds depends on the
+  envelope — model, quant, context, and the machine. A constraint asserted in advance is
+  what sends a sweep looking in the wrong place, which has already happened once here.
+- **What has been measured so far, and its exact scope.** In the envelope
+  *Qwen3.8-27B · Q4_K_M · contexts to 64k · 32 GB*, **time bound before memory did**: the
+  full ladder ran with swap delta 0.0 MB at peak resident 17.91-20.27 GB, while ingest cost
+  rose to 13.1 minutes at 64k as the prompt rate decayed from 109 to 75 tok/s.
+  **This does not rule memory out.** Only one quant was tested. Q6_K weights are roughly
+  6 GB heavier, larger models and longer contexts are untested, and each moves the envelope.
+  The finding is that memory did not bind *here*, not that it does not bind.
+- **Headroom exists at this quant and should be spent deliberately.** 64k/Q4_K_M left
+  roughly a third of the machine unused, which is why Q5_K_M and Q6_K belong in 0004's
+  sweep — and why that sweep is also where memory gets its next chance to bind.
+- **The optimum is expected to differ by task, not just by profile.** A short tool-calling
+  turn, a long refactor and a repo-wide search have different context and latency needs, so
+  "one winning config" is an assumption the results have to earn rather than a goal.
 - **Two properties, never conflated.** *Inference is local* — no prompt or file content
   reaches a model this machine does not run. *The harness is offline* — it needs no vendor
   reachability at all. The first is required everywhere. The second is stronger, and
@@ -88,8 +104,12 @@ remembered.
   its own environment and called, never merged into the Go code.
 - **Reproducible over convenient.** Every server invocation, quant and sampling setting
   lives in the repo. A number nobody can regenerate is not evidence.
-- **Measurement before tuning.** No optimisation is adopted without a before/after on
-  the committed scorer.
+- **Measurement before tuning, and measurement over reasoning.** No optimisation is
+  adopted without a before/after on the committed scorer. Arithmetic about this machine has
+  now been wrong three times — predicted KV cost was ~4x the measured figure, free memory
+  was read as saturation when macOS keeps it near zero regardless, and the memory ceiling
+  did not exist at all. **A number that was derived rather than observed is a hypothesis,
+  and it is labelled as one until a run confirms it.**
 - **A swapping machine is not a slow machine, it is an invalid measurement.** On 32 GB
   the model plus normal desktop apps can exhaust memory before the context is full, and
   every timing taken in that state measures paging rather than inference. Runs record
