@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,7 +41,7 @@ func extractCode(reply string) string {
 // runPatch writes the model's code beside the unseen test and runs `go test`.
 // Compilation failure and test failure are reported apart: one is the model
 // producing invalid Go, the other is it producing Go that is wrong.
-func runPatch(p Patch, code string) (Outcome, string) {
+func runPatch(ctx context.Context, p Patch, code string) (Outcome, string) {
 	if code == "" {
 		return FailEmpty, "no code in reply"
 	}
@@ -68,12 +69,23 @@ func runPatch(p Patch, code string) (Outcome, string) {
 		}
 	}
 
-	cmd := exec.Command("go", "test", "./...")
+	// CommandContext so cancellation actually reaches the process. The previous
+	// hand-rolled timer killed the process but left its reader goroutine blocked
+	// until the pipe closed, and ignored the caller's context entirely.
+	runCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(runCtx, "go", "test", "./...")
 	cmd.Dir = work
 	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
-	out, err := runWithTimeout(cmd, 90*time.Second)
+	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return Pass, ""
+	}
+	if runCtx.Err() != nil {
+		// A model can emit code that compiles and then loops forever. That is a
+		// failed answer, not a broken harness, so it is scored rather than fatal.
+		return FailTest, "test run exceeded 90s (likely non-terminating)"
 	}
 	text := string(out)
 	// go reports build errors before any test runs; distinguishing them keeps
@@ -83,23 +95,6 @@ func runPatch(p Patch, code string) (Outcome, string) {
 		return FailCompile, truncate(firstUseful(text), 200)
 	}
 	return FailTest, truncate(firstUseful(text), 200)
-}
-
-func runWithTimeout(cmd *exec.Cmd, d time.Duration) ([]byte, error) {
-	done := make(chan struct{})
-	var out []byte
-	var err error
-	go func() { out, err = cmd.CombinedOutput(); close(done) }()
-	select {
-	case <-done:
-		return out, err
-	case <-time.After(d):
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		<-done
-		return out, fmt.Errorf("timed out after %s", d)
-	}
 }
 
 // firstUseful skips go's noise lines so the recorded detail is the actual error.

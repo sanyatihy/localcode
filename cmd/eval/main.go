@@ -3,10 +3,17 @@
 //
 // Tier 1 only: single-turn tasks with deterministic checks, which is what the
 // serving sweeps need and what runs in seconds rather than minutes.
+//
+// Exit codes are the contract, so a sweep can branch without parsing output:
+//
+//	0  every task passed
+//	1  the run completed and at least one task failed
+//	2  the run could not be carried out (bad flags, unreadable fixture, no server)
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -15,55 +22,58 @@ import (
 	"github.com/sanyatihy/localcode/internal/eval"
 )
 
+// errTasksFailed distinguishes "the measurement ran and the answer is no" from
+// "the measurement could not be taken" — the two exit codes a sweep branches on.
+var errTasksFailed = errors.New("one or more tasks failed")
+
 func main() {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		if errors.Is(err, errTasksFailed) {
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "eval: %v\n", err)
+		os.Exit(2)
+	}
+}
+
+func run(args []string, stdout, stderr *os.File) error {
+	fs := flag.NewFlagSet("eval", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	var (
-		endpoint = flag.String("endpoint", "http://127.0.0.1:8080", "OpenAI-compatible endpoint")
-		taskPath = flag.String("task", "", "path to a single task fixture")
-		tasksDir = flag.String("tasks", "", "directory of task fixtures to run as a suite")
-		repeats  = flag.Int("n", 1, "passes over the suite")
-		config   = flag.String("config", "unlabelled", "label for the serving config under test")
-		results  = flag.String("results", "", "append a JSONL row here; empty writes none")
-		thinking = flag.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
-		temp     = flag.Float64("temperature", -1, "temperature; negative leaves it unset")
-		topP     = flag.Float64("top-p", -1, "top_p; negative leaves it unset")
-		topK     = flag.Int("top-k", -1, "top_k; negative leaves it unset")
-		presPen  = flag.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
-		timeout  = flag.Duration("timeout", 15*time.Minute, "per-request timeout")
+		endpoint = fs.String("endpoint", "http://127.0.0.1:8080", "OpenAI-compatible endpoint")
+		taskPath = fs.String("task", "", "path to a single task fixture")
+		tasksDir = fs.String("tasks", "", "directory of task fixtures to run as a suite")
+		repeats  = fs.Int("n", 1, "passes over the suite")
+		config   = fs.String("config", "unlabelled", "label for the serving config under test")
+		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
+		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
+		temp     = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
+		topP     = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
+		topK     = fs.Int("top-k", -1, "top_k; negative leaves it unset")
+		presPen  = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
+		timeout  = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
 	)
-	flag.Parse()
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if (*taskPath == "") == (*tasksDir == "") {
-		fmt.Fprintln(os.Stderr, "eval: give exactly one of -task or -tasks")
-		os.Exit(2)
+		return errors.New("give exactly one of -task or -tasks")
 	}
-
-	var paths []string
-	if *taskPath != "" {
-		paths = []string{*taskPath}
-	} else {
+	paths := []string{*taskPath}
+	if *tasksDir != "" {
 		var err error
 		if paths, err = eval.DiscoverTasks(*tasksDir); err != nil {
-			fmt.Fprintf(os.Stderr, "eval: %v\n", err)
-			os.Exit(2)
+			return err
 		}
 		if len(paths) == 0 {
-			fmt.Fprintf(os.Stderr, "eval: no fixtures under %s\n", *tasksDir)
-			os.Exit(2)
+			return fmt.Errorf("no fixtures under %s", *tasksDir)
 		}
 	}
 
-	var think *bool
-	switch *thinking {
-	case "on":
-		v := true
-		think = &v
-	case "off":
-		v := false
-		think = &v
-	case "":
-	default:
-		fmt.Fprintln(os.Stderr, "eval: -thinking must be on, off, or empty")
-		os.Exit(2)
+	think, err := parseThinking(*thinking)
+	if err != nil {
+		return err
 	}
 
 	// Negative means "not set", so the server's own default applies. Zero is a real
@@ -87,33 +97,30 @@ func main() {
 
 	props, err := client.Props(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "eval: cannot read server props: %v\n", err)
-		os.Exit(2)
+		return fmt.Errorf("cannot read server props from %s: %w", *endpoint, err)
 	}
 
 	// Sequential on purpose: the server runs one slot, so concurrent requests would
 	// queue and every timing would measure the queue instead of the model.
 	failures := 0
-	for rep := 0; rep < *repeats; rep++ {
+	for rep := range *repeats {
 		for _, p := range paths {
 			task, err := eval.LoadTask(p)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "eval: %v\n", err)
-				os.Exit(2)
+				return err
 			}
 			res, err := client.Run(ctx, task, sampling, think)
 			if err != nil {
-				// A transport failure is recorded and the suite continues: losing four
-				// hours of sweep to one dropped connection would be worse than a gap.
-				fmt.Fprintf(os.Stderr, "eval: %s: %v\n", task.ID, err)
+				// A transport failure is recorded and the suite continues: losing hours
+				// of sweep to one dropped connection would be worse than a gap.
+				fmt.Fprintf(stderr, "eval: %s: %v\n", task.ID, err)
 				failures++
 				continue
 			}
 			if *results != "" {
 				row := eval.NewRow(*config, rep, *thinking, sampling, props, task.Kind, res)
 				if err := eval.AppendRow(*results, row); err != nil {
-					fmt.Fprintf(os.Stderr, "eval: cannot append result: %v\n", err)
-					os.Exit(2)
+					return fmt.Errorf("cannot append result: %w", err)
 				}
 			}
 			status := "PASS"
@@ -121,16 +128,29 @@ func main() {
 				status = "FAIL"
 				failures++
 			}
-			fmt.Printf("%-4s [%d] %-24s %s %s\n", status, rep, res.TaskID, res.Outcome, res.Detail)
-			fmt.Printf("          ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
+			fmt.Fprintf(stdout, "%-4s [%d] %-24s %s %s\n", status, rep, res.TaskID, res.Outcome, res.Detail)
+			fmt.Fprintf(stdout, "          ctx %d | prompt %d tok (%d cached) @ %.1f tok/s | gen %d tok @ %.1f tok/s | reasoning %d chars | wall %.1fs\n",
 				props.NCtx, res.PromptTokens, res.CachedTokens, res.PromptPerSecond,
 				res.CompletionTokens, res.GenPerSecond, res.ReasoningChars, res.WallSeconds)
 		}
 	}
-
-	// Exit code is the contract: a sweep must tell pass from fail without parsing
-	// output. 1 means at least one task failed, 2 means the run itself broke.
 	if failures > 0 {
-		os.Exit(1)
+		return fmt.Errorf("%w: %d", errTasksFailed, failures)
+	}
+	return nil
+}
+
+func parseThinking(s string) (*bool, error) {
+	switch s {
+	case "on":
+		v := true
+		return &v, nil
+	case "off":
+		v := false
+		return &v, nil
+	case "":
+		return nil, nil // leave the model's own template default alone
+	default:
+		return nil, fmt.Errorf("-thinking must be on, off, or empty, got %q", s)
 	}
 }

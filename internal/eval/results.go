@@ -58,9 +58,14 @@ func (r Row) ToolCallValid() (valid, applicable bool) {
 	}
 }
 
+// Now is the clock NewRow stamps rows with. A package variable rather than a
+// parameter threaded through every call site: it is the only nondeterminism in the
+// package, and a test that wants a fixed timestamp sets it directly.
+var Now = func() time.Time { return time.Now().UTC() }
+
 func NewRow(cfg string, repeat int, thinking string, s Sampling, props ServerProps, kind string, res Result) Row {
 	return Row{
-		RunAt:            time.Now().UTC().Format(time.RFC3339),
+		RunAt:            Now().Format(time.RFC3339),
 		Config:           cfg,
 		Repeat:           repeat,
 		Thinking:         thinking,

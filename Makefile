@@ -4,30 +4,38 @@ CONFIG   ?= config/baseline.env
 
 # Scoring (0002). The eval label is LABEL, not CONFIG: it names a run for the
 # results file, which is a different thing from the file that launched the server.
-# Both meanings collided in the merge, and one silently accepting the other's value
-# would mislabel every row it wrote.
 LABEL    ?= unlabelled
 TASKS    ?= tasks
 RESULTS  ?= results/tier1.jsonl
 N        ?= 1
 THINKING ?=
 
-.PHONY: build check test smoke serve eval report
+.PHONY: build check fmt vet test smoke verify serve eval report
 
 ## build: compile everything
 build:
 	@go build ./...
 
-## check: the ship gate — the scorer's own correctness, then a live endpoint
-check: test smoke
+## check: the offline gate — formatting, vet, and tests under the race detector.
+## Runs in CI, so it must need no server and no model weights.
+check: fmt vet test
 
-## test: unit tests only; needs no server
+fmt:
+	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
+
+vet:
+	@go vet ./...
+
 test:
-	@go test ./...
+	@go test -race ./...
 
-## smoke: assert a served endpoint answers and round-trips a tool call
+## smoke: assert a *served* endpoint answers and round-trips a tool call.
+## Separate from check because it needs a running llama-server, which CI has not.
 smoke:
 	@scripts/smoke.sh
+
+## verify: the pre-ship gate — offline checks plus a live endpoint
+verify: check smoke
 
 ## serve: start llama-server from CONFIG
 serve:
