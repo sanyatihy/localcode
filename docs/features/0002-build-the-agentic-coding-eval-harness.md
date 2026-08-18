@@ -35,33 +35,20 @@ is missing is the thing that runs fixed tasks through one of them and records nu
 
 ## Design
 
-Two things the original plan conflated, kept separate here because they change at
-different rates:
+**Harness and scorer are separate**, because they change at different rates: the harness is
+the agent loop (chosen, not written — 0010), the scorer is this feature. The scorer drives a
+harness through a **thin adapter** — invoke it non-interactively with a prompt in a
+directory, tell when it stopped — written for all of 0010's candidates at once, since an
+interface with one implementation is an abstraction inventing itself.
 
-- **The harness** is the agent loop — Claude Code, Pi, Hermes, OpenCode. Chosen, not written (0010).
-- **The scorer** is this feature: a Go binary that runs fixed tasks through a harness
-  against an endpoint and records what happened.
+**Two tiers, because they cost differently and answer differently.** Tier 1 talks straight
+to the endpoint: seconds per task, enough to sweep a toggle matrix, and independent of the
+harness question, so it comes first. Tier 2 drives a real harness through a multi-turn task
+in a scratch git checkout — the only way to see coherence and recovery — at minutes per run.
 
-The scorer drives a harness through a **thin adapter**: how to invoke it non-interactively
-with a task prompt in a given directory, and how to tell when it has stopped. Adapters for the
-candidates 0010 compares, written together because an interface with one implementation is
-an abstraction inventing itself — and Claude Code's is the one that must exist first, since
-it is 0010's baseline and 0008's flow. Everything else — task
-definitions, scoring, metrics, results — is shared.
-
-**The suite is two tiers, because they cost different amounts and answer different
-questions.** Tier 1 talks straight to the endpoint over HTTP: no harness, no agent loop,
-seconds per task. It measures single-turn quality — does it call the right tool with valid
-arguments, does its patch compile and pass, does it still retrieve correctly at depth — and
-that is enough to sweep a toggle matrix. Tier 2 drives a real harness through a multi-turn
-task, which is the only way to see coherence and recovery, and costs minutes per run.
-
-Tier 1 comes first because it is what the serving sweeps actually need, and because it is
-independent of the harness question. Tier 2 tasks run in a **scratch git checkout**, and
-passing means the repo's own tests pass Deterministic checks are what make this an instrument; an LLM judge would add
-a second model's noise to every number this project rests on.
-
-Metrics come from the cheapest honest source rather than from new code:
+**Passing means the repo's own tests pass.** Deterministic checks are what make this an
+instrument; an LLM judge would add a second model's noise to every number this project rests
+on.
 
 | Metric | Source |
 |---|---|
@@ -70,12 +57,10 @@ Metrics come from the cheapest honest source rather than from new code:
 | Generation / prompt-processing tok/s | `llama-server` timings; `llama-bench` for isolated throughput |
 | Peak memory, context high-water | Sampled during the run (0003 owns the envelope) |
 
-Results append as one row per (config, harness, task, run) to a committed file, so sweeps
-accumulate and nothing is recomputed to be compared. Runs repeat **3×** — sampling makes a
-single run unfalsifiable — and the scorer reports spread, not just the mean.
-
-Six to ten tasks, fixed and small. A suite too slow to re-run stops being re-run, and every
-sweep multiplies it by the config count.
+Results append one row per (config, harness, task, run) so sweeps accumulate and nothing is
+recomputed to be compared. Runs repeat **3×** — a single run is unfalsifiable — and the
+scorer reports spread. Six to ten fixed tasks: a suite too slow to re-run stops being
+re-run, and every sweep multiplies it by the config count.
 
 ## Tasks
 
@@ -94,90 +79,31 @@ sweep multiplies it by the config count.
 
 ## Log
 
-- 2026-08-17 — stack settled as Go, per `docs/INBOX.md`; question answered and cleared.
-- 2026-08-17 — rescoped: the harness is chosen (Pi/Hermes), not written. Only the scorer
-  is built here, which is a fraction of the original scope.
-- 2026-08-17 — tier-1 scorer runs. Verified against the live baseline both ways and,
-  more importantly, against two negative controls: expecting the wrong tool and an
-  unsatisfiable argument each fail with a distinct outcome and exit 1. Outcomes are
-  classified rather than boolean (no call / wrong tool / invalid JSON / wrong args /
-  server error) because 0005 needs to know *how* a config fails, and because a server
-  error must never be scored as model quality. Checker failure paths are covered by an
-  offline test so the instrument does not depend on a server behaving.
-- 2026-08-17 — seven tier-1 fixtures land and all run end to end. Both patch fixtures were
-  confirmed to fail their own unseen tests before any model saw them; a fixture that passes
-  out of the box would score every config correct and mean nothing.
-- 2026-08-17 — the first suite run caught a defect in the instrument rather than the model.
-  toolcall-edit-file failed with the model calling read_file when told to make an edit — but
-  reading before editing is defensible agent behaviour, so the fixture was scoring a style
-  preference as a wrong answer, and would have failed every config identically. Rewritten to
-  include the file content inline, making a read provably unnecessary; the model then calls
-  edit_file correctly. The general rule this teaches: a tier-1 task must have exactly one
-  defensible action, or it is measuring the fixture author, not the model.
-- 2026-08-17 — retrieval passes at 2k, 8k and 16k depth on the q8_0 KV baseline, so the
-  quantised cache is not visibly costing recall at the context this config serves. That is a
-  single sentinel per depth, not a rate — it establishes the probe works, and 0004 is what
-  turns it into evidence about KV types.
-- 2026-08-17 — fixture Go files renamed to .go.txt. Left as .go they sit inside this
-  module, so `go test ./...` compiled and ran the deliberately-broken fixtures and the
-  repo gate was red for exactly the reason the fixtures are correct. The scratch module
-  writes them back under real .go names.
-- 2026-08-17 — results are JSONL, one row per (config, task, repeat). Each row records
-  what the server reported serving — n_ctx and model file — not only the config label a
-  human typed. When the sweep starts varying server-level flags, a label is a claim, and
-  a row carrying the served n_ctx is what stops one config's numbers being attributed to
-  another after a restart that did not take.
-- 2026-08-17 — suite mode, `make eval CONFIG=… N=…`, and a reporter grouping by config
-  and thinking mode. Spread is min-max rather than a standard deviation: three passes is
-  already a multi-hour job here, and a deviation over three samples claims precision the
-  data does not have. Runs are sequential because the server has one slot — concurrent
-  requests would queue and every timing would measure the queue. A transport failure
-  records and continues rather than aborting, since losing hours of sweep to one dropped
-  connection is worse than a gap in the data.
-- 2026-08-17 — merging 0001 collided on the Makefile in two ways that mattered more than
-  the textual conflict. Both branches defined `CONFIG`: 0001 as the path to the env file
-  scripts/serve.sh consumes, documented in docs/TECH.md, and 0002 as the label written
-  into every results row. Either silently taking the other's value would have mislabelled
-  results or launched the wrong server, so the eval knob is renamed `LABEL` and 0001's
-  shipped meaning stands. Both also defined `check`, one as unit tests and one as the
-  live smoke; `check` is the ship gate in AGENTS.md, so it now runs both, with `test`
-  and `smoke` available separately.
-- 2026-08-17 — audited the Go against `kit help go-checklist`, which I had not read before
-  writing it. Real defects, not style: runPatch used a hand-rolled timer that killed the
-  process but left its reader goroutine blocked and ignored the caller's context, now
-  `exec.CommandContext`; both commands did their work in `main` with scattered
-  `os.Exit`, bypassing deferred cleanup, now `run() error` with one exit point and
-  documented codes; `time.Now()` was uninjected, now a package-level `Now` a test can
-  set; `go.mod` had no toolchain pin. `make check` gated on tests alone — it now runs
-  fmt, vet and `-race`, and the live smoke moved to `make smoke` because
-  `kit init --stack go` wired CI to `make check`, and CI has no server or weights.
-  Tests moved to the public boundary (Client.Run against an httptest double), which also
-  reaches failure paths a real model cannot be asked to produce on demand.
-- 2026-08-17 — golangci-lint found 12 issues the earlier gate missed, because `make check`
-  did not run it. Two were substantive: `AppendRow` deferred-and-dropped `Close` on a
-  *write* path, so a row that never reached disk would have silently shortened a
-  multi-hour sweep — Close is now checked and returned; and the haystack determinism test
-  compared one expression to itself, which proves almost nothing, so it now builds from
-  two independently constructed equal inputs and additionally asserts the sentinel appears
-  exactly once and that a deeper haystack is larger. The rest were unchecked writes to
-  stdout, now explicitly discarded at the call site. `lint` is wired into `make check`
-  so this cannot regress silently, `.golangci.yml` is pinned, and the CI action is pinned
-  to the same version rather than `latest`, which would fail a push for a lint that did
-  not exist when the code was written.
-- 2026-08-17 — the fixtures were starving thinking mode, and the aborted matrix proves it:
-  **8 of 8 failures under thinking=on hit their token cap exactly**, and none was a quality
-  failure. Retrieval allowed 64 tokens, which thinking spends on reasoning before it can
-  answer. Left unfixed the matrix would have reported thinking on at 13/21 against thinking
-  off at 21/21 and concluded thinking hurts quality, when the entire gap was a budget set
-  while testing with thinking off. Caps raised to 512/1024/2048 — the same for both modes,
-  so a mode spending more of it is a measured cost rather than a disqualification — and
-  `fail_truncated_at_cap` now separates a capped answer from a wrong one, checked before
-  any per-kind check.
-- 2026-08-17 — **first clean matrix. 42 runs, zero truncations, every task 3/3 in both
-  modes.** Thinking costs 3.06x the completion tokens (1089 to 3333) and 1.67x the wall
-  time (384 s to 641 s), and buys nothing this suite can detect. The wall ratio is smaller
-  than the token ratio because retrieval tasks are ingest-dominated, so extra generation is
-  diluted by prompt processing.
+- 2026-08-17 — rescoped: the harness is chosen (Pi/Hermes), not written. Only the scorer is
+  built here.
+- 2026-08-17 — a tier-1 task must have exactly one defensible action. `toolcall-edit-file`
+  scored a style preference — the model read before editing, which is reasonable — and would
+  have failed every config identically. Fixed by inlining the file content.
+- 2026-08-17 — fixture Go files are `.go.txt`: left as `.go` they sit inside this module, so
+  `go test ./...` compiled the deliberately-broken fixtures and the gate went red.
+- 2026-08-17 — each results row records what the server reported serving — `n_ctx`, model
+  file — not just the label a human typed. A label is a claim; a restart that did not take
+  would otherwise attribute one config's numbers to another.
+- 2026-08-17 — spread is min-max, not a standard deviation: three passes is already a
+  multi-hour job and a deviation over three samples claims precision the data lacks. Runs are
+  sequential because the server has one slot.
+- 2026-08-17 — merging 0001 renamed the eval knob to `LABEL`: both branches defined `CONFIG`,
+  one as the serve config path and one as the results label, and either silently winning
+  would mislabel results or launch the wrong server. `check` now runs unit tests and smoke.
+- 2026-08-17 — **the fixtures were starving thinking mode**: 8 of 8 failures under
+  thinking=on hit their token cap exactly, none a quality failure. Retrieval allowed 64
+  tokens, which thinking spends before answering. Unfixed, the matrix would have reported
+  thinking hurting quality when the gap was a budget set while testing with thinking off.
+  Caps are 512/1024/2048, identical in both modes, and `fail_truncated_at_cap` separates a
+  capped answer from a wrong one.
+- 2026-08-17 — **first clean matrix: 42 runs, zero truncations, every task 3/3 in both
+  modes.** Thinking costs 3.06x completion tokens (1089 → 3333) and 1.67x wall (384 s →
+  641 s) and buys nothing this suite can detect.
 
   | task | off: pass / tok / s | on: pass / tok / s |
   |---|---|---|
@@ -189,66 +115,32 @@ sweep multiplies it by the config count.
   | toolcall-read-file | 3/3 · 28 · 4.4 | 3/3 · 64 · 8.6 |
   | toolcall-edit-file | 3/3 · 61 · 8.0 | 3/3 · 152 · 18.0 |
 
-- 2026-08-17 — **the result's real limit is a ceiling effect, and it must not be reported
-  as a quality verdict.** Both modes scored 21/21, so the suite did not discriminate: it
-  showed both configs are adequate for these tasks and said nothing about which is better
-  where they are not. For the attended profile that is still decisive — thinking is 1.67x
-  slower at no measured gain, so off wins on cost alone. For unattended it is no evidence
-  at all: thinking's hypothesised benefit is long-horizon multi-step reasoning, and this
-  suite contains none. Concluding "thinking does not help" from a suite where nothing fails
-  would be the same error as the token-cap one, reached from the opposite direction.
-- 2026-08-17 — the discriminating-tasks box is removed from here: 0013 was drafted for
-  exactly that work after this box was written, and a box one feature owns should not sit
-  in another's list. 0002 keeps the instrument; 0013 makes it able to rank.
-- 2026-08-17 — harness configuration solved for two of three, and each needed its own
-  mechanism: Pi an extension registering a provider, OpenCode a `provider` block using
-  `@ai-sdk/openai-compatible`. Both are repo-local, so a run is reproducible from a
-  checkout. Both were verified by completing patch-nil-check in a scratch module with the
-  unseen test passing — Pi in 38.5 s, OpenCode in 3 m 06 s, the gap being OpenCode
-  spending turns on `go build` and `go vet` where Pi went straight to the edit.
-  Hermes is blocked and written up in `harness/hermes/README.md`: it resolves the
-  provider — proven by control, since an unknown provider name fails differently — and
-  then cannot reach loopback, while curl and both other harnesses reach the same server
-  from the same shell. Egress firewall, proxy env, the /v1 suffix and api vs api_mode are
-  all ruled out; a network-isolated sandbox is the leading hypothesis. It is excluded from
-  0010 on transport, not on quality, and that distinction has to survive into the write-up.
-- 2026-08-17 — Hermes works; the blocker write-up is replaced by a configuration. It was
-  never a transport fault. The `providers.<name>` map I reverse-engineered from the
-  source is real but is not how a local endpoint is configured, and taking that path
-  produced `Connection error` — which an instrumented listener disproved, since Hermes
-  never opened a connection at all. The documented shape is a top-level `model:` block
-  with `provider: custom`, and it worked immediately.
-  **Hermes refuses any context window under 64,000 tokens**, checked before any request,
-  so the 32k baseline could never have satisfied it. That is a real constraint on 0010:
-  Pi and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all
-  three at 64k — where 0003 measured a cold ingest at 13.1 minutes against 5.4 at 32k.
-  The harness comparison therefore inherits a context cost that is Hermes' requirement.
-  Verified on patch-nil-check with the unseen test passing: Pi 38.5 s at 32k, OpenCode
-  3 m 06 s at 32k, Hermes 4 m 45 s at 64k. Hermes also took 3 m 13 s to answer a trivial
-  prompt, pointing at a large fixed system prompt ingested every turn.
+- 2026-08-17 — **that result is a ceiling effect and must not be read as a quality verdict.**
+  Both modes scored 21/21, so the suite did not discriminate. Decisive for attended — 1.67x
+  slower at no measured gain — and no evidence at all for unattended, whose case for thinking
+  is long-horizon reasoning this suite does not contain. 0013 is the fix.
+- 2026-08-17 — harness configuration is repo-local per harness: Pi an extension registering a
+  provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`, Hermes a top-level
+  `model:` block with `provider: custom` (the `providers.<name>` map reverse-engineered from
+  its source is real but not how a local endpoint is configured, and produced a connection
+  error while never opening a connection).
+- 2026-08-17 — **Hermes refuses any context window under 64,000 tokens**, checked before any
+  request. Pi and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must
+  put all three at 64k — where 0003 measured a cold ingest of 13.1 minutes against 5.4 at
+  32k. 0010 inherits that cost.
 - 2026-08-18 — tier 2 lands. `Driver` is declared in the consumer and kept to two methods,
-  because that is all three harnesses agree on; `internal/harness` hides each CLI behind
-  one type. **All three drove patch-nil-check to a pass through the adapter**, scored by
-  the unseen test: pi 35.0 s, opencode 142.5 s, hermes 302.7 s — same model, same 64k
-  server, same fixture, an 8.6x spread.
-- 2026-08-18 — two bugs that appeared only through the adapter, never by hand. Relative
-  config paths resolved against the scratch checkout because `cmd.Dir` is the workdir, so
-  pi hunted for its extension under /tmp; paths are now absolute at validation, where the
-  error can name what is wrong. And `cmd.Dir` does not update `PWD`, which Go replaces
-  wholesale when `Env` is set — a tool resolving its project from `PWD` rather than
-  `getcwd()` looks in the launching directory, and OpenCode reported that as "Unexpected
-  server error". Reproducible under the adapter and never by hand, which is the shape of
-  thing that gets dismissed as flakiness.
-- 2026-08-18 — `RunTier2` refuses a fixture that passes before the harness runs, and
-  refuses it without calling the driver: the tier-1 lesson encoded, since a fixture that
-  cannot fail scores every config as correct.
-- 2026-08-18 — both open questions settled. **Every candidate does expose a scriptable
-  mode**, and all three are now driven by the adapter: `pi -p`, `opencode run`,
-  `hermes -z`. Nobody leaves 0010 by default. The assumption the design rested on held,
-  though the configuration to reach it was different for each and documented in
-  `harness/`.
-  The second question — whether a fixed suite represents real agentic work — is answered
-  **no, and it is now measured rather than suspected**: tier 1 returned 21/21 in both
-  thinking modes, so the suite cannot rank configs at all. That is 0013's whole subject,
-  and 0008 remains where live divergence gets caught. Settling it here rather than
-  carrying it: the question produced two features, which is what an open question is for.
+  all three harnesses agree on. **All three drove patch-nil-check to a pass**, scored by the
+  unseen test: pi 35.0 s, opencode 142.5 s, hermes 302.7 s — same model, same 64k server, an
+  8.6x spread.
+- 2026-08-18 — two bugs visible only through the adapter. Relative config paths resolved
+  against the scratch checkout because `cmd.Dir` is the workdir, so pi hunted for its
+  extension under /tmp; paths are absolute at validation now. And `cmd.Dir` does not update
+  `PWD`, which Go replaces wholesale when `Env` is set, so a tool resolving its project from
+  `PWD` looks in the launching directory — OpenCode reported that as "Unexpected server
+  error".
+- 2026-08-18 — `RunTier2` refuses a fixture that passes before the harness runs, and without
+  calling the driver: the tier-1 lesson encoded.
+- 2026-08-18 — both open questions settled. Every candidate exposes a scriptable mode
+  (`pi -p`, `opencode run`, `hermes -z`), so nobody leaves 0010 by default. And a fixed suite
+  does **not** represent real agentic work — measured, not suspected: 21/21 in both modes
+  means it cannot rank configs, which is 0013's subject.
