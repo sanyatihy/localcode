@@ -102,6 +102,16 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   cut, because it consumes runtime in every future sweep and reports nothing.
 
 ## Log
+- 2026-08-18 — **every off-vs-on conclusion in this feature is void, and the reason is in the
+  vision.** Thinking carries its own recommended sampling, and comparing the toggle at one
+  fixed setting measures the pair rather than the toggle. All 114 rows collected here sent no
+  sampling at all — server defaults, identical in both modes — where 0002's matrix had
+  correctly used the documented pair per mode. So "reasoning made this model worse", the
+  discriminating verdict on `patch-contradiction-rounding`, and the reversed verdict on
+  `toolcall-constraint-readonly` are all unsupported as stated. What survives is everything
+  that does not cross the toggle: `xhigh` not terminating, the effort-level comparison among
+  low/medium/xhigh, and the flatness of the twelve floor-check tasks, which are 3/3 on both
+  sides of a comparison that would only matter if they differed. 0005 redoes the toggle.
 - 2026-08-18 — seven tasks authored, taking the suite from 7 to 14. Each patch fixture is
   proved to discriminate *before* any model time is spent on it: `TestPatchFixturesDiscriminate`
   runs a correct answer and the tempting wrong one through the real patch runner and requires
