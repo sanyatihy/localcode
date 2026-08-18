@@ -1,9 +1,9 @@
 ---
 id: 0005
 title: Sweep thinking and sampling per profile
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
@@ -92,13 +92,13 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 
 ## Tasks
 
-- [ ] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed
-- [ ] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
-- [ ] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
-- [ ] Results are reported per profile, and the recommendation says which setting won attended and which won unattended
-- [ ] Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config, including its speed cost
-- [ ] Failures are classified by cause (unparseable, schema-invalid, wrong-but-valid) so the remaining deficit is named rather than counted
-- [ ] The chosen sampling config is committed, and `docs/TECH.md` records the validity rate before and after
+- [x] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed — **no mismatch; nothing to fix**
+- [x] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
+- [x] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
+- [x] Results are reported per profile, and the recommendation says which setting won attended and which won unattended — **both profiles take the same setting**
+- [~] ~~Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config~~ — **dropped**: zero malformed calls in 150 runs, so it has nothing to fix
+- [x] Failures are classified by cause (unparseable, schema-invalid, wrong-but-valid) so the remaining deficit is named rather than counted
+- [x] The chosen sampling config is committed, and `docs/TECH.md` records the validity rate before and after
 
 ## Open questions
 
@@ -110,14 +110,19 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 - 2026-08-17 — retitled and rescoped around thinking mode after live probes: 70 completion
   tokens with thinking against 28 without, for an identical correct tool call. Each mode has
   its own model-card sampling, so the toggle cannot be swept at a fixed temperature.
-- 2026-08-18 — inherited from 0013: `reasoning_effort` is a real axis with four points, its
-  default is `xhigh`, and `xhigh` does not terminate on some tier-1 tasks. Reasoning lowered
-  the score wherever it changed anything, so `off` is a candidate to beat rather than a floor.
-- 2026-08-18 — inherited, and this feature is not started: 0013 collected 114 rows comparing
-  thinking on against off at the server's default sampling, which the vision declares void
-  because each mode carries its own recommended pair. Those toggle conclusions are unsupported
-  and are this feature's to redo. `cmd/eval` refuses `-thinking` without either
-  `-sampling-profile thinking|nonthinking` or explicit flags, so the redo costs one flag.
-  Also worth knowing before the sweep is designed: twelve of fourteen tier-1 tasks are 3/3 at
-  every setting measured, so pass rate has no room to move — tool-call validity, tokens per
-  completed task and wall clock do.
+- 2026-08-18 — the axis gained a third point. `reasoning_effort` is a real setting with
+  `xhigh` as its default, so the sweep is four-valued rather than two, and `off` becomes a
+  candidate to beat rather than the floor the design assumed it was.
+- 2026-08-18 — this feature gained a correction it did not have: 0013's 114 toggle rows were
+  taken at one fixed sampling, which the vision voids, so redoing that comparison is a box
+  here rather than a finding there.
+- 2026-08-18 — box 5 rewritten by the template check. The tool-call form the template asks for
+  is XML, not JSON, so a JSON-schema constraint would fight it and only a GBNF grammar
+  targeting the XML form was ever a candidate.
+- 2026-08-18 — **the hypothesis is falsified.** The design predicted thinking off for attended
+  and on for unattended, on the argument that an unattended run needs care nobody is there to
+  supply. Both profiles take the same setting, so the per-profile split this feature was built
+  around does not exist on this workload, and 0008 inherits one config rather than two.
+- 2026-08-18 — **box 5 dropped rather than run.** The failure it targets has never occurred:
+  the deficit is entirely tool *choice*, which a grammar cannot correct and might entrench.
+  Backlogged against a model whose failures are format rather than choice.

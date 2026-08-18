@@ -8,6 +8,11 @@ only on a real signal: someone asked, a metric moved, something else needs it.
 
 Keep each entry to a few lines: what it is, and what would make it worth doing.
 
+- **Constrained decoding, when something actually emits malformed calls** — 0005 dropped GBNF
+  because 150 tool-call runs produced zero unparseable and zero schema-invalid calls, leaving
+  a grammar nothing to fix. Promote when: a model or harness appears whose failures are format
+  rather than choice. Note the template asks for an XML call form, so a JSON-schema constraint
+  is the wrong tool even then.
 - **Speculative decoding with a draft model** — pair the 27B with a 0.6B/1.7B Qwen3
   draft to cut generation latency. Promote when: 0004 has settled the main config and
   generation speed is the thing still failing the interactive threshold. Deliberately

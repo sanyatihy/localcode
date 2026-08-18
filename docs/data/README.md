@@ -21,6 +21,8 @@ here should be compared across machines without saying so.
 | `2026-08-18-m2max-32gb-0013-calibration-r1.jsonl` | 84 runs | First calibration of the 14-task suite, both thinking modes, three passes, at 32k/q8_0. **Failed its own criterion** — one genuine failure in 78 clean runs, so the suite still cannot rank. Six rows are `fail_truncated_at_cap` and are cap artifacts, not quality: read them with the caps of that run (2048 patch, 1024 tool-call), which have since been raised. |
 | `2026-08-18-m2max-32gb-0013-reasoning-effort.jsonl` | 18 runs | The three tasks whose caps bound at `xhigh`, re-run at `low` and `medium` with `reasoning_effort` set explicitly. The first file to carry the level; rows in every earlier file are `xhigh` whether they say so or not. |
 | `2026-08-18-m2max-32gb-0013-readonly-fixed.jsonl` | 12 runs | `toolcall-constraint-readonly` at all four reasoning levels after its fixture was fixed. Supersedes that task's rows in the two files above, which scored the model for declining to patch a file it had not been shown. |
+| `2026-08-18-m2max-32gb-0005-toggle.jsonl` | 81 runs | Thinking off, on/low and on/medium, **each at its own model-card sampling** — the first clean comparison across the toggle. Supersedes every earlier thinking-vs-off figure. |
+| `2026-08-18-m2max-32gb-0005-sampling.jsonl` | 162 runs | Temperature and top_p swept around each mode's default, plus greedy, one value moved per cell. |
 | `2026-08-17-m2max-32gb-tier1-matrix.jsonl` | 42 runs | Thinking on vs off at model-card sampling, baseline 32k/q8_0, three passes over seven tasks. |
 
 ## Erratum: page size, 2026-08-18
