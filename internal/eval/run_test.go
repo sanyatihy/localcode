@@ -74,7 +74,7 @@ func TestRunToolCallOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := fakeServer(t, tc.body)
 			c := NewClient(srv.URL, 5*time.Second)
-			res, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, "")
+			res, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, "", nil)
 			if err != nil {
 				t.Fatalf("unexpected transport error: %v", err)
 			}
@@ -105,7 +105,7 @@ func TestRunRetrievalOutcomes(t *testing.T) {
 			})
 			srv := fakeServer(t, string(body))
 			c := NewClient(srv.URL, 5*time.Second)
-			res, err := c.Run(context.Background(), task, Sampling{}, nil, "")
+			res, err := c.Run(context.Background(), task, Sampling{}, nil, "", nil)
 			if err != nil {
 				t.Fatalf("unexpected transport error: %v", err)
 			}
@@ -191,7 +191,7 @@ func TestTruncationIsNotScoredAsWrong(t *testing.T) {
 			Messages:  []Message{{Role: "user", Content: "{{BODY}}"}},
 			Retrieval: &Retrieval{DepthTokens: 200, Sentinel: "KEY-X"}},
 	} {
-		res, err := c.Run(context.Background(), task, Sampling{}, nil, "")
+		res, err := c.Run(context.Background(), task, Sampling{}, nil, "", nil)
 		if err != nil {
 			t.Fatalf("%s: %v", task.Kind, err)
 		}

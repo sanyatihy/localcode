@@ -78,6 +78,13 @@ type Result struct {
 	Outcome Outcome `json:"outcome"`
 	Detail  string  `json:"detail,omitempty"`
 
+	// Memory around the run. A run whose swap grew was measuring the pager, and the
+	// vision calls that void rather than slow — so it is recorded per row and the
+	// reporter flags it rather than averaging it in.
+	FreeGB      float64 `json:"free_gb"`
+	SwapDeltaMB float64 `json:"swap_delta_mb"`
+	MemMeasured bool    `json:"mem_measured"`
+
 	PromptTokens     int     `json:"prompt_tokens"`
 	CachedTokens     int     `json:"cached_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
@@ -153,7 +160,7 @@ func (t *Task) expand() ([]Message, error) {
 // own chat template; nil leaves the template default alone, which is not the same
 // as setting it false. effort is the reasoning_effort level; empty leaves the
 // model's default, which for Qwen3.8 is xhigh.
-func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, effort string) (Result, error) {
+func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, effort string, prof *Profile) (Result, error) {
 	msgs, err := t.expand()
 	if err != nil {
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
@@ -182,6 +189,7 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(budget)*time.Second)
 	defer cancel()
 	started := time.Now()
+	before := sampleMemory()
 
 	resp, err := c.Complete(runCtx, req)
 	if err != nil {
@@ -195,11 +203,21 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 				WallSeconds: time.Since(started).Seconds(),
 				Detail:      fmt.Sprintf("exceeded its %ds budget", budget)}, nil
 		}
-		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
+		// A request went out and took time even though it failed, so recording zero
+		// would understate any total this row is summed into.
+		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error(),
+			WallSeconds: time.Since(started).Seconds()}, err
 	}
 
+	after := sampleMemory()
+	// Wall is measured here, client side, on purpose: it is the only speed number every
+	// backend can produce. Server-reported tok/s exists on llama.cpp and may not exist
+	// elsewhere, so it is recorded where available and never used to compare backends.
 	res := Result{
 		TaskID:           t.ID,
+		FreeGB:           after.FreeGB,
+		SwapDeltaMB:      after.SwapUsedMB - before.SwapUsedMB,
+		MemMeasured:      before.OK && after.OK,
 		PromptTokens:     resp.Usage.PromptTokens,
 		CachedTokens:     resp.Usage.PromptTokensDetails.CachedTokens,
 		CompletionTokens: resp.Usage.CompletionTokens,
@@ -216,7 +234,14 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 		return res, nil
 	}
 	msg := resp.Choices[0].Message
-	res.ReasoningChars = len(msg.ReasoningContent)
+	// Through the profile: a backend that inlines its reasoning in the content would
+	// otherwise have it counted as answer text and scored as one.
+	reasoning, content := msg.ReasoningContent, msg.Content
+	if prof != nil {
+		reasoning, content = prof.ExtractReasoning(msg.ReasoningContent, msg.Content)
+	}
+	msg.Content = content
+	res.ReasoningChars = len(reasoning)
 
 	// Checked before the per-kind check: a truncated reply can fail any of them for a
 	// reason that is not the model's, and attributing it to quality would be wrong.
