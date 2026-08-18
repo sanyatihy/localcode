@@ -137,9 +137,17 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 // When a run varies server-level flags, a config label is a human's claim about what
 // was launched, and a row that carries the served n_ctx cannot quietly attribute one
 // config's numbers to another.
+// ServerProps is what a backend says it is serving. Not every backend says: llama.cpp
+// exposes /props, an MLX server may expose nothing, and a row must be able to record
+// "unavailable" rather than a confident zero that reads as "0 context".
 type ServerProps struct {
 	NCtx      int    `json:"n_ctx"`
 	ModelPath string `json:"model_path"`
+
+	// Available is false when the backend could not be asked. The scorer still runs —
+	// a backend that cannot introspect is scoreable, it just cannot have its served
+	// config checked against the label a human typed.
+	Available bool `json:"available"`
 }
 
 func (c *Client) Props(ctx context.Context) (ServerProps, error) {
@@ -163,5 +171,5 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return out, err
 	}
-	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath}, nil
+	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, Available: true}, nil
 }
