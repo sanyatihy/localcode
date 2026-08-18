@@ -54,10 +54,13 @@ related:             # other docs worth reading first
 <!-- Optional. Delete when empty. Each with a leaning if you have one. -->
 
 ## Log
-<!-- What the doing taught that the plan did not know: a measurement, a falsified premise,
-     an open question settled, what a dependency's outcome changed downstream. Take the room
-     it needs — this is the section a later reader gains most from, and the one most docs
-     are thinnest in. Not a diary: nothing about mistakes made and fixed, rules complied
-     with, or what the diff already shows. Append-only.
+<!-- One entry per change to the plan, and each names the change: a box rewritten, a
+     premise falsified, an open question settled, a number something downstream reads.
+     Take the room a change needs; append-only.
+
+     An entry naming no change is not an entry. What the work did before it converged —
+     the run, the re-run, the reading that was revised — belongs in the pull request, and
+     a fact still true after this ships belongs in the as-built doc, one line. Never both:
+     each fact has one home.
        - YYYY-MM-DD — decided X over Y because … -->
 
