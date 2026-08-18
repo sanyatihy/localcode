@@ -126,3 +126,9 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 - 2026-08-18 — **box 5 dropped rather than run.** The failure it targets has never occurred:
   the deficit is entirely tool *choice*, which a grammar cannot correct and might entrench.
   Backlogged against a model whose failures are format rather than choice.
+- 2026-08-18 — the tool-call validity figures this feature reported were counted wrongly and
+  are corrected: validity is 12/12 in every cell, not 11/12 or 9/12. `Row.ToolCallValid`
+  already defined it as syntactically valid and schema-conforming, *separately* from choosing
+  the right tool, and the sweep counted a wrong-tool choice as invalid instead. The primary
+  metric this feature was built around therefore ranks nothing at all, and the conclusion is
+  stronger for it: reasoning buys nothing measurable rather than buying one point of validity.
