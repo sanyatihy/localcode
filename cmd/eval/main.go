@@ -52,7 +52,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		// hardcodes one vendor's vocabulary has to be edited before it can measure
 		// anything new. The server rejects what it does not know. What this process
 		// guarantees instead is that whatever was sent is on every row.
-		effort  = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
+		effort = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
+		// The mode's recommended sampling, as one flag. The pair is documented in
+		// docs/VISION.md and getting it wrong silently is what voided 114 rows.
+		profile = fs.String("sampling-profile", "", "thinking|nonthinking: apply the model's recommended sampling for that mode")
 		temp    = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
 		topP    = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
 		topK    = fs.Int("top-k", -1, "top_k; negative leaves it unset")
@@ -84,7 +87,28 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	// Negative means "not set", so the server's own default applies. Zero is a real
 	// value a sweep may want, and must stay distinguishable from silence.
+	// The toggle carries its own sampling, so comparing modes at one fixed setting
+	// measures the pair rather than the toggle — the vision calls such a result void,
+	// and 114 rows were collected that way before anyone noticed. Setting the mode
+	// without saying which sampling goes with it is refused rather than defaulted:
+	// the whole point is that there is no neutral setting to fall back on.
+	if *thinking != "" && *profile == "" && *temp < 0 && *topP < 0 && *topK < 0 && *presPen < 0 {
+		return errors.New("-thinking was set with no sampling: pass -sampling-profile thinking|nonthinking, " +
+			"or set the sampling flags explicitly. Comparing modes at one fixed sampling measures the pair, not the toggle")
+	}
+
 	var sampling eval.Sampling
+	switch *profile {
+	case "":
+	case "thinking":
+		t, p, k := 1.0, 0.95, 20
+		sampling.Temperature, sampling.TopP, sampling.TopK = &t, &p, &k
+	case "nonthinking":
+		t, p, k, pp := 0.7, 0.80, 20, 1.5
+		sampling.Temperature, sampling.TopP, sampling.TopK, sampling.PresencePenalty = &t, &p, &k, &pp
+	default:
+		return fmt.Errorf("-sampling-profile must be thinking or nonthinking, got %q", *profile)
+	}
 	if *temp >= 0 {
 		sampling.Temperature = temp
 	}
