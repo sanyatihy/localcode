@@ -111,11 +111,13 @@ These govern *how*. Bias toward caution on anything non-trivial; use judgement o
 - **Enforce, do not instruct.** Before adding a rule here, ask what would remove the need for
   it — a refusal in `kit`, or protection on the remote. Prose is the weakest tier and is
   honest only for judgement and taste.
-- **Write about the system, not the session.** A sentence about *the work* — which session it
-  happened in, what the previous attempt did, who got a rule wrong — stops being true the
-  moment it is fixed. State what holds; the incident belongs in the pull request, and
-  anything durable in `docs/TECH.md`.
-- **Write the record while you work, and only what the code cannot say.** A ticked box in
-  the implementing commit and a `## Log` line for what the doing taught cost nothing and are
-  accurate; an essay written in advance is expensive and often wrong by the end. Cut
-  restatement and hedging — never a decision, a constraint, or the evidence behind it.
+- **Write about the system, not the session.** A sentence about *the work* — which session
+  it happened in, what the previous attempt did, who got a rule wrong — stops being true the
+  moment it is fixed. State what holds, then the evidence for it, and only the rule is
+  compulsory: evidence earns a trailing clause where it stops the rule being reversed — the
+  constraint or the measurement, never how it was found or the order the attempts came in.
+- **Every fact has one home, and you choose it as you write the sentence.** True after this
+  ships → `docs/TECH.md`, one line. What changed this doc's plan → one `## Log` entry that
+  *names the change*: a box rewritten, a premise falsified, a number something downstream
+  reads. Neither → the pull request. An entry naming no change is not an entry, however much
+  the run taught you, and nothing is written twice.
