@@ -7,7 +7,7 @@ shipped:
 check:
 checked:
 review:
-needs: 0004
+needs: 0005
 related: 0010, 0005
 ---
 
@@ -94,6 +94,12 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-18 — `needs:` moves from 0004 to 0005. 0004 is dropped, so no sweep will name a
+  winning quant; the config this feature wires in is Q4_K_M by elimination, and what it still
+  waits on is the sampling and reasoning level 0005 settles. **This feature now also owns
+  naming the context and KV cache type**, which 0004 would have swept — 0003 and 0014 bound
+  them already (ingest time binds, not memory; 57,344 is the attended ceiling) but nothing has
+  yet written down which to use.
 
 - 2026-08-17 — retargeted from Cursor's built-in assistant to the Claude-Code-in-editor
   flow already in use. The earlier tunnel design is kept as a rejected alternative: the
