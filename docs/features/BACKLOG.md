@@ -15,6 +15,10 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
 - **Qwen3-Coder-Next (80B-A3B)** — MoE built for agentic coding, 3B active. Promote when:
   someone confirms a quant fits 32 GB with usable context; at ~45 GB for Q4 it currently
   does not, and the vision rules out a model zoo.
+- **The quant ladder, on a bigger machine** — 0004 was dropped because the admissible wired
+  budget on 32 GB is ~22.2 GB and Q4_K_M already sits at 21.75, so Q5_K_M and Q6_K are
+  excluded *by projection rather than by measurement*. Promote when: the 128 GB machine
+  arrives, which moves that budget and makes the exclusion testable instead of assumed.
 - **Quantising the model ourselves** — build custom quants rather than taking unsloth's.
   Promote when: 0004 shows the available quant ladder has a gap worth filling.
 - **Hermes' persistent memory over a real week** — 0010 scores both harnesses cold,
