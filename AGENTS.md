@@ -13,13 +13,15 @@ format. Every rule below is a rule some agent got wrong; none is style.
    - **A feature is one pull request**, so it is the unit of review. Too big is one nobody
      can review in a sitting — config, storage, API and CLI together is a project. Too small
      changes nothing observable; that is a task box.
+   - **A feature records a decision.** A change whose whole story fits in its commit message
+     is a `BACKLOG.md` line and a commit, not six sections padded to fill.
    - **Fill `needs:` on every draft.** It is what lets `next` refuse work whose foundation
      is missing, and empty ones are what let agents run at once. Judge by whether the work
      could *start* now: a shared composition root, a shared router, or numbered migrations
      make a feature dependent however separate it looks.
    - **One drafting session is one plan round:** all its docs on one `plan/<something>`
-     branch, merged once. Never name a branch after a feature — a leading four-digit ID *is*
-     a claim, so a draft on one claims itself.
+     branch, merged once. The name must not mention a feature id anywhere in it — any
+     branch citing one is a claim, so a draft on one claims itself.
    - **The round must reach the default branch before anything on it can be claimed.**
      `claim` refuses otherwise; land it at whatever statuses its docs reached.
    - **Leave every doc `Draft`, and never edit `status:` by hand** — `accept`, `ship` and
@@ -109,7 +111,11 @@ These govern *how*. Bias toward caution on anything non-trivial; use judgement o
 - **Enforce, do not instruct.** Before adding a rule here, ask what would remove the need for
   it — a refusal in `kit`, or protection on the remote. Prose is the weakest tier and is
   honest only for judgement and taste.
+- **Write about the system, not the session.** A sentence about *the work* — which session it
+  happened in, what the previous attempt did, who got a rule wrong — stops being true the
+  moment it is fixed. State what holds; the incident belongs in the pull request, and
+  anything durable in `docs/TECH.md`.
 - **Write the record while you work, and only what the code cannot say.** A ticked box in
-  the implementing commit and a `## Log` line for a surprise cost nothing and are accurate;
-  an essay written in advance is expensive and often wrong by the end. Cut restatement and
-  hedging — never a decision, a constraint, or the evidence behind it.
+  the implementing commit and a `## Log` line for what the doing taught cost nothing and are
+  accurate; an essay written in advance is expensive and often wrong by the end. Cut
+  restatement and hedging — never a decision, a constraint, or the evidence behind it.
