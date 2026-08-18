@@ -58,6 +58,16 @@ loses at 16k has lost the case that matters.
   but this is close enough that the numbers should decide it in the open.
 
 ## Log
+- 2026-08-18 — **`reasoning_effort` cannot be sent the same way to both runtimes, so 0006 does
+  not send it.** `llama-server` accepts it top-level; `mlx_lm` has no such field and would
+  silently ignore it, running at the template's `xhigh` default while llama.cpp ran at
+  whatever was asked — two reasoning levels compared as one runtime difference. Both do accept
+  it inside `chat_template_kwargs`, which is the portable route if a later comparison needs it.
+  This one runs at thinking off, 0005's settled config, where no effort text is injected at all.
+- 2026-08-18 — **MLX returns reasoning inline rather than in a field.** `mlx_lm` tracks a
+  thinking state and emits think tags in the content; it has no `reasoning_content`. 0012's
+  profile already extracts either form and strips the inline one from the content, so reasoning
+  is not counted as answer text on one side and excluded on the other.
 - 2026-08-18 — the matched pair is **MLX 4bit at 16.1 GB against llama.cpp Q4_K_M at 17 GB**,
   which is the closest available. The 8bit build is 29.5 GB and sits past the ~22.2 GB
   admissible wired budget 0014 measured, so this comparison has one quantisation on each side
