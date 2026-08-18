@@ -56,8 +56,10 @@ before any run so that it is a rule and not a preference, in fractions of one co
 | `not_applicable` | the condition is unattended |
 | `insufficient_samples` | the fill was shorter than the sustain window |
 
-Attended baseline with an editor rendering and no model loaded measures **0.28–0.47 cores**,
-so both bounds sit well clear of normal operation. A brief spike is the compositor doing its
+Attended baseline with no model loaded measures **0.17–0.47 cores** — the low end a nearly
+static screen, the high end an editor actively rendering — so both bounds sit well clear of
+normal operation. Each run records its own baseline in the apparatus row, since that spread
+is wide enough that quoting a single measured figure would be the weaker claim. A brief spike is the compositor doing its
 job; the sustain window is what separates that from the compositor losing.
 
 **Two things this cannot do, stated now rather than discovered later.** Passive CPU cannot
@@ -95,6 +97,27 @@ constraint rather than discover it as a bad result.
 - [ ] `docs/TECH.md` records the admissible context range for a machine in use, separately from the range the model can serve
 - [ ] The consequence for Hermes' 64k floor is written down where 0010 will read it
 
+## Running the re-walk
+
+The band in question is 32k to 64k, at 8k granularity. Nothing below 32k is re-walked:
+those cells are not in doubt and each costs its full ingest. Roughly 50 minutes.
+
+    CELLS="config/ladder-32k-q8_0.env config/ladder-40k-q8_0.env config/ladder-48k-q8_0.env config/ladder-56k-q8_0.env config/ladder-64k-q8_0.env" \
+      CONDITION=attended-worked-in ./scripts/ladder.sh
+
+Three conditions on the run, all of which void it if missed:
+
+- **The desktop must be driven.** A verdict from passive CPU means nothing against a static
+  screen, which reads as a stall. Do ordinary work while it runs; that is what `attended`
+  denotes and the run is measuring.
+- **Other processes must fit underneath the model.** The apparatus row records the footprint
+  and the ladder prints it before the first cell. At 19.1 GB for the model at 32k and 20.3
+  at 64k, an apparatus above ~9 GB puts the machine into swap, and per 0003 a run that swaps
+  measures the pager rather than the desktop. A browser alone was measured at 5.8 GB.
+- **The last cell is the known-bad one.** 64k is expected to degrade the desktop for the
+  ~13 minutes it ingests. That is the calibration point, not a mishap — it is the cell that
+  tells the threshold which direction the signal moves.
+
 ## Open questions
 
 - Is the right remedy a smaller context, a raised wired limit, or accepting that unattended
@@ -130,3 +153,11 @@ constraint rather than discover it as a bad result.
   not document, and a threshold set against an undocumented decay is not reproducible.
   Thresholds are two-sided and provisional — the direction of the signal at the failure is
   the one thing the re-walk still has to establish.
+- 2026-08-18 — the re-walk band is 32k/40k/48k/56k/64k, and the ladder takes a `CELLS`
+  selection so a band can be walked without paying for cells that are not in question.
+  Two harness bugs surfaced from one accidental full-ladder run and are fixed: the health
+  check could conclude a server had died before `serve.sh` had `exec`ed it, recording
+  `load_failed` for a server that then loaded fine and collided with the next cell; and
+  `CELLS` used `:-`, so an explicitly empty value walked every cell instead of none. The
+  first had hidden through every earlier run and appeared only under a 20 GB apparatus —
+  the condition this feature exists to measure.
