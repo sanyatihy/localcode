@@ -1,1 +1,4 @@
 results/*.jsonl
+
+# MLX runs from its own venv; the pins are committed, the wheels are not.
+mlx/.venv/

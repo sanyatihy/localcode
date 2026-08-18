@@ -45,7 +45,7 @@ loses at 16k has lost the case that matters.
 
 ## Tasks
 
-- [ ] MLX and mlx-lm install into an isolated environment, with the setup committed and repeatable
+- [x] MLX and mlx-lm install into an isolated environment, with the setup committed and repeatable
 - [ ] The same model is served under MLX at a documented matched-footprint quantisation, answering the same OpenAI-compatible requests
 - [ ] Both runtimes are scored on the harness at realistic context depths, not just short prompts
 - [ ] Peak memory of each runtime is measured against 0003's envelope, Python overhead included
@@ -58,6 +58,15 @@ loses at 16k has lost the case that matters.
   but this is close enough that the numbers should decide it in the open.
 
 ## Log
+- 2026-08-18 — the matched pair is **MLX 4bit at 16.1 GB against llama.cpp Q4_K_M at 17 GB**,
+  which is the closest available. The 8bit build is 29.5 GB and sits past the ~22.2 GB
+  admissible wired budget 0014 measured, so this comparison has one quantisation on each side
+  and not a ladder.
+- 2026-08-18 — **context is not a matched variable across these runtimes.** `llama-server`
+  reserves a KV cache at load and reports what it serves; `mlx_lm` sizes per request and has
+  no equivalent number, so the two cannot be set to "the same context" and depth has to be
+  measured by sending deep prompts instead. That is also why 0012's served-config guard had
+  to become optional before this feature could run at all.
 - 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
   llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
   itself, under time pressure, in a comparison whose numbers then rest on it.
