@@ -47,12 +47,17 @@ func run(args []string, stdout, stderr *os.File) error {
 		config   = fs.String("config", "unlabelled", "label for the serving config under test")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
-		effort   = fs.String("reasoning-effort", "", "reasoning_effort: low, medium, xhigh, or empty for the model default (xhigh on Qwen3.8)")
-		temp     = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
-		topP     = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
-		topK     = fs.Int("top-k", -1, "top_k; negative leaves it unset")
-		presPen  = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
-		timeout  = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
+		// Passed through rather than validated against a list. Qwen3.8 takes
+		// low/medium/xhigh; the next model will take something else, and a harness that
+		// hardcodes one vendor's vocabulary has to be edited before it can measure
+		// anything new. The server rejects what it does not know. What this process
+		// guarantees instead is that whatever was sent is on every row.
+		effort  = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
+		temp    = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
+		topP    = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
+		topK    = fs.Int("top-k", -1, "top_k; negative leaves it unset")
+		presPen = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
+		timeout = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -70,10 +75,6 @@ func run(args []string, stdout, stderr *os.File) error {
 		if len(paths) == 0 {
 			return fmt.Errorf("no fixtures under %s", *tasksDir)
 		}
-	}
-
-	if err := validateEffort(*effort); err != nil {
-		return err
 	}
 
 	think, err := parseThinking(*thinking)
@@ -143,18 +144,6 @@ func run(args []string, stdout, stderr *os.File) error {
 		return fmt.Errorf("%w: %d", errTasksFailed, failures)
 	}
 	return nil
-}
-
-// validateEffort rejects an unknown level rather than letting the server ignore it
-// and the run quietly measure the default. A sweep that thinks it varied an axis it
-// did not is worse than one that refuses to start.
-func validateEffort(s string) error {
-	switch s {
-	case "", "low", "medium", "xhigh":
-		return nil
-	default:
-		return fmt.Errorf("-reasoning-effort must be low, medium, xhigh, or empty, got %q", s)
-	}
 }
 
 func parseThinking(s string) (*bool, error) {

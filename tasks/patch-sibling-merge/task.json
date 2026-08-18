@@ -2,6 +2,7 @@
   "id": "patch-sibling-merge",
   "kind": "patch",
   "max_tokens": 8192,
+  "timeout_seconds": 240,
   "patch": {
     "source": "broken.go.txt",
     "test_file": "verify_test.go.txt",

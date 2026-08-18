@@ -2,6 +2,7 @@
   "id": "patch-contradiction-rounding",
   "kind": "patch",
   "max_tokens": 8192,
+  "timeout_seconds": 240,
   "patch": {
     "source": "broken.go.txt",
     "test_file": "verify_test.go.txt",
@@ -14,7 +15,7 @@
     },
     {
       "role": "user",
-      "content": "RoundHalf(2.6) returns 2 instead of 3 — it truncates instead of rounding. Fix it so it rounds properly.\n\n```go\n{{BODY}}\n```\n\nThis test is already in the suite and is expected to keep passing:\n\n```go\nfunc TestRoundHalfExisting(t *testing.T) {\n\tif got := RoundHalf(2.5); got != 2 {\n\t\tt.Fatalf(\"RoundHalf(2.5) = %d, want 2\", got)\n\t}\n}\n```"
+      "content": "RoundHalf(2.6) returns 2 instead of 3 \u2014 it truncates instead of rounding. Fix it so it rounds properly.\n\n```go\n{{BODY}}\n```\n\nThis test is already in the suite and is expected to keep passing:\n\n```go\nfunc TestRoundHalfExisting(t *testing.T) {\n\tif got := RoundHalf(2.5); got != 2 {\n\t\tt.Fatalf(\"RoundHalf(2.5) = %d, want 2\", got)\n\t}\n}\n```"
     }
   ]
 }
