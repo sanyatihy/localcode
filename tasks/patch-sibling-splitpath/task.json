@@ -1,7 +1,7 @@
 {
   "id": "patch-sibling-splitpath",
   "kind": "patch",
-  "max_tokens": 2048,
+  "max_tokens": 8192,
   "patch": {
     "source": "broken.go.txt",
     "test_file": "verify_test.go.txt",
