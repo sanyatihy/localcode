@@ -192,9 +192,19 @@ The four settings on the three tasks that move (three passes each, 32k/q8_0):
 |---|---|---|---|---|
 | `patch-contradiction-rounding` | 3/3 | 1/3 | 2/3 | 0/3, never terminated |
 | `patch-off-by-one` | 3/3 | 3/3 | 3/3 | 2/3, one non-termination |
-| `toolcall-constraint-readonly` | 2/3 | 2/3 | 2/3 | 1/3, two non-terminations |
+| `toolcall-constraint-readonly` † | 2/3 | 3/3 | 3/3 | 3/3 |
 
-**Reasoning made this model worse where it moved at all.** On the contradicted-specification
+† re-measured after its fixture was fixed; the earlier figures scored the model for refusing
+to patch a file it had not been shown. Its `xhigh` runs complete once the cap is 4096 rather
+than 1024, so that task's non-termination really was a budget problem — unlike the
+contradiction task, where raising the cap only bought a longer spiral.
+
+**Reasoning made this model worse where it moved at all — except where it did the opposite.**
+On the contradicted-specification task, off passes every time and thinking fails 3 of 6, always
+on the same assertion. On the read-only tool-choice task the direction reverses: off reaches for
+the forbidden `edit_file` once in three, and every run with reasoning on takes the constraint.
+Two tasks, two directions, three runs a cell — enough to kill "more thinking is better" as a
+working assumption, not enough to replace it with a rule. On the contradicted-specification
 task, off passes every time and thinking fails 3 of 6 — always on the same assertion, the model
 resolving the contradiction case by case rather than picking one rule. `medium` beating `low`
 is within the noise of three runs and is not a ranking. What the data supports is that more
@@ -204,8 +214,9 @@ reasoning is not a free upgrade here, which is the opposite of what 0005 was bui
 
 Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
 separately from any quality outcome. The default is 120 s; the fixtures that legitimately
-cost more say so, up to 300 s for the 16k retrieval. This is not a safety net that should
-ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
+cost more say so, up to 300 s for the 16k retrieval. No run has yet hit one on real work — the guard is covered by a unit test, not by a live
+firing, and the `xhigh` cell that used to run unbounded now finishes at 95 s against its 120 s
+budget. This is not a safety net that should ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
 reasoning and produced no answer.
 
 Budgets are set from the fast end (`reasoning off`) plus headroom, so a task hitting its
@@ -226,7 +237,7 @@ three below that moved.
 | tasks | verdict |
 |---|---|
 | `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
-| `toolcall-constraint-readonly` | **weak, and was flawed** — its failures were the model refusing to patch a file it could not see, which the fixture gave no legal way to express. Source now supplied in the prompt; needs re-measuring |
+| `toolcall-constraint-readonly` | **weakly discriminates, in the opposite direction** — off 2/3, every reasoning level 3/3. Its earlier failures were a fixture flaw (the model refusing to patch a file it had not been shown), fixed by supplying the source in the prompt and re-measured |
 | `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
 
 A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
