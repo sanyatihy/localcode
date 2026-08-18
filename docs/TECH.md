@@ -205,6 +205,10 @@ to patch a file it had not been shown. Its `xhigh` runs complete once the cap is
 than 1024, so that task's non-termination really was a budget problem — unlike the
 contradiction task, where raising the cap only bought a longer spiral.
 
+> **Superseded for the toggle.** A clean comparison exists — each mode at its own
+> model-card sampling, in `docs/data/2026-08-18-m2max-32gb-0005-toggle.jsonl`. Read that for
+> anything crossing the toggle. The block below stands only for what does not cross it.
+>
 > **Void as a thinking comparison.** Every row in this section was taken at the server's
 > default sampling, identical in both modes. The vision requires each mode to run at its own
 > recommended sampling — `temp 1.0 / top_p 0.95 / top_k 20` on, `temp 0.7 / top_p 0.80 /
