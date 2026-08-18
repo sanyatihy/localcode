@@ -83,3 +83,11 @@ at idle — a rule that cannot be evaluated from the data is not enforceable.
   settle it, and guessing now risks a shape that fits neither.
 
 ## Log
+- 2026-08-18 — two pieces of generalisation landed early, under 0013, because 0013 could not
+  finish without them. `reasoning_effort` is passed through verbatim instead of validated
+  against Qwen's `low`/`medium`/`xhigh`, since the next model's vocabulary will differ and a
+  harness that hardcodes one vendor's has to be edited before it can measure anything new;
+  the level is recorded per row instead. And every task now carries a `timeout_seconds`
+  budget with `fail_over_budget` as its own outcome, so a model that does not terminate costs
+  a bounded amount of a sweep rather than the sweep. Both belong to this feature's remit and
+  are noted here so they are not designed twice.

@@ -1,5 +1,5 @@
 {
-  "id": "toolcall-edit-file",
+  "id": "toolcall-constraint-unknown-path",
   "kind": "toolcall",
   "max_tokens": 4096,
   "timeout_seconds": 120,
@@ -10,7 +10,7 @@
     },
     {
       "role": "user",
-      "content": "Here is the complete content of config/app.yaml:\n\n```yaml\nservice: api\ntimeout: 30\nretries: 3\n```\n\nYou have the full file above, so there is nothing left to read. Change the timeout to 60."
+      "content": "A function named refreshToken is defined somewhere in this repository. Find the file that defines it. The layout is unfamiliar and no path has been given to you, so do not guess one."
     }
   ],
   "tools": [
@@ -18,12 +18,13 @@
       "type": "function",
       "function": {
         "name": "read_file",
-        "description": "Read a file",
+        "description": "Read a file from the repository",
         "parameters": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "Repo-relative path"
             }
           },
           "required": [
@@ -35,40 +36,30 @@
     {
       "type": "function",
       "function": {
-        "name": "edit_file",
-        "description": "Replace an exact string in a file",
+        "name": "search_repo",
+        "description": "Search the repository for a string and return matching files and lines",
         "parameters": {
           "type": "object",
           "properties": {
-            "path": {
-              "type": "string"
-            },
-            "old_string": {
-              "type": "string"
-            },
-            "new_string": {
-              "type": "string"
+            "query": {
+              "type": "string",
+              "description": "Literal string to search for"
             }
           },
           "required": [
-            "path",
-            "old_string",
-            "new_string"
+            "query"
           ]
         }
       }
     }
   ],
   "expect": {
-    "tool": "edit_file",
+    "tool": "search_repo",
     "required_args": [
-      "path",
-      "old_string",
-      "new_string"
+      "query"
     ],
     "arg_contains": {
-      "path": "app.yaml",
-      "new_string": "60"
+      "query": "refreshToken"
     }
   }
 }

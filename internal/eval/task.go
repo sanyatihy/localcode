@@ -7,7 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// DefaultTimeoutSeconds bounds a task that does not set its own budget. Generous
+// enough for the slowest fixture measured at the fast end, tight enough that a stuck
+// task costs minutes rather than the afternoon.
+const DefaultTimeoutSeconds = 120
 
 // Task is one tier-1 fixture: a single-turn request plus a deterministic check.
 // "Deterministic" is the whole point — an LLM judge would add a second model's
@@ -18,6 +24,13 @@ type Task struct {
 	Messages  []Message `json:"messages"`
 	Tools     []Tool    `json:"tools,omitempty"`
 	MaxTokens int       `json:"max_tokens"`
+
+	// TimeoutSeconds bounds one attempt. A task with no ceiling is not a measurement,
+	// it is a hostage: this suite has produced 15-minute single runs that ended in no
+	// answer at all. Over-budget is scored as its own outcome so it is never mistaken
+	// for a wrong answer, and the number lives in the fixture because how long a task
+	// may reasonably take is a property of the task.
+	TimeoutSeconds int `json:"timeout_seconds"`
 
 	Expect    Expect     `json:"expect"`
 	Patch     *Patch     `json:"patch,omitempty"`
@@ -53,6 +66,11 @@ const (
 	// about the model. Kept distinct because thinking mode spends the same budget on
 	// reasoning first, so a shared cap silently penalises it.
 	FailTruncated Outcome = "fail_truncated_at_cap"
+
+	// FailOverBudget is likewise not a quality failure: the model was still working
+	// when its clock ran out. It is the outcome that keeps a sweep bounded, and a
+	// suite where it appears often is badly budgeted rather than badly answered.
+	FailOverBudget Outcome = "fail_over_budget"
 )
 
 type Result struct {
@@ -85,6 +103,9 @@ func LoadTask(path string) (*Task, error) {
 	}
 	if t.MaxTokens == 0 {
 		t.MaxTokens = 512
+	}
+	if t.TimeoutSeconds == 0 {
+		t.TimeoutSeconds = DefaultTimeoutSeconds
 	}
 	switch t.Kind {
 	case "toolcall":
@@ -130,17 +151,19 @@ func (t *Task) expand() ([]Message, error) {
 
 // Run executes one task and scores it. thinking is passed through to the model's
 // own chat template; nil leaves the template default alone, which is not the same
-// as setting it false.
-func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (Result, error) {
+// as setting it false. effort is the reasoning_effort level; empty leaves the
+// model's default, which for Qwen3.8 is xhigh.
+func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, effort string) (Result, error) {
 	msgs, err := t.expand()
 	if err != nil {
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
 	}
 	req := chatRequest{
-		Messages:  msgs,
-		Tools:     t.Tools,
-		MaxTokens: t.MaxTokens,
-		Sampling:  s,
+		Messages:        msgs,
+		Tools:           t.Tools,
+		MaxTokens:       t.MaxTokens,
+		ReasoningEffort: effort,
+		Sampling:        s,
 	}
 	if len(t.Tools) > 0 {
 		req.ToolChoice = "auto"
@@ -149,8 +172,24 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (
 		req.ChatTemplateKwargs = map[string]any{"enable_thinking": *thinking}
 	}
 
-	resp, err := c.Complete(ctx, req)
+	// Defaulted here as well as in LoadTask: Run must not assume its caller came
+	// through the loader, and a zero budget meaning "expire immediately" would turn a
+	// hand-built Task into a suite of instant failures.
+	budget := t.TimeoutSeconds
+	if budget <= 0 {
+		budget = DefaultTimeoutSeconds
+	}
+	runCtx, cancel := context.WithTimeout(ctx, time.Duration(budget)*time.Second)
+	defer cancel()
+
+	resp, err := c.Complete(runCtx, req)
 	if err != nil {
+		// The task's own clock expiring is a scored outcome, not a transport failure,
+		// and must not abort the suite: returning the error here would end the run.
+		if runCtx.Err() != nil && ctx.Err() == nil {
+			return Result{TaskID: t.ID, Outcome: FailOverBudget,
+				Detail: fmt.Sprintf("exceeded its %ds budget", budget)}, nil
+		}
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
 	}
 

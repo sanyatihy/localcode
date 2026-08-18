@@ -1,0 +1,7 @@
+package main
+
+// RoundHalf rounds x to the nearest whole number. A value exactly halfway between two
+// integers rounds away from zero, so RoundHalf(0.5) is 1 and RoundHalf(2.5) is 3.
+func RoundHalf(x float64) int {
+	return int(x)
+}

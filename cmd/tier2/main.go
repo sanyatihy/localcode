@@ -123,7 +123,10 @@ func run(args []string, stdout, stderr *os.File) error {
 			_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
 		}
 		if cfg.results != "" {
-			row := eval.NewRow(cfg.label, 0, "", eval.Sampling{}, eval.ServerProps{}, "tier2", res)
+			// Empty effort, and honestly so: tier-2 drives an external harness that
+			// builds its own requests, so what it asked for is the harness's business
+			// and not something this process can claim to have set.
+			row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, eval.ServerProps{}, "tier2", res)
 			row.Detail = strings.TrimSpace(d.Name() + " " + row.Detail)
 			if err := eval.AppendRow(cfg.results, row); err != nil {
 				return fmt.Errorf("append result: %w", err)

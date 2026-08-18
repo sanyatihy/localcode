@@ -28,8 +28,17 @@ vet:
 
 ## lint: golangci-lint, pinned by .golangci.yml. Skipped with a loud note if the
 ## binary is absent, so a laptop without it still runs the rest — CI always has it.
+##
+## Written as an if rather than `command -v ... && run || echo`: in that form a lint
+## *failure* also takes the `||` branch, so real findings were reported as "not
+## installed, SKIPPED" and `make check` exited 0 while CI failed on them. The skip
+## must be reachable only when the binary is genuinely missing.
 lint:
-	@command -v golangci-lint >/dev/null 2>&1 		&& golangci-lint run ./... 		|| echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"; \
+	fi
 
 test:
 	@go test -race ./...

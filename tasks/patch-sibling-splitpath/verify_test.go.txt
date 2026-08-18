@@ -1,0 +1,37 @@
+package main
+
+import (
+	"reflect"
+	"testing"
+)
+
+func eq(t *testing.T, name, in string, got, want []string) {
+	t.Helper()
+	if len(got) == 0 && len(want) == 0 {
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s: SplitPath(%q) = %#v, want %#v", name, in, got, want)
+	}
+}
+
+// The reported symptom.
+func TestSplitPathLeadingSlash(t *testing.T) {
+	eq(t, "leading", "/a/b", SplitPath("/a/b"), []string{"a", "b"})
+}
+
+// The sibling cases the report does not mention and the doc comment does. Trimming
+// a leading slash fixes the symptom above and leaves every one of these broken.
+func TestSplitPathOtherEmptySegments(t *testing.T) {
+	eq(t, "trailing", "a/b/", SplitPath("a/b/"), []string{"a", "b"})
+	eq(t, "internal", "a//b", SplitPath("a//b"), []string{"a", "b"})
+	eq(t, "both ends", "/a/b/", SplitPath("/a/b/"), []string{"a", "b"})
+	eq(t, "repeated leading", "//a", SplitPath("//a"), []string{"a"})
+}
+
+func TestSplitPathDegenerate(t *testing.T) {
+	eq(t, "empty", "", SplitPath(""), nil)
+	eq(t, "root", "/", SplitPath("/"), nil)
+	eq(t, "plain", "a/b/c", SplitPath("a/b/c"), []string{"a", "b", "c"})
+	eq(t, "single", "a", SplitPath("a"), []string{"a"})
+}
