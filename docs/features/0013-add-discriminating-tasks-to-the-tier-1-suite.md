@@ -63,6 +63,35 @@ to locate it.
 - [ ] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them
 - [ ] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
 
+## Running the calibration
+
+The suite is 14 tasks. Both thinking modes, three passes: 84 runs. The tasks are written
+and proved to trap; what is unmeasured is whether they *spread*, and until that is run
+nothing may be concluded from them.
+
+Needs the machine, and needs it cleared — per 0014, nothing fits alongside a normal working
+set, so browsers closed before the server starts. Serve at 32k, which is inside the attended
+ceiling of 57,344:
+
+    ./scripts/serve.sh config/ladder-32k-q8_0.env &
+
+    make eval LABEL=0013-thinking-on  N=3 THINKING=on  RESULTS=results/tier1-0013.jsonl
+    make eval LABEL=0013-thinking-off N=3 THINKING=off RESULTS=results/tier1-0013.jsonl
+
+`THINKING` is `on` or `off` — `true` and `false` are rejected. Results go to a file of their
+own rather than `results/tier1.jsonl`, so the calibration is not mixed into the matrix taken
+against the 7-task suite.
+
+**What counts as success is a spread, not a score.** Some tasks both modes pass, some both
+fail, some split; only the middle band carries information. A flat 42/42 or 0/42 means the
+tasks are wrong and get rewritten before anything downstream reads them — the same standard
+0003 applied to the ceiling, and the reason this is the deliverable rather than the fixtures.
+
+Watch for `fail_truncated_at_cap` in particular. It is not a quality failure and must not be
+counted as one: thinking mode spends the same `max_tokens` on reasoning first, so a cap sized
+against the non-thinking mode silently penalises it. The patch fixtures carry 2048 for that
+reason, and if truncation shows up in the thinking pass the cap is the finding, not the model.
+
 ## Open questions
 
 - Should non-discriminating tasks be retired once identified? Leaning **no** — they are the
