@@ -2,6 +2,7 @@
   "id": "toolcall-constraint-readonly",
   "kind": "toolcall",
   "max_tokens": 4096,
+  "timeout_seconds": 120,
   "messages": [
     {
       "role": "system",

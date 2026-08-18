@@ -2,6 +2,7 @@
   "id": "retrieval-distractor-8000",
   "kind": "retrieval",
   "max_tokens": 512,
+  "timeout_seconds": 180,
   "retrieval": {
     "depth_tokens": 8000,
     "position": 0.33,
@@ -9,8 +10,16 @@
     "label": "staging",
     "question": "What is the staging deployment key?",
     "distractors": [
-      { "label": "production", "sentinel": "KEY-B24F-PRODUCTION", "position": 0.62 },
-      { "label": "development", "sentinel": "KEY-B24F-DEVELOPMENT", "position": 0.9 }
+      {
+        "label": "production",
+        "sentinel": "KEY-B24F-PRODUCTION",
+        "position": 0.62
+      },
+      {
+        "label": "development",
+        "sentinel": "KEY-B24F-DEVELOPMENT",
+        "position": 0.9
+      }
     ]
   },
   "messages": [

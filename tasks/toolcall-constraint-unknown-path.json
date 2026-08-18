@@ -2,6 +2,7 @@
   "id": "toolcall-constraint-unknown-path",
   "kind": "toolcall",
   "max_tokens": 4096,
+  "timeout_seconds": 120,
   "messages": [
     {
       "role": "system",
@@ -21,9 +22,14 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "path": { "type": "string", "description": "Repo-relative path" }
+            "path": {
+              "type": "string",
+              "description": "Repo-relative path"
+            }
           },
-          "required": ["path"]
+          "required": [
+            "path"
+          ]
         }
       }
     },
@@ -35,16 +41,25 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "query": { "type": "string", "description": "Literal string to search for" }
+            "query": {
+              "type": "string",
+              "description": "Literal string to search for"
+            }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       }
     }
   ],
   "expect": {
     "tool": "search_repo",
-    "required_args": ["query"],
-    "arg_contains": { "query": "refreshToken" }
+    "required_args": [
+      "query"
+    ],
+    "arg_contains": {
+      "query": "refreshToken"
+    }
   }
 }

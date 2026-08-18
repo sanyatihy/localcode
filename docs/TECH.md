@@ -200,6 +200,24 @@ resolving the contradiction case by case rather than picking one rule. `medium` 
 is within the noise of three runs and is not a ranking. What the data supports is that more
 reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
 
+## The suite is bounded on purpose
+
+Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
+separately from any quality outcome. The default is 120 s; the fixtures that legitimately
+cost more say so, up to 300 s for the 16k retrieval. This is not a safety net that should
+ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
+reasoning and produced no answer.
+
+Budgets are set from the fast end (`reasoning off`) plus headroom, so a task hitting its
+budget means something changed, not that the number was tight. One pass over the 14 tasks
+costs **5.4 minutes** with reasoning off; the same pass at `xhigh` cost 16.8 and did not
+finish six of its runs.
+
+**`reasoning_effort` is passed to the server verbatim rather than checked against a list.**
+Qwen3.8 takes `low`/`medium`/`xhigh` and the next model will take something else; a harness
+that hardcodes one vendor's vocabulary has to be edited before it can measure anything new.
+What is guaranteed instead is that whatever was sent appears on every row.
+
 ## Which tier-1 tasks carry signal
 
 Measured at `off` and `xhigh` across the full 14-task suite, and at all four levels for the
