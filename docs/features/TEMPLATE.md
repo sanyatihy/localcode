@@ -27,18 +27,19 @@ related:             # other docs worth reading first
 
 
 ## Problem
-<!-- 1-3 sentences: what is broken or missing, and the signal that justifies it now.
-     Shorter than that and nobody can tell whether it was worth doing. -->
+<!-- 1-3 sentences: the standing tension and the signal that justifies it now — not the
+     incident that surfaced it, which the pull request holds. Shorter and nobody can tell
+     whether it was worth doing; longer and the doc is arguing instead of deciding. -->
 
 ## Non-goals
 <!-- What this deliberately does not do, and where that lives instead. One line each;
      a reason with each, or the next person reopens the argument. -->
 
 ## Design
-<!-- Only what a builder cannot derive: the decisions, the constraints, and why each beat
-     the alternative. Call out data-model, migration, API and config changes explicitly.
-     Written before the work, so it is the part most likely to be wrong by the end — keep
-     it under a screen and let `## Log` carry what the doing teaches. -->
+<!-- Decisions only: what was chosen, what it beat, what it costs. Not a walkthrough — the
+     code will say what the code does, and this is read alongside it. Call out data-model,
+     migration, API and config changes explicitly. Written before the work, so it is the
+     part most likely to be wrong by the end; let `## Log` carry what the doing teaches. -->
 
 ## Tasks
 <!-- Each box is one PR-sized outcome you can verify without asking anyone, in the
@@ -53,8 +54,10 @@ related:             # other docs worth reading first
 <!-- Optional. Delete when empty. Each with a leaning if you have one. -->
 
 ## Log
-<!-- Written while you work, and the cheapest record there is: a dated line for anything
-     the doing settled or contradicted — a decision, a measurement, a box that turned out
-     wrong. Append-only; the argument lives in the PR.
-       - YYYY-MM-DD — decided X over Y because … (#PR) -->
+<!-- What the doing taught that the plan did not know: a measurement, a falsified premise,
+     an open question settled, what a dependency's outcome changed downstream. Take the room
+     it needs — this is the section a later reader gains most from, and the one most docs
+     are thinnest in. Not a diary: nothing about mistakes made and fixed, rules complied
+     with, or what the diff already shows. Append-only.
+       - YYYY-MM-DD — decided X over Y because … -->
 
