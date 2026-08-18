@@ -44,7 +44,7 @@ func TestHaystackPlantsEveryKeyInPositionOrder(t *testing.T) {
 	if prod < 0 || stag < 0 || dev < 0 {
 		t.Fatalf("a planted key is missing: prod=%d staging=%d dev=%d", prod, stag, dev)
 	}
-	if !(prod < stag && stag < dev) {
+	if prod >= stag || stag >= dev {
 		t.Errorf("keys are not in position order: prod=%d staging=%d dev=%d", prod, stag, dev)
 	}
 	if !strings.Contains(h, "the staging deployment key is KEY-STAGING-4417") {
@@ -53,7 +53,12 @@ func TestHaystackPlantsEveryKeyInPositionOrder(t *testing.T) {
 }
 
 func TestHaystackWithDistractorsIsDeterministic(t *testing.T) {
-	if buildHaystack(distractorTask()) != buildHaystack(distractorTask()) {
+	// Two independently constructed but equal inputs, not one expression compared to
+	// itself: the property is that equal tasks give equal prompts across separate runs,
+	// which is what lets two configs be compared at all.
+	a := buildHaystack(distractorTask())
+	b := buildHaystack(distractorTask())
+	if a != b {
 		t.Error("two builds of one task differ; configs would be compared against different prompts")
 	}
 }

@@ -199,6 +199,12 @@ Each of these has already caused a wrong number in this repo.
   cell. It fired only once the machine carried 20 GB of other processes, where the child is
   slow to be scheduled: a race that hid through every earlier run appears exactly when the
   measurement gets interesting.
+- **`cmd && run || echo "skipped"` reports a failure as a skip.** The lint target used that
+  shape to tolerate a missing binary, so when golangci-lint was present *and found issues* the
+  non-zero exit took the `||` branch: `make check` printed "not installed, SKIPPED" and exited
+  0 while CI failed on the same findings. The local gate was green for two pushes that CI
+  rejected. A fallback must be reachable only for the condition it describes — write it as an
+  `if`, not as the right-hand side of an `||`.
 - **Killing an 18 GB server is not instant.** A fixed `sleep` after `pkill` lets the next
   server fail to bind while the health check passes against the *old* one, silently
   measuring the previous config under the next config's name. Poll until the process is
