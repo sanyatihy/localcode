@@ -85,3 +85,16 @@ constraint rather than discover it as a bad result.
   rendering and the editor freezes, while 0003 scored that cell `ok` because it measured
   whether the model finished. Nothing it recorded could have caught it — the failure does
   not touch swap, and RSS does not distinguish wired GPU memory from the rest.
+- 2026-08-18 — the ladder now samples wired memory and its limit every two seconds *during*
+  the fill, not just around it, and reports peak wired and minimum headroom per cell. The
+  limit is recorded with provenance: `iogpu.wired_limit_mb` reads 0 here, so the 24 GB
+  figure is `default-assumed` from the documented 75% of installed RAM, not a reading, and
+  headroom inherits that uncertainty. Idle wired measures 2.58 GB, which puts the 64k cell
+  at roughly 22.9 GB against that assumed 24 GB — consistent with the reported failure, and
+  the first number in this repo that could have predicted it.
+- 2026-08-18 — building the probe found the reason the metric was not merely missing but
+  unreadable: `memprobe.sh` assumed a 4 KB page and this machine uses 16 KB, so `vm_stat`
+  figures were understated 4×. Recorded as a gotcha in `docs/TECH.md` and as an erratum
+  against the affected data file. No conclusion in 0003 reverses — free memory reads as
+  pinned near zero either way — but wired memory read off the same counter would have been
+  wrong by the same factor, in the direction that makes an inadmissible config look fine.
