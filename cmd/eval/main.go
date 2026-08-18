@@ -53,14 +53,16 @@ func run(args []string, stdout, stderr *os.File) error {
 		// anything new. The server rejects what it does not know. What this process
 		// guarantees instead is that whatever was sent is on every row.
 		effort = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
-		// The mode's recommended sampling, as one flag. The pair is documented in
-		// docs/VISION.md and getting it wrong silently is what voided 114 rows.
-		profile = fs.String("sampling-profile", "", "thinking|nonthinking: apply the model's recommended sampling for that mode")
-		temp    = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
-		topP    = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
-		topK    = fs.Int("top-k", -1, "top_k; negative leaves it unset")
-		presPen = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
-		timeout = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
+		// The mode's recommended sampling, as one flag. The values come from the model
+		// profile rather than from constants here: they are a property of the model, and
+		// the next model's differ. Getting the pair wrong silently is what voided 114 rows.
+		profile     = fs.String("sampling-profile", "", "thinking|nonthinking: apply the model's recommended sampling for that mode")
+		profilePath = fs.String("model-profile", "config/profiles/qwen3.8.json", "model profile: thinking mechanism, per-mode sampling, reasoning extraction")
+		temp        = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
+		topP        = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
+		topK        = fs.Int("top-k", -1, "top_k; negative leaves it unset")
+		presPen     = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
+		timeout     = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -98,16 +100,16 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	var sampling eval.Sampling
-	switch *profile {
-	case "":
-	case "thinking":
-		t, p, k := 1.0, 0.95, 20
-		sampling.Temperature, sampling.TopP, sampling.TopK = &t, &p, &k
-	case "nonthinking":
-		t, p, k, pp := 0.7, 0.80, 20, 1.5
-		sampling.Temperature, sampling.TopP, sampling.TopK, sampling.PresencePenalty = &t, &p, &k, &pp
-	default:
-		return fmt.Errorf("-sampling-profile must be thinking or nonthinking, got %q", *profile)
+	prof, err := eval.LoadProfile(*profilePath)
+	if err != nil {
+		return fmt.Errorf("model profile: %w", err)
+	}
+	if *profile != "" {
+		s, err := prof.SamplingFor(*profile)
+		if err != nil {
+			return err
+		}
+		sampling = s
 	}
 	if *temp >= 0 {
 		sampling.Temperature = temp
@@ -125,9 +127,15 @@ func run(args []string, stdout, stderr *os.File) error {
 	ctx := context.Background()
 	client := eval.NewClient(*endpoint, *timeout)
 
+	// A backend that cannot introspect is still scoreable — MLX serves completions
+	// without llama.cpp's /props. What is lost is the guard that checks the served
+	// config against the label a human typed, so the run says so loudly and the rows
+	// record it rather than carrying a confident zero that reads as "0 context".
 	props, err := client.Props(ctx)
 	if err != nil {
-		return fmt.Errorf("cannot read server props from %s: %w", *endpoint, err)
+		_, _ = fmt.Fprintf(stderr, "eval: %s exposes no served config (%v); "+
+			"rows will record it as unavailable and the served-config guard is off\n", *endpoint, err)
+		props = eval.ServerProps{}
 	}
 
 	// Sequential on purpose: the server runs one slot, so concurrent requests would
@@ -139,7 +147,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			if err != nil {
 				return err
 			}
-			res, err := client.Run(ctx, task, sampling, think, *effort)
+			res, err := client.Run(ctx, task, sampling, think, *effort, prof)
 			if err != nil {
 				// A transport failure is recorded and the suite continues: losing hours
 				// of sweep to one dropped connection would be worse than a gap.

@@ -25,6 +25,12 @@ type agg struct {
 	gen, wall       []float64
 	completion      []int
 	outcomes        map[eval.Outcome]int
+
+	// A swapped run is void rather than slow, and a run that measured no memory cannot
+	// claim to be clean. Both are counted so the summary can say so instead of folding
+	// them into an average that looks fine.
+	swapped, unmeasured int
+	maxSwap             float64
 }
 
 func main() {
@@ -80,6 +86,17 @@ func run(args []string, stdout, stderr *os.File) error {
 		}
 		a.total++
 		a.outcomes[r.Outcome]++
+		// 20 MB of slack: macOS moves swap around by a few MB without the run causing it,
+		// and flagging that as contamination would cry wolf on every clean sweep.
+		switch {
+		case !r.MemMeasured:
+			a.unmeasured++
+		case r.SwapDeltaMB > 20:
+			a.swapped++
+			if r.SwapDeltaMB > a.maxSwap {
+				a.maxSwap = r.SwapDeltaMB
+			}
+		}
 		if r.Outcome == eval.Pass {
 			a.pass++
 		}
@@ -117,6 +134,17 @@ func run(args []string, stdout, stderr *os.File) error {
 				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
 			if s := failSummary(a.outcomes); s != "" {
 				_, _ = fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
+			}
+			// A run whose swap grew was measuring the pager. The vision calls that void
+			// rather than slow, so it is named here instead of being averaged into the
+			// timings above, which is what would make it invisible.
+			if a.swapped > 0 {
+				_, _ = fmt.Fprintf(stdout, "  %-12s VOID: %d run(s) swapped (max +%.0f MB) — timings measure paging\n",
+					"", a.swapped, a.maxSwap)
+			}
+			if a.unmeasured > 0 {
+				_, _ = fmt.Fprintf(stdout, "  %-12s %d run(s) recorded no memory; cleanliness is unverified\n",
+					"", a.unmeasured)
 			}
 		}
 	}

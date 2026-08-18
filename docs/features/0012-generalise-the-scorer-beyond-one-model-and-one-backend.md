@@ -1,9 +1,9 @@
 ---
 id: 0012
 title: Generalise the scorer beyond one model and one backend
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
@@ -65,12 +65,12 @@ at idle — a rule that cannot be evaluated from the data is not enforceable.
 
 ## Tasks
 
-- [ ] A committed model profile carries the thinking mechanism and per-mode sampling defaults, and the Qwen3.8 profile reproduces the current matrix exactly — same requests on the wire, proven by comparing against a recorded baseline
-- [ ] The scorer reads sampling defaults from the profile instead of the matrix script's hardcoded flags, so a toggle cannot be swept at one fixed temperature by accident
-- [ ] Reasoning is extracted through the profile, covering both a separate response field and `<think>` tags inside content
-- [ ] A backend capability layer reports served config and timings where available and says "unavailable" where not, with the llama.cpp implementation behaving exactly as today
-- [ ] Client-measured wall time is recorded for every run and documented as the only cross-backend speed metric
-- [ ] Free memory and swap delta are recorded per row, and the reporter flags any run that swapped rather than averaging it in
+- [x] A committed model profile carries the thinking mechanism and per-mode sampling defaults, and the Qwen3.8 profile reproduces the current matrix exactly — same requests on the wire, proven by comparing against a recorded baseline
+- [x] The scorer reads sampling defaults from the profile instead of the matrix script's hardcoded flags, so a toggle cannot be swept at one fixed temperature by accident
+- [x] Reasoning is extracted through the profile, covering both a separate response field and `<think>` tags inside content
+- [x] A backend capability layer reports served config and timings where available and says "unavailable" where not, with the llama.cpp implementation behaving exactly as today
+- [x] Client-measured wall time is recorded for every run and documented as the only cross-backend speed metric
+- [x] Free memory and swap delta are recorded per row, and the reporter flags any run that swapped rather than averaging it in
 
 ## Open questions
 
@@ -83,6 +83,13 @@ at idle — a rule that cannot be evaluated from the data is not enforceable.
   settle it, and guessing now risks a shape that fits neither.
 
 ## Log
+- 2026-08-18 — the baseline the first box asks for turned out to already exist: the shipped
+  result files record the sampling each run sent, so the profile is proved against them rather
+  than against a golden file written for the purpose. A profile that disagrees with the matrix
+  it claims to reproduce now fails a test.
+- 2026-08-18 — a missing `/props` stops being fatal. The scorer refused to start without it,
+  which would have blocked 0006 before MLX served a single request; an un-introspectable
+  backend is now scored with the served-config guard off and the row saying so.
 - 2026-08-18 — two pieces of generalisation landed early, under 0013, because 0013 could not
   finish without them. `reasoning_effort` is passed through verbatim instead of validated
   against Qwen's `low`/`medium`/`xhigh`, since the next model's vocabulary will differ and a
