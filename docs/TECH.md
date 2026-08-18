@@ -300,11 +300,11 @@ Each mode at its own model-card sampling; 9 ranking tasks, 3 passes, 32k/q8_0.
 
 | setting | pass | tool-call valid | wall |
 |---|---|---|---|
-| **off · `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5`** | **25/27** | 11/12 | **5.0 min** |
-| off · greedy | 21/27 | 9/12 | 4.4 min |
-| off · temp 0.3 | 23/27 | 10/12 | 4.3 min |
-| off · temp 1.0 | 24/27 | 11/12 | 8.4 min |
-| off · top_p 0.95 | 25/27 | 11/12 | 4.4 min |
+| **off · `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5`** | **25/27** | 12/12 | **5.0 min** |
+| off · greedy | 21/27 | 12/12 | 4.4 min |
+| off · temp 0.3 | 23/27 | 12/12 | 4.3 min |
+| off · temp 1.0 | 24/27 | 12/12 | 8.4 min |
+| off · top_p 0.95 | 25/27 | 12/12 | 4.4 min |
 | **on/low · `temp 1.0 / top_p 0.95 / top_k 20`** | **25/27** | **12/12** | 18.6 min |
 | on/low · greedy | 24/27 | 12/12 | 16.4 min |
 | on/low · temp 0.7 | 24/27 | 12/12 | 18.0 min |
@@ -315,10 +315,16 @@ thinking — 21, 23, 25 as temperature rises to 0.7 — and `top_p` does nothing
 is the worst setting measured**, which is worth knowing because it is the tempting choice for
 a reproducible sweep.
 
+**Tool-call validity is 12/12 in every cell of the sweep and ranks nothing.** It is the column
+0005 was built around, and no setting moves it: every call this model emitted was parseable and
+schema-conforming. Greedy's deficit is reasoning, not format. Where a tool-call task fails it
+is a *choice* — the right shape addressed to the wrong tool — which is the same conclusion the
+150-run classification reaches from the other direction.
+
 **Reasoning does not earn its cost at either profile.** It is 4× the wall clock for 25/27
-against 25/27. The one metric favouring it is tool-call validity, 12/12 against 11/12 — a
-single failure. Eight of nine tasks are 3/3 in every cell, so the claim is *no gain detectable
-on this suite*, not *no gain exists*.
+against 25/27, with tool-call validity identical at 12/12. Nothing measured here favours it.
+Eight of nine tasks are 3/3 in every cell, so the claim is *no gain detectable on this suite*,
+not *no gain exists*.
 
 So both profiles take the same setting, which is a result and not an assumption:
 
