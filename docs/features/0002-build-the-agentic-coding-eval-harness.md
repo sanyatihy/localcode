@@ -1,9 +1,9 @@
 ---
 id: 0002
 title: Build the agentic coding eval harness
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
