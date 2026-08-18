@@ -87,15 +87,10 @@ answers, or the sweep will blame the model for a budget problem.
   can be measured instead of assumed.
 
 ## Log
-
-## Log
-
-- 2026-08-17 — split the decision rule per profile. Attended gates on latency because a
-  human waits; unattended does not, so a slower, more correct config can win it.
-- 2026-08-17 — the per-profile rules now gate on different memory ceilings, not only on
-  latency: attended sweeps under 0003's working ceiling because the desktop is in use,
-  unattended under the hard ceiling. The profiles therefore have different feasible sets,
-  so a single "winner" is not always meaningful.
-- 2026-08-17 — regrounded on 0003's measurements. The grid was built around a memory
-  ceiling that does not exist, so quants now run upward as well as downward — Q5_K_M and
-  Q6_K are in — and cells are gated on ingest seconds rather than gigabytes.
+- 2026-08-17 — the decision rule splits per profile: attended gates on latency because a
+  human waits, and on 0003's working memory ceiling because the desktop is in use;
+  unattended on neither. The profiles have different feasible sets, so a single "winner" is
+  not always meaningful.
+- 2026-08-17 — regrounded on 0003: the grid was built around a memory ceiling that does not
+  exist, so quants now run upward as well as downward — Q5_K_M and Q6_K are in — and cells
+  are gated on ingest seconds rather than gigabytes.

@@ -82,10 +82,6 @@ Because template correctness can invalidate everything downstream of it, it is t
   model deficits that 0007 and 0010 need to see.
 
 ## Log
-
-## Log
-
-- 2026-08-17 — retitled and rescoped around thinking mode after live probes on the
-  baseline: 70 completion tokens with thinking vs 28 without for an identical, correct
-  tool call. Also recorded the coupling — each mode has its own recommended sampling, so
-  the toggle cannot be swept at a fixed temperature.
+- 2026-08-17 — retitled and rescoped around thinking mode after live probes: 70 completion
+  tokens with thinking against 28 without, for an identical correct tool call. Each mode has
+  its own model-card sampling, so the toggle cannot be swept at a fixed temperature.

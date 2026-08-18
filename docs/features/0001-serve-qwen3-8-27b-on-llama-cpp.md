@@ -68,22 +68,14 @@ editing the baseline or inventing their own flags — which is what makes 0003's
 
 ## Log
 
-- 2026-08-17 — box 1 rewritten. It assumed a `make models` download into a gitignored
-  `models/`, but the weights were already cached by `llama-server -hf` and a second copy
-  would have cost 17 GB and ~74 minutes for nothing. Replaced by naming the cached
-  repo:quant in config. The premise in `## Problem` was wrong for the same reason — a
-  server was already running — so the feature is now about reproducing a launch, not
-  achieving one.
-
-- 2026-08-17 — added a `make check` box: AGENTS.md gates shipping on it and no feature
-  had created it. Appended rather than inserted — it blocks shipping, not the boxes above.
-- 2026-08-17 — open question settled by what the machine had: the baseline is
-  `bartowski/Qwen3.8-27B-GGUF:Q4_K_M`, already cached and serving, so no quant was chosen
-  on the merits here at all. The uploader is now itself a variable — bartowski against
-  unsloth's dynamic UD-Q4_K_XL at the same nominal quant — which belongs to 0004 alongside
-  the quant ladder rather than being inherited silently from whoever downloaded first.
-- 2026-08-17 — built and verified against a real restart cycle: stopped the hand-started
-  server, relaunched from `config/baseline.env` to an identical process line, launched
-  `config/ctx16k-f16.env` to prove a variant needs no edit to either, then restored the
-  baseline. Load ~4.2 s warm-page-cache, ~18.8 GB resident at low occupancy. Smoke runs
-  in ~6.5 s, which is cheap enough to gate on.
+- 2026-08-17 — box 1 rewritten and the premise in `## Problem` with it: the weights were
+  already cached by `llama-server -hf`, so a `make models` download would have cost 17 GB and
+  ~74 minutes for nothing. The feature is about reproducing a launch, not achieving one.
+- 2026-08-17 — a `make check` box was appended: AGENTS.md gates shipping on it and no feature
+  had created it.
+- 2026-08-17 — the baseline quant is what the machine already had, chosen on no merits at
+  all. The uploader is therefore a variable in its own right — bartowski against unsloth's
+  UD-Q4_K_XL at the same nominal quant — and belongs to 0004 rather than being inherited from
+  whoever downloaded first.
+- 2026-08-17 — verified against a real restart cycle: baseline relaunched to an identical
+  process line, a variant launched without editing either config.
