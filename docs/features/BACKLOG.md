@@ -13,10 +13,6 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   a grammar nothing to fix. Promote when: a model or harness appears whose failures are format
   rather than choice. Note the template asks for an XML call form, so a JSON-schema constraint
   is the wrong tool even then.
-- **Record memory per eval run** — the vision requires runs to record free memory and swap so
-  contamination is detected rather than assumed; `scripts/ladder.sh` does, `cmd/eval` does not,
-  so a sweep's cleanliness is argued from stable tok/s rather than measured. Promote when: a
-  sweep runs close enough to the memory ceiling that the argument stops being convincing.
 - **Speculative decoding with a draft model** — pair the 27B with a 0.6B/1.7B Qwen3
   draft to cut generation latency. Promote when: 0004 has settled the main config and
   generation speed is the thing still failing the interactive threshold. Deliberately
