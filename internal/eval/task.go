@@ -181,14 +181,19 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(budget)*time.Second)
 	defer cancel()
+	started := time.Now()
 
 	resp, err := c.Complete(runCtx, req)
 	if err != nil {
 		// The task's own clock expiring is a scored outcome, not a transport failure,
 		// and must not abort the suite: returning the error here would end the run.
 		if runCtx.Err() != nil && ctx.Err() == nil {
+			// Carry the wall clock. An over-budget run is precisely the one whose
+			// duration is the finding, and recording zero both loses it and understates
+			// every total the row is summed into.
 			return Result{TaskID: t.ID, Outcome: FailOverBudget,
-				Detail: fmt.Sprintf("exceeded its %ds budget", budget)}, nil
+				WallSeconds: time.Since(started).Seconds(),
+				Detail:      fmt.Sprintf("exceeded its %ds budget", budget)}, nil
 		}
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
 	}
