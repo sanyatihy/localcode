@@ -113,3 +113,11 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 - 2026-08-18 — inherited from 0013: `reasoning_effort` is a real axis with four points, its
   default is `xhigh`, and `xhigh` does not terminate on some tier-1 tasks. Reasoning lowered
   the score wherever it changed anything, so `off` is a candidate to beat rather than a floor.
+- 2026-08-18 — inherited, and this feature is not started: 0013 collected 114 rows comparing
+  thinking on against off at the server's default sampling, which the vision declares void
+  because each mode carries its own recommended pair. Those toggle conclusions are unsupported
+  and are this feature's to redo. `cmd/eval` refuses `-thinking` without either
+  `-sampling-profile thinking|nonthinking` or explicit flags, so the redo costs one flag.
+  Also worth knowing before the sweep is designed: twelve of fourteen tier-1 tasks are 3/3 at
+  every setting measured, so pass rate has no room to move — tool-call validity, tokens per
+  completed task and wall clock do.
