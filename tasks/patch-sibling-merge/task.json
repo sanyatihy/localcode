@@ -1,0 +1,20 @@
+{
+  "id": "patch-sibling-merge",
+  "kind": "patch",
+  "max_tokens": 2048,
+  "patch": {
+    "source": "broken.go.txt",
+    "test_file": "verify_test.go.txt",
+    "package": "main"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a careful Go engineer. Reply with the complete corrected file in a single ```go code block. No explanation."
+    },
+    {
+      "role": "user",
+      "content": "Merge panics with \"assignment to entry in nil map\" when defaults is nil. Fix it.\n\n```go\n{{BODY}}\n```"
+    }
+  ]
+}

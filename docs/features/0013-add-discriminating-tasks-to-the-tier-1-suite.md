@@ -56,10 +56,10 @@ to locate it.
 
 ## Tasks
 
-- [ ] Two "fix that breaks a sibling case" patch tasks exist, each with a tempting wrong patch that passes the reported symptom and fails an unnamed test
-- [ ] Two retrieval tasks carry distractor sentinels, so the answer requires discriminating rather than recalling
-- [ ] Two tool-choice tasks make the obvious tool the wrong one under a stated constraint
-- [ ] One task presents a doc comment contradicting a test, with the check accepting either resolution provided it is applied consistently
+- [x] Two "fix that breaks a sibling case" patch tasks exist, each with a tempting wrong patch that passes the reported symptom and fails an unnamed test
+- [x] Two retrieval tasks carry distractor sentinels, so the answer requires discriminating rather than recalling
+- [x] Two tool-choice tasks make the obvious tool the wrong one under a stated constraint
+- [x] One task presents a doc comment contradicting a test, with the check accepting either resolution provided it is applied consistently
 - [ ] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them
 - [ ] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
 
@@ -72,3 +72,15 @@ to locate it.
   cut, because it consumes runtime in every future sweep and reports nothing.
 
 ## Log
+- 2026-08-18 — seven tasks authored, taking the suite from 7 to 14. Each patch fixture is
+  proved to discriminate *before* any model time is spent on it: `TestPatchFixturesDiscriminate`
+  runs a correct answer and the tempting wrong one through the real patch runner and requires
+  the first to pass and the second to fail. Six wrong answers are checked, all of them the fix
+  the reported symptom invites rather than strawmen. A fixture whose unseen test rejects a
+  correct fix would score the model down for being right, which is the more expensive of the
+  two failure modes and the reason both halves are asserted.
+- 2026-08-18 — retrieval gained distractors, which needed a scorer change as well as fixtures:
+  an answer naming a decoy now fails even when the wanted key is also present, so reciting
+  every key in the dump is a failure to discriminate rather than a hedge that earns a pass.
+  The three pre-existing retrieval prompts are pinned by hash, since their numbers are already
+  recorded in `docs/data` and a moved prompt would silently break comparability.

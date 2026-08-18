@@ -1,0 +1,50 @@
+{
+  "id": "toolcall-constraint-unknown-path",
+  "kind": "toolcall",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a coding agent. Use the provided tools. Do not explain."
+    },
+    {
+      "role": "user",
+      "content": "A function named refreshToken is defined somewhere in this repository. Find the file that defines it. The layout is unfamiliar and no path has been given to you, so do not guess one."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read a file from the repository",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "description": "Repo-relative path" }
+          },
+          "required": ["path"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "search_repo",
+        "description": "Search the repository for a string and return matching files and lines",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "Literal string to search for" }
+          },
+          "required": ["query"]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "tool": "search_repo",
+    "required_args": ["query"],
+    "arg_contains": { "query": "refreshToken" }
+  }
+}

@@ -1,0 +1,10 @@
+package main
+
+import "strings"
+
+// SplitPath splits a slash-separated path into its non-empty segments. Empty
+// segments are dropped wherever they occur, so SplitPath("/a/b"), SplitPath("a/b/")
+// and SplitPath("a//b") all return ["a", "b"], and SplitPath("") returns no segments.
+func SplitPath(p string) []string {
+	return strings.Split(p, "/")
+}
