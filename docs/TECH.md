@@ -110,6 +110,12 @@ Re-walked against the desktop instead, with WindowServer sampled through each fi
 | 57 344 | ok | **pass** | 22.18 GB | 0.15–0.32 |
 | 65 536 | ok | **fail** | 22.29 GB | 0.01–0.09 |
 
+The desktop verdict is fixed in advance rather than read off each run: `fail_saturated` at
+a sustained ≥ 0.90 cores over any 30 s window, `fail_stalled` at ≤ 0.02, `pass` at neither
+over a run of at least 30 s, and `not_applicable` when nothing is attending the machine. An
+attended baseline with no model loaded measures 0.17–0.47 cores, so both bounds sit clear
+of normal operation.
+
 **The two ranges are different, and both are real.** The model serves 8k–64k. A machine
 someone is using is admissible to **56k**; 64k is unattended-only. Every cell above
 completed its request, so nothing but the desktop column distinguishes the last row.
@@ -218,6 +224,37 @@ resolving the contradiction case by case rather than picking one rule. `medium` 
 is within the noise of three runs and is not a ranking. What the data supports is that more
 reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
 
+## The harness
+
+`cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
+into `docs/data/`.
+
+- **A row records what the server reported serving** — `n_ctx`, model file, and the
+  `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
+  did not take would otherwise attribute one config's numbers to another.
+- **Spread is min–max over three passes, never a standard deviation**, which would claim
+  precision three samples do not have. Runs are sequential: the server has one slot.
+- **A tier-1 task must have exactly one defensible action.** A task that scores a style
+  preference — reading a file before editing it — fails every config identically and ranks
+  nothing.
+- **Patch fixtures are proved to discriminate before any model time is spent on them.**
+  `TestPatchFixturesDiscriminate` runs a correct answer and the tempting wrong one through
+  the real patch runner and requires the first to pass and the second to fail. Both halves
+  are asserted: a fixture whose unseen test rejects a correct fix scores the model down for
+  being right, which is the more expensive of the two failure modes.
+- **A retrieval answer naming a decoy fails even when the wanted key is also present**, so
+  reciting every key in the dump is a failure to discriminate rather than a hedge that earns
+  a pass. The three pre-distractor retrieval prompts are pinned by hash: their numbers are
+  already recorded in `docs/data` and a moved prompt would break comparability silently.
+- **Tier 2 refuses a fixture that passes before the harness runs**, and refuses it without
+  calling the driver.
+- **Harness configuration is repo-local and different for each**: Pi an extension
+  registering a provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`,
+  Hermes a top-level `model:` block with `provider: custom`.
+- **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
+  and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
+  at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
+
 ## The suite is bounded on purpose
 
 Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
@@ -311,6 +348,12 @@ Each of these has already caused a wrong number in this repo.
 - **A pass criterion that only asks about the model is blind to the machine.** 0003's
   ladder marked 64k `ok` while that context made the desktop unusable. Any measurement
   meant to protect the machine has to take its verdict from outside the model process.
+- **Fixture Go files are `.go.txt`.** Named `.go` they sit inside this module, so
+  `go test ./...` compiles the deliberately-broken fixtures and the gate goes red.
+- **`cmd.Dir` does not update `PWD`, and Go replaces the environment wholesale when `Env` is
+  set.** A tool that resolves its project from `PWD` then works in the launching directory —
+  OpenCode reports that as "Unexpected server error". Relative config paths fail the same
+  way, resolving against the scratch checkout, so paths are made absolute at validation.
 - **zsh does not word-split unquoted variables.** Scripts here run under `bash` via
   shebang; a loop written interactively in zsh can produce config filenames with the value
   glued in, which the ladder will then glob and parse.

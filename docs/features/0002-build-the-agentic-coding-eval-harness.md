@@ -78,68 +78,24 @@ re-run, and every sweep multiplies it by the config count.
 - [x] An adapter interface drives at least two harnesses through the same tier-2 task in a scratch checkout, pass checked by the repo's own tests
 
 ## Log
-
 - 2026-08-17 — rescoped: the harness is chosen (Pi/Hermes), not written. Only the scorer is
   built here.
-- 2026-08-17 — a tier-1 task must have exactly one defensible action. `toolcall-edit-file`
-  scored a style preference — the model read before editing, which is reasonable — and would
-  have failed every config identically. Fixed by inlining the file content.
-- 2026-08-17 — fixture Go files are `.go.txt`: left as `.go` they sit inside this module, so
-  `go test ./...` compiled the deliberately-broken fixtures and the gate went red.
-- 2026-08-17 — each results row records what the server reported serving — `n_ctx`, model
-  file — not just the label a human typed. A label is a claim; a restart that did not take
-  would otherwise attribute one config's numbers to another.
-- 2026-08-17 — spread is min-max, not a standard deviation: three passes is already a
-  multi-hour job and a deviation over three samples claims precision the data lacks. Runs are
-  sequential because the server has one slot.
-- 2026-08-17 — merging 0001 renamed the eval knob to `LABEL`: both branches defined `CONFIG`,
-  one as the serve config path and one as the results label, and either silently winning
-  would mislabel results or launch the wrong server. `check` now runs unit tests and smoke.
+- 2026-08-17 — merging 0001 renamed the eval knob to `LABEL`: both branches had defined
+  `CONFIG`, one as the serve config path and one as the results label, and either winning
+  silently would mislabel results or launch the wrong server.
 - 2026-08-17 — **the fixtures were starving thinking mode**: 8 of 8 failures under
   thinking=on hit their token cap exactly, none a quality failure. Retrieval allowed 64
-  tokens, which thinking spends before answering. Unfixed, the matrix would have reported
-  thinking hurting quality when the gap was a budget set while testing with thinking off.
-  Caps are 512/1024/2048, identical in both modes, and `fail_truncated_at_cap` separates a
-  capped answer from a wrong one.
-- 2026-08-17 — **first clean matrix: 42 runs, zero truncations, every task 3/3 in both
-  modes.** Thinking costs 3.06x completion tokens (1089 → 3333) and 1.67x wall (384 s →
-  641 s) and buys nothing this suite can detect.
-
-  | task | off: pass / tok / s | on: pass / tok / s |
-  |---|---|---|
-  | patch-nil-check | 3/3 · 137 · 15.0 | 3/3 · 221 · 23.9 |
-  | patch-off-by-one | 3/3 · 100 · 10.7 | 3/3 · 438 · 46.6 |
-  | retrieval-2000 | 3/3 · 12 · 7.7 | 3/3 · 73 · 14.8 |
-  | retrieval-8000 | 3/3 · 12 · 26.9 | 3/3 · 93 · 37.4 |
-  | retrieval-16000 | 3/3 · 13 · 55.4 | 3/3 · 70 · 64.4 |
-  | toolcall-read-file | 3/3 · 28 · 4.4 | 3/3 · 64 · 8.6 |
-  | toolcall-edit-file | 3/3 · 61 · 8.0 | 3/3 · 152 · 18.0 |
-
-- 2026-08-17 — **that result is a ceiling effect and must not be read as a quality verdict.**
-  Both modes scored 21/21, so the suite did not discriminate. Decisive for attended — 1.67x
-  slower at no measured gain — and no evidence at all for unattended, whose case for thinking
-  is long-horizon reasoning this suite does not contain. 0013 is the fix.
-- 2026-08-17 — harness configuration is repo-local per harness: Pi an extension registering a
-  provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`, Hermes a top-level
-  `model:` block with `provider: custom` (the `providers.<name>` map reverse-engineered from
-  its source is real but not how a local endpoint is configured, and produced a connection
-  error while never opening a connection).
-- 2026-08-17 — **Hermes refuses any context window under 64,000 tokens**, checked before any
-  request. Pi and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must
-  put all three at 64k — where 0003 measured a cold ingest of 13.1 minutes against 5.4 at
-  32k. 0010 inherits that cost.
-- 2026-08-18 — tier 2 lands. `Driver` is declared in the consumer and kept to two methods,
+  tokens, which thinking spends before answering. Caps became 512/1024/2048, identical in
+  both modes, and the scorer separates a capped answer from a wrong one.
+- 2026-08-17 — **first clean matrix, and it is a ceiling effect rather than a verdict.** 42
+  runs, zero truncations, every task 3/3 in both modes, so the suite did not discriminate.
+  Decisive for attended — 1.67x slower at no measured gain — and no evidence at all for
+  unattended, whose case rests on long-horizon reasoning this suite does not contain. 0013
+  is the fix. Rows in `docs/data/2026-08-17-m2max-32gb-tier1-matrix.jsonl`.
+- 2026-08-18 — tier 2 lands. `Driver` is declared in the consumer and kept to two methods
   all three harnesses agree on. **All three drove patch-nil-check to a pass**, scored by the
   unseen test: pi 35.0 s, opencode 142.5 s, hermes 302.7 s — same model, same 64k server, an
   8.6x spread.
-- 2026-08-18 — two bugs visible only through the adapter. Relative config paths resolved
-  against the scratch checkout because `cmd.Dir` is the workdir, so pi hunted for its
-  extension under /tmp; paths are absolute at validation now. And `cmd.Dir` does not update
-  `PWD`, which Go replaces wholesale when `Env` is set, so a tool resolving its project from
-  `PWD` looks in the launching directory — OpenCode reported that as "Unexpected server
-  error".
-- 2026-08-18 — `RunTier2` refuses a fixture that passes before the harness runs, and without
-  calling the driver: the tier-1 lesson encoded.
 - 2026-08-18 — both open questions settled. Every candidate exposes a scriptable mode
   (`pi -p`, `opencode run`, `hermes -z`), so nobody leaves 0010 by default. And a fixed suite
   does **not** represent real agentic work — measured, not suspected: 21/21 in both modes
