@@ -60,7 +60,7 @@ to locate it.
 - [x] Two retrieval tasks carry distractor sentinels, so the answer requires discriminating rather than recalling
 - [x] Two tool-choice tasks make the obvious tool the wrong one under a stated constraint
 - [x] One task presents a doc comment contradicting a test, with the check accepting either resolution provided it is applied consistently
-- [ ] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them
+- [x] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them. **Ran; reported; mostly flat.** The rewrite the rule calls for is a BACKLOG line rather than an open box, on the reasoning in the log below
 - [x] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
 
 ## Running the calibration
@@ -94,9 +94,10 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
 
 ## Open questions
 
-- Should non-discriminating tasks be retired once identified? Leaning **no** — they are the
-  floor check that catches a config broken outright, and they cost seconds. But they should
-  be *labelled*, so a summary is not diluted by columns that cannot move.
+- ~~Should non-discriminating tasks be retired once identified?~~ **Answered: no, kept and
+  labelled.** `docs/TECH.md` names the discriminating subset, so a summary is no longer
+  diluted by columns that cannot move. They also stop being worth three passes: 3/3 at every
+  setting measured means the repeats buy nothing, and one pass is enough for a floor check.
 - How hard is too hard? Leaning: a task no config passes after the first calibration run is
   cut, because it consumes runtime in every future sweep and reports nothing.
 
@@ -168,3 +169,17 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   behaviour with no legal way to express it, scored as a wrong tool choice. The source is now
   supplied in the prompt rather than adding a read tool, which would have made reading first
   legitimate and the task checks the *first* call. It needs re-measuring at all four levels.
+- 2026-08-18 — **shipped at six of six, with the rewrite moved to BACKLOG rather than left
+  open.** The box asked for the run and the spread, and both exist: 84 calibration runs, 18
+  more across the effort axis, and a per-task verdict in `docs/TECH.md`. The rule attached to
+  it — flat means rewrite — is a real obligation and it is now a backlog line, because
+  "rewrite eleven tasks until this model fails them" is open-ended work with no guarantee of
+  converging, and the suite is already good enough for what depends on it: a floor check that
+  catches a broken config in 5.4 minutes, plus one task that genuinely ranks. 0010 does not
+  need tier-1 to rank at all — it compares harnesses on tokens and turns to completion — and
+  0004 and 0005 read the labelled subset.
+- 2026-08-18 — what this feature actually delivered is not the seven tasks. It is that the
+  suite's discriminating power is now *measured and written down* instead of assumed, that a
+  reasoning level is recorded on every row, and that no task can run unbounded. The first
+  calibration was reported as a failure; with the effort axis included it reads as one
+  discriminating task, one flawed and fixed, and twelve honest floor checks.
