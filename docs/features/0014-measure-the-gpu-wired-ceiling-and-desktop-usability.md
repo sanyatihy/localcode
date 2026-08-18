@@ -81,9 +81,7 @@ constraint rather than discover it as a bad result.
   a measurable state is worse than one that reports it.
 
 ## Log
-
-- 2026-08-18 — raised from a user report, not from the instrument: at 64k the windows stop
-  rendering correctly and the editor freezes. 0003 scored that same cell `ok` because it
-  measured whether the model finished, and the vision's constraint is whether the machine
-  stays usable. Nothing it recorded could have caught this — the failure does not touch
-  swap, and resident size does not distinguish wired GPU memory from the rest.
+- 2026-08-18 — raised from a user report, not the instrument: at 64k the desktop stops
+  rendering and the editor freezes, while 0003 scored that cell `ok` because it measured
+  whether the model finished. Nothing it recorded could have caught it — the failure does
+  not touch swap, and RSS does not distinguish wired GPU memory from the rest.
