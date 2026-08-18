@@ -1,7 +1,7 @@
 ---
 id: 0004
 title: A/B quantisation against context length
-status: Draft
+status: Dropped
 created: 2026-08-17
 shipped:
 check:
@@ -118,6 +118,14 @@ results file should say so.
   can be measured instead of assumed.
 
 ## Log
+- 2026-08-18 — **dropped; the grid is not run.** 0014 measured the admissible wired budget at
+  ~22.2 GB and Q4_K_M at 32k reaches 21.75, so the quants above it are excluded and the ones
+  below are ruled out by the decision not to go smaller. That leaves no cell whose outcome
+  would change a choice. **The exclusion of Q5_K_M and Q6_K is a projection, not a
+  measurement** — neither was downloaded, and the vision holds a derived number to be a
+  hypothesis until a run confirms it, so this is a decision taken on a hypothesis and is
+  recorded as one. The ladder moves to BACKLOG against the 128 GB machine, which moves the
+  budget this drop rests on.
 - 2026-08-17 — the decision rule splits per profile: attended gates on latency because a
   human waits, and on 0003's working memory ceiling because the desktop is in use;
   unattended on neither. The profiles have different feasible sets, so a single "winner" is
