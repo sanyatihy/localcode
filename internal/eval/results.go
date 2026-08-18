@@ -32,10 +32,13 @@ type Row struct {
 	ServedNCtx  int    `json:"served_n_ctx"`
 	ServedModel string `json:"served_model"`
 
-	TaskID  string  `json:"task_id"`
-	Kind    string  `json:"kind"`
-	Outcome Outcome `json:"outcome"`
-	Detail  string  `json:"detail,omitempty"`
+	TaskID      string  `json:"task_id"`
+	Kind        string  `json:"kind"`
+	Outcome     Outcome `json:"outcome"`
+	Detail      string  `json:"detail,omitempty"`
+	FreeGB      float64 `json:"free_gb"`
+	SwapDeltaMB float64 `json:"swap_delta_mb"`
+	MemMeasured bool    `json:"mem_measured"`
 
 	PromptTokens     int     `json:"prompt_tokens"`
 	CachedTokens     int     `json:"cached_tokens"`
@@ -83,6 +86,9 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 		Kind:             kind,
 		Outcome:          res.Outcome,
 		Detail:           res.Detail,
+		FreeGB:           res.FreeGB,
+		SwapDeltaMB:      res.SwapDeltaMB,
+		MemMeasured:      res.MemMeasured,
 		PromptTokens:     res.PromptTokens,
 		CachedTokens:     res.CachedTokens,
 		CompletionTokens: res.CompletionTokens,

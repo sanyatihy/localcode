@@ -239,6 +239,21 @@ reasoning is not a free upgrade here, which is the opposite of what 0005 was bui
 `cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
 into `docs/data/`.
 
+- **Client-measured wall time is the only speed metric that crosses backends.** It is
+  recorded on every row, including a run that failed or exceeded its budget. Server-reported
+  `gen tok/s` and `prompt tok/s` come from llama.cpp and may not exist elsewhere, so they are
+  recorded where available and never used to compare one runtime against another.
+- **Every row records free memory and the swap delta across the run**, and the reporter names
+  runs that swapped instead of averaging them into the timings — a run that swapped measured
+  the pager. Rows that could not measure are reported as unverified rather than as clean;
+  `mem_measured: false` is not the same as a swap delta of zero.
+- **A backend that cannot introspect is still scoreable.** llama.cpp exposes `/props`; a
+  backend that does not is run anyway, with the served config recorded as unavailable and the
+  guard that checks it against the typed label switched off and said so.
+- **Model-specific behaviour lives in a profile, not in the scorer** — `config/profiles/`.
+  The thinking mechanism, each mode's sampling pair, and where reasoning arrives are all
+  properties of the model. The pair especially: it is in the profile so that a toggle cannot
+  be swept at one fixed temperature by accident, which has already cost 114 rows.
 - **A row records what the server reported serving** — `n_ctx`, model file, and the
   `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
   did not take would otherwise attribute one config's numbers to another.
