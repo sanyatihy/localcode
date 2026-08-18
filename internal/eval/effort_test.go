@@ -1,0 +1,95 @@
+package eval
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+// captureRequest returns a server that records the decoded request body it was sent.
+// What matters here is what went on the wire: a reasoning level that never left the
+// process would leave every run measuring the model's default while the results file
+// claimed otherwise, which is the failure this whole axis was added to end.
+func captureRequest(t *testing.T, got *map[string]any) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/props", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"model_path":"/tmp/fake.gguf","default_generation_settings":{"n_ctx":4096}}`))
+	})
+	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(got)
+		_, _ = w.Write([]byte(toolReply("read_file", `{"path":"src/auth/session.go"}`)))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestReasoningEffortReachesTheWire(t *testing.T) {
+	for _, tc := range []struct {
+		effort   string
+		wantSent bool
+	}{
+		{"low", true},
+		{"medium", true},
+		{"xhigh", true},
+		// Empty must send nothing rather than a literal "", so the model's own
+		// default applies and the omission is visible as an omission.
+		{"", false},
+	} {
+		var got map[string]any
+		srv := captureRequest(t, &got)
+		c := NewClient(srv.URL, 0)
+		if _, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, tc.effort); err != nil {
+			t.Fatalf("effort %q: %v", tc.effort, err)
+		}
+		v, present := got["reasoning_effort"]
+		if present != tc.wantSent {
+			t.Errorf("effort %q: field present=%v, want %v (body: %v)", tc.effort, present, tc.wantSent, got)
+		}
+		if tc.wantSent && v != tc.effort {
+			t.Errorf("effort %q: sent %v", tc.effort, v)
+		}
+	}
+}
+
+// The level is a separate axis from enable_thinking, not a finer version of it, so
+// both must be able to travel in one request.
+func TestEffortAndThinkingAreIndependent(t *testing.T) {
+	var got map[string]any
+	srv := captureRequest(t, &got)
+	c := NewClient(srv.URL, 0)
+	on := true
+	if _, err := c.Run(context.Background(), toolTask(), Sampling{}, &on, "low"); err != nil {
+		t.Fatal(err)
+	}
+	if got["reasoning_effort"] != "low" {
+		t.Errorf("reasoning_effort = %v, want low", got["reasoning_effort"])
+	}
+	kw, ok := got["chat_template_kwargs"].(map[string]any)
+	if !ok || kw["enable_thinking"] != true {
+		t.Errorf("enable_thinking did not survive alongside the effort: %v", got)
+	}
+}
+
+// A row without the level cannot say what it measured, and an empty value is a
+// measurement of the model's default rather than of nothing.
+func TestRowCarriesReasoningEffort(t *testing.T) {
+	r := NewRow("cfg", 0, "on", "low", Sampling{}, ServerProps{NCtx: 32768}, "patch", Result{TaskID: "t"})
+	if r.ReasoningEffort != "low" {
+		t.Errorf("row lost the effort: %+v", r)
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back map[string]any
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := back["reasoning_effort"]; !ok {
+		t.Error("reasoning_effort is absent from the serialised row; results would not record the axis")
+	}
+}

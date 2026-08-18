@@ -155,7 +155,7 @@ Apple Silicon; treat RSS as a lower bound.
 | Model load | 4.2 s with a warm page cache; a cold boot reads ~17 GB off disk first |
 | Prompt cache reuse | 11 552 of 12 068 tokens reused; a repeated request fell 7.0 s → 2.6 s |
 | Smoke gate | 6.5 s |
-| Thinking mode | 3.06× completion tokens, 1.67× wall, on tier-1 tasks |
+| Thinking at `xhigh` | 3.06× completion tokens, 1.67× wall, on tier-1 tasks — **this is xhigh vs off, not thinking vs off**; see the reasoning-effort section |
 
 ### Ladder rungs are derived, not written down
 
@@ -172,6 +172,47 @@ tokens in every case while a 20-minute ingest budget allows ~64k.
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
 does not care how much memory is spare.
+
+## Reasoning effort is a four-point axis, and its default is the bad end
+
+Qwen3.8 ships a `reasoning_effort` dial — `xhigh` (default), `medium`, `low` — separate from
+`enable_thinking`. `llama-server` honours it both as a top-level field and inside
+`chat_template_kwargs`, with identical results; the harness sends the top-level form the model
+card documents and records the level on every row.
+
+**The default is `xhigh`, and it is not a sane default for agentic work.** Qwen's own notes
+scope it to "complex tasks demanding thorough analysis", and on this suite it does not
+terminate: three tier-1 tasks burned their entire budget on reasoning and never wrote an
+answer, one of them producing 27,234 characters of it at four times the original cap. Every
+thinking-mode number recorded before 2026-08-18 was taken at `xhigh` whether it says so or not.
+
+The four settings on the three tasks that move (three passes each, 32k/q8_0):
+
+| task | off | low | medium | xhigh |
+|---|---|---|---|---|
+| `patch-contradiction-rounding` | 3/3 | 1/3 | 2/3 | 0/3, never terminated |
+| `patch-off-by-one` | 3/3 | 3/3 | 3/3 | 2/3, one non-termination |
+| `toolcall-constraint-readonly` | 2/3 | 2/3 | 2/3 | 1/3, two non-terminations |
+
+**Reasoning made this model worse where it moved at all.** On the contradicted-specification
+task, off passes every time and thinking fails 3 of 6 — always on the same assertion, the model
+resolving the contradiction case by case rather than picking one rule. `medium` beating `low`
+is within the noise of three runs and is not a ranking. What the data supports is that more
+reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
+
+## Which tier-1 tasks carry signal
+
+Measured at `off` and `xhigh` across the full 14-task suite, and at all four levels for the
+three below that moved.
+
+| tasks | verdict |
+|---|---|
+| `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
+| `toolcall-constraint-readonly` | **weak, and was flawed** — its failures were the model refusing to patch a file it could not see, which the fixture gave no legal way to express. Source now supplied in the prompt; needs re-measuring |
+| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
+
+A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
+the discriminating subset, and keep the rest as the floor check they are.
 
 ## Gotchas
 
@@ -209,6 +250,12 @@ Each of these has already caused a wrong number in this repo.
   server fail to bind while the health check passes against the *old* one, silently
   measuring the previous config under the next config's name. Poll until the process is
   gone, then verify `/props` reports the context you asked for.
+- **A cap that binds has three possible causes, not one.** The fixture underbudgeted, the
+  model did not terminate, or the reasoning level was wrong — and a single row cannot tell them
+  apart. Raising the cap and watching the reasoning distinguishes the first two: bounded need
+  converges, a spiral scales with the budget. Doing that here turned "the fixture is
+  underbudgeted" into "the default effort level does not terminate", which was the real answer
+  and a different fix entirely.
 - **A shared `max_tokens` starves thinking mode.** Reasoning is charged against the same
   budget as the answer, so a cap sized while testing with thinking off produces empty
   answers and looks like a quality failure. Detect `finish_reason == "length"` separately;

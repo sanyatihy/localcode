@@ -19,8 +19,14 @@ type Row struct {
 
 	// Toggles under test. Thinking is a string, not a bool, because "unset" is a
 	// third state: it leaves the model's own template default alone.
-	Thinking string   `json:"thinking"`
-	Sampling Sampling `json:"sampling"`
+	Thinking string `json:"thinking"`
+
+	// The effort the thinking was done at. Empty means the model's own default was
+	// left in force, which for Qwen3.8 is xhigh — so an empty value here is a
+	// measurement of xhigh, not of "unset", and rows written before this field
+	// existed are all xhigh whether they say so or not.
+	ReasoningEffort string   `json:"reasoning_effort"`
+	Sampling        Sampling `json:"sampling"`
 
 	// What the server actually served, so a mislabelled config is detectable.
 	ServedNCtx  int    `json:"served_n_ctx"`
@@ -63,12 +69,13 @@ func (r Row) ToolCallValid() (valid, applicable bool) {
 // package, and a test that wants a fixed timestamp sets it directly.
 var Now = func() time.Time { return time.Now().UTC() }
 
-func NewRow(cfg string, repeat int, thinking string, s Sampling, props ServerProps, kind string, res Result) Row {
+func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props ServerProps, kind string, res Result) Row {
 	return Row{
 		RunAt:            Now().Format(time.RFC3339),
 		Config:           cfg,
 		Repeat:           repeat,
 		Thinking:         thinking,
+		ReasoningEffort:  effort,
 		Sampling:         s,
 		ServedNCtx:       props.NCtx,
 		ServedModel:      filepath.Base(props.ModelPath),

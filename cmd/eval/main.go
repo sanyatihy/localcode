@@ -47,6 +47,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		config   = fs.String("config", "unlabelled", "label for the serving config under test")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
+		effort   = fs.String("reasoning-effort", "", "reasoning_effort: low, medium, xhigh, or empty for the model default (xhigh on Qwen3.8)")
 		temp     = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
 		topP     = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
 		topK     = fs.Int("top-k", -1, "top_k; negative leaves it unset")
@@ -69,6 +70,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		if len(paths) == 0 {
 			return fmt.Errorf("no fixtures under %s", *tasksDir)
 		}
+	}
+
+	if err := validateEffort(*effort); err != nil {
+		return err
 	}
 
 	think, err := parseThinking(*thinking)
@@ -109,7 +114,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			if err != nil {
 				return err
 			}
-			res, err := client.Run(ctx, task, sampling, think)
+			res, err := client.Run(ctx, task, sampling, think, *effort)
 			if err != nil {
 				// A transport failure is recorded and the suite continues: losing hours
 				// of sweep to one dropped connection would be worse than a gap.
@@ -118,7 +123,7 @@ func run(args []string, stdout, stderr *os.File) error {
 				continue
 			}
 			if *results != "" {
-				row := eval.NewRow(*config, rep, *thinking, sampling, props, task.Kind, res)
+				row := eval.NewRow(*config, rep, *thinking, *effort, sampling, props, task.Kind, res)
 				if err := eval.AppendRow(*results, row); err != nil {
 					return fmt.Errorf("cannot append result: %w", err)
 				}
@@ -138,6 +143,18 @@ func run(args []string, stdout, stderr *os.File) error {
 		return fmt.Errorf("%w: %d", errTasksFailed, failures)
 	}
 	return nil
+}
+
+// validateEffort rejects an unknown level rather than letting the server ignore it
+// and the run quietly measure the default. A sweep that thinks it varied an axis it
+// did not is worse than one that refuses to start.
+func validateEffort(s string) error {
+	switch s {
+	case "", "low", "medium", "xhigh":
+		return nil
+	default:
+		return fmt.Errorf("-reasoning-effort must be low, medium, xhigh, or empty, got %q", s)
+	}
 }
 
 func parseThinking(s string) (*bool, error) {

@@ -9,7 +9,7 @@
     },
     {
       "role": "user",
-      "content": "refreshToken in src/auth/session.go is missing a nil check on its tok parameter. Add it. Note that the repository is mounted read-only for this session, so anything that writes to disk will fail."
+      "content": "refreshToken in src/auth/session.go is missing a nil check on its tok parameter. Add it. Note that the repository is mounted read-only for this session, so anything that writes to disk will fail.\n\nThe file reads:\n\n```go\npackage auth\n\nimport \"errors\"\n\nvar ErrNilToken = errors.New(\"nil token\")\n\nfunc refreshToken(tok *Token) (*Token, error) {\n\tif tok.Expired {\n\t\treturn &Token{Value: tok.Value + \"-renewed\"}, nil\n\t}\n\treturn tok, nil\n}\n```"
     }
   ],
   "tools": [
@@ -21,11 +21,21 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "path": { "type": "string" },
-            "old_string": { "type": "string" },
-            "new_string": { "type": "string" }
+            "path": {
+              "type": "string"
+            },
+            "old_string": {
+              "type": "string"
+            },
+            "new_string": {
+              "type": "string"
+            }
           },
-          "required": ["path", "old_string", "new_string"]
+          "required": [
+            "path",
+            "old_string",
+            "new_string"
+          ]
         }
       }
     },
@@ -37,17 +47,30 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "path": { "type": "string" },
-            "diff": { "type": "string", "description": "Unified diff of the proposed change" }
+            "path": {
+              "type": "string"
+            },
+            "diff": {
+              "type": "string",
+              "description": "Unified diff of the proposed change"
+            }
           },
-          "required": ["path", "diff"]
+          "required": [
+            "path",
+            "diff"
+          ]
         }
       }
     }
   ],
   "expect": {
     "tool": "propose_patch",
-    "required_args": ["path", "diff"],
-    "arg_contains": { "path": "session.go" }
+    "required_args": [
+      "path",
+      "diff"
+    ],
+    "arg_contains": {
+      "path": "session.go"
+    }
   }
 }

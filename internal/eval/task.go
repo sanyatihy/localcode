@@ -130,17 +130,19 @@ func (t *Task) expand() ([]Message, error) {
 
 // Run executes one task and scores it. thinking is passed through to the model's
 // own chat template; nil leaves the template default alone, which is not the same
-// as setting it false.
-func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool) (Result, error) {
+// as setting it false. effort is the reasoning_effort level; empty leaves the
+// model's default, which for Qwen3.8 is xhigh.
+func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, effort string) (Result, error) {
 	msgs, err := t.expand()
 	if err != nil {
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
 	}
 	req := chatRequest{
-		Messages:  msgs,
-		Tools:     t.Tools,
-		MaxTokens: t.MaxTokens,
-		Sampling:  s,
+		Messages:        msgs,
+		Tools:           t.Tools,
+		MaxTokens:       t.MaxTokens,
+		ReasoningEffort: effort,
+		Sampling:        s,
 	}
 	if len(t.Tools) > 0 {
 		req.ToolChoice = "auto"
