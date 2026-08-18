@@ -176,3 +176,27 @@ func splitFirstLine(s string) string {
 	}
 	return s
 }
+
+// A capped reply must be reported as truncated, never as a wrong answer. Thinking mode
+// spends the same budget on reasoning before answering, so scoring truncation as a
+// quality failure silently penalises it — which is exactly what happened before this
+// existed, producing eight failures that were all budget and none of them quality.
+func TestTruncationIsNotScoredAsWrong(t *testing.T) {
+	body := `{"choices":[{"finish_reason":"length","message":{"content":"","reasoning_content":"thinking and thinking"}}]}`
+	srv := fakeServer(t, body)
+	c := NewClient(srv.URL, 5*time.Second)
+	for _, task := range []*Task{
+		toolTask(),
+		{ID: "r", Kind: "retrieval", MaxTokens: 8,
+			Messages:  []Message{{Role: "user", Content: "{{BODY}}"}},
+			Retrieval: &Retrieval{DepthTokens: 200, Sentinel: "KEY-X"}},
+	} {
+		res, err := c.Run(context.Background(), task, Sampling{}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", task.Kind, err)
+		}
+		if res.Outcome != FailTruncated {
+			t.Errorf("%s: outcome = %s, want %s", task.Kind, res.Outcome, FailTruncated)
+		}
+	}
+}

@@ -23,9 +23,16 @@ run() { # label thinking flags...
     -results "$RESULTS" "$@" || true   # a failed task must not stop the matrix
 }
 
-run "think-on-card"   on  -temperature 1.0 -top-p 0.95 -top-k 20
-run "think-off-card"  off -temperature 0.7 -top-p 0.80 -top-k 20 -presence-penalty 1.5
-run "think-on-greedy"  on  -temperature 0
-run "think-off-greedy" off -temperature 0
+# The two model-card configs are the question: thinking on versus off, each done as
+# its own documentation says it should be. They run by default.
+run "think-on-card"  on  -temperature 1.0 -top-p 0.95 -top-k 20
+run "think-off-card" off -temperature 0.7 -top-p 0.80 -top-k 20 -presence-penalty 1.5
+
+# Greedy is a floor case, not a config anyone would ship, and it roughly doubles the
+# wall time of the sweep. Opt in with FLOOR=1 when the floor is actually the question.
+if [ "${FLOOR:-0}" = "1" ]; then
+  run "think-on-greedy"  on  -temperature 0
+  run "think-off-greedy" off -temperature 0
+fi
 
 echo "### matrix complete ###"
