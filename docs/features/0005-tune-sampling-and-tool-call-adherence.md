@@ -78,6 +78,18 @@ candidate rather than the cheap baseline the sweep was going to beat. Any run th
 record its effort level is uninterpretable — see `docs/TECH.md`, where every figure taken
 before 2026-08-18 is `xhigh` whether it says so or not.
 
+**This feature now owns a correction, not just a sweep.** 0013 collected 114 rows comparing
+thinking on against off at the server's default sampling, which the vision declares void: each
+mode has its own recommended pair, so a fixed-sampling comparison measures the pair. Every
+toggle conclusion from 0013 is therefore unsupported and is redone here — and the redo is the
+cheap part, because `cmd/eval` now refuses to set `-thinking` without either
+`-sampling-profile thinking|nonthinking` or explicit sampling flags.
+
+**Judge it on tool-call validity and cost, not on task success.** Twelve of the fourteen tier-1
+tasks are 3/3 at every setting measured, so a sweep scored on pass rate will return another flat
+result — 0013 already ran that experiment. The metrics with room to move are tool-call validity
+rate, tokens per completed task, and wall clock, all of which the scorer already records.
+
 ## Tasks
 
 - [ ] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed
