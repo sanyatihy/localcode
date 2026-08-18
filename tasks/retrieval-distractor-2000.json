@@ -1,0 +1,31 @@
+{
+  "id": "retrieval-distractor-2000",
+  "kind": "retrieval",
+  "max_tokens": 512,
+  "timeout_seconds": 120,
+  "retrieval": {
+    "depth_tokens": 2000,
+    "position": 0.55,
+    "sentinel": "KEY-6C1D-STAGING",
+    "label": "staging",
+    "question": "What is the staging deployment key?",
+    "distractors": [
+      {
+        "label": "production",
+        "sentinel": "KEY-6C1D-PRODUCTION",
+        "position": 0.2
+      },
+      {
+        "label": "development",
+        "sentinel": "KEY-6C1D-DEVELOPMENT",
+        "position": 0.85
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "{{BODY}}\n\nThe dump above lists a deployment key for each environment. Reply with the staging key and nothing else."
+    }
+  ]
+}

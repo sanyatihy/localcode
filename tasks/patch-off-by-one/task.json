@@ -1,7 +1,8 @@
 {
   "id": "patch-off-by-one",
   "kind": "patch",
-  "max_tokens": 2048,
+  "max_tokens": 8192,
+  "timeout_seconds": 240,
   "patch": {
     "source": "broken.go.txt",
     "test_file": "verify_test.go.txt",

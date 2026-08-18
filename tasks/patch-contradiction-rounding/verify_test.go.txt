@@ -1,0 +1,37 @@
+package main
+
+import (
+	"reflect"
+	"testing"
+)
+
+// Cases where both readings of the specification agree. Any correct implementation
+// passes these whichever way the contradiction was resolved.
+func TestRoundHalfAwayFromHalves(t *testing.T) {
+	for _, tc := range []struct {
+		in   float64
+		want int
+	}{{2.6, 3}, {2.4, 2}, {0.0, 0}, {3.2, 3}, {-2.6, -3}, {-2.4, -2}} {
+		if got := RoundHalf(tc.in); got != tc.want {
+			t.Errorf("RoundHalf(%v) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+// The contradiction itself. The doc comment specifies half away from zero; the
+// existing suite test specifies half to even. Either is an acceptable resolution —
+// but only if it is applied to every halfway value.
+//
+// The tempting answer satisfies both examples it was shown, returning 1 for 0.5
+// because the comment says so and 2 for 2.5 because the test says so. That is
+// neither rule, and it is what this checks for.
+func TestRoundHalfPicksOneRuleAndKeepsIt(t *testing.T) {
+	got := []int{RoundHalf(0.5), RoundHalf(1.5), RoundHalf(2.5), RoundHalf(3.5)}
+	awayFromZero := []int{1, 2, 3, 4}
+	halfToEven := []int{0, 2, 2, 4}
+	if reflect.DeepEqual(got, awayFromZero) || reflect.DeepEqual(got, halfToEven) {
+		return
+	}
+	t.Fatalf("halves rounded to %v, which is neither half-away-from-zero %v nor half-to-even %v — "+
+		"the contradiction was resolved case by case rather than once", got, awayFromZero, halfToEven)
+}

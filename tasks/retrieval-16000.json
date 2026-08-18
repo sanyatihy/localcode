@@ -2,6 +2,7 @@
   "id": "retrieval-16000",
   "kind": "retrieval",
   "max_tokens": 512,
+  "timeout_seconds": 300,
   "retrieval": {
     "depth_tokens": 16000,
     "position": 0.5,

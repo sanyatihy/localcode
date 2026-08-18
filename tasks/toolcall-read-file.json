@@ -1,7 +1,8 @@
 {
   "id": "toolcall-read-file",
   "kind": "toolcall",
-  "max_tokens": 1024,
+  "max_tokens": 4096,
+  "timeout_seconds": 120,
   "messages": [
     {
       "role": "system",

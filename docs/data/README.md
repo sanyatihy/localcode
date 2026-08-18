@@ -18,6 +18,8 @@ here should be compared across machines without saying so.
 |---|---|---|
 | `2026-08-17-m2max-32gb-ceiling-ladder.jsonl` | 12 cells + apparatus | Context ladder 8k–64k, two conditions: `unattended` (clean boot, swap zero) and `attended-worked-in` (4 h uptime, 13.7 GB swap already allocated). The worked-in rows carry `instrument: pre-timing` and have no `fill_seconds` — they predate that metric and cannot be compared on speed. |
 | `2026-08-18-m2max-32gb-desktop-band.jsonl` | 5 cells + apparatus | The 32k–64k band re-walked `attended-worked-in` against the desktop rather than the model, with wired memory and WindowServer sampled through each fill. Carries `desktop_verdict`, `wired_peak_gb` and the WindowServer series summary. The apparatus row records the desktop baseline the verdicts were judged against. |
+| `2026-08-18-m2max-32gb-0013-calibration-r1.jsonl` | 84 runs | First calibration of the 14-task suite, both thinking modes, three passes, at 32k/q8_0. **Failed its own criterion** — one genuine failure in 78 clean runs, so the suite still cannot rank. Six rows are `fail_truncated_at_cap` and are cap artifacts, not quality: read them with the caps of that run (2048 patch, 1024 tool-call), which have since been raised. |
+| `2026-08-18-m2max-32gb-0013-reasoning-effort.jsonl` | 18 runs | The three tasks whose caps bound at `xhigh`, re-run at `low` and `medium` with `reasoning_effort` set explicitly. The first file to carry the level; rows in every earlier file are `xhigh` whether they say so or not. |
 | `2026-08-17-m2max-32gb-tier1-matrix.jsonl` | 42 runs | Thinking on vs off at model-card sampling, baseline 32k/q8_0, three passes over seven tasks. |
 
 ## Erratum: page size, 2026-08-18

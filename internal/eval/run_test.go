@@ -74,7 +74,7 @@ func TestRunToolCallOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := fakeServer(t, tc.body)
 			c := NewClient(srv.URL, 5*time.Second)
-			res, err := c.Run(context.Background(), toolTask(), Sampling{}, nil)
+			res, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, "")
 			if err != nil {
 				t.Fatalf("unexpected transport error: %v", err)
 			}
@@ -105,7 +105,7 @@ func TestRunRetrievalOutcomes(t *testing.T) {
 			})
 			srv := fakeServer(t, string(body))
 			c := NewClient(srv.URL, 5*time.Second)
-			res, err := c.Run(context.Background(), task, Sampling{}, nil)
+			res, err := c.Run(context.Background(), task, Sampling{}, nil, "")
 			if err != nil {
 				t.Fatalf("unexpected transport error: %v", err)
 			}
@@ -140,7 +140,7 @@ func TestNewRowUsesInjectedClock(t *testing.T) {
 	t.Cleanup(func() { Now = orig })
 	Now = func() time.Time { return time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC) }
 
-	row := NewRow("cfg", 0, "off", Sampling{}, ServerProps{NCtx: 4096}, "toolcall", Result{TaskID: "t"})
+	row := NewRow("cfg", 0, "off", "", Sampling{}, ServerProps{NCtx: 4096}, "toolcall", Result{TaskID: "t"})
 	if row.RunAt != "2026-08-17T12:00:00Z" {
 		t.Errorf("RunAt = %q, want the injected time", row.RunAt)
 	}
@@ -148,7 +148,7 @@ func TestNewRowUsesInjectedClock(t *testing.T) {
 
 func TestAppendRowRoundTrips(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "results.jsonl")
-	want := NewRow("cfg", 1, "on", Sampling{}, ServerProps{NCtx: 32768}, "patch", Result{TaskID: "p", Outcome: Pass})
+	want := NewRow("cfg", 1, "on", "low", Sampling{}, ServerProps{NCtx: 32768}, "patch", Result{TaskID: "p", Outcome: Pass})
 	if err := AppendRow(path, want); err != nil {
 		t.Fatalf("AppendRow: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestTruncationIsNotScoredAsWrong(t *testing.T) {
 			Messages:  []Message{{Role: "user", Content: "{{BODY}}"}},
 			Retrieval: &Retrieval{DepthTokens: 200, Sentinel: "KEY-X"}},
 	} {
-		res, err := c.Run(context.Background(), task, Sampling{}, nil)
+		res, err := c.Run(context.Background(), task, Sampling{}, nil, "")
 		if err != nil {
 			t.Fatalf("%s: %v", task.Kind, err)
 		}

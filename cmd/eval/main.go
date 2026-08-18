@@ -47,11 +47,17 @@ func run(args []string, stdout, stderr *os.File) error {
 		config   = fs.String("config", "unlabelled", "label for the serving config under test")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
-		temp     = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
-		topP     = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
-		topK     = fs.Int("top-k", -1, "top_k; negative leaves it unset")
-		presPen  = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
-		timeout  = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
+		// Passed through rather than validated against a list. Qwen3.8 takes
+		// low/medium/xhigh; the next model will take something else, and a harness that
+		// hardcodes one vendor's vocabulary has to be edited before it can measure
+		// anything new. The server rejects what it does not know. What this process
+		// guarantees instead is that whatever was sent is on every row.
+		effort  = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
+		temp    = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
+		topP    = fs.Float64("top-p", -1, "top_p; negative leaves it unset")
+		topK    = fs.Int("top-k", -1, "top_k; negative leaves it unset")
+		presPen = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
+		timeout = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -109,7 +115,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			if err != nil {
 				return err
 			}
-			res, err := client.Run(ctx, task, sampling, think)
+			res, err := client.Run(ctx, task, sampling, think, *effort)
 			if err != nil {
 				// A transport failure is recorded and the suite continues: losing hours
 				// of sweep to one dropped connection would be worse than a gap.
@@ -118,7 +124,7 @@ func run(args []string, stdout, stderr *os.File) error {
 				continue
 			}
 			if *results != "" {
-				row := eval.NewRow(*config, rep, *thinking, sampling, props, task.Kind, res)
+				row := eval.NewRow(*config, rep, *thinking, *effort, sampling, props, task.Kind, res)
 				if err := eval.AppendRow(*results, row); err != nil {
 					return fmt.Errorf("cannot append result: %w", err)
 				}

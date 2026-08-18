@@ -1,0 +1,12 @@
+package main
+
+// Merge returns the defaults with any key also present in overrides replaced by the
+// overrides value. The result is a new map: callers mutate what they get back, and
+// neither input may be modified.
+func Merge(defaults, overrides map[string]string) map[string]string {
+	out := defaults
+	for k, v := range overrides {
+		out[k] = v
+	}
+	return out
+}

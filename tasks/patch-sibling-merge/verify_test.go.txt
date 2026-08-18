@@ -1,0 +1,49 @@
+package main
+
+import "testing"
+
+// The reported symptom.
+func TestMergeNilDefaults(t *testing.T) {
+	got := Merge(nil, map[string]string{"a": "1"})
+	if got == nil || got["a"] != "1" {
+		t.Fatalf("Merge(nil, {a:1}) = %v, want {a:1}", got)
+	}
+}
+
+// The sibling case the report does not mention, and the doc comment does. The
+// tempting fix — defaulting a nil map and carrying on — passes the test above and
+// fails this one, because it still hands back the caller's own map.
+func TestMergeDoesNotMutateItsInputs(t *testing.T) {
+	defaults := map[string]string{"a": "1"}
+	overrides := map[string]string{"b": "2"}
+	got := Merge(defaults, overrides)
+	if _, leaked := defaults["b"]; leaked {
+		t.Fatal("Merge wrote into defaults; the result must be a new map")
+	}
+	got["c"] = "3"
+	if _, leaked := defaults["c"]; leaked {
+		t.Fatal("the result aliases defaults; mutating it changed the caller's map")
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("overrides was modified: %v", overrides)
+	}
+}
+
+func TestMergeOverridesWin(t *testing.T) {
+	got := Merge(map[string]string{"a": "1", "b": "2"}, map[string]string{"b": "override"})
+	if got["a"] != "1" || got["b"] != "override" {
+		t.Fatalf("got %v, want {a:1 b:override}", got)
+	}
+}
+
+func TestMergeNilOverrides(t *testing.T) {
+	defaults := map[string]string{"a": "1"}
+	got := Merge(defaults, nil)
+	if got["a"] != "1" {
+		t.Fatalf("got %v, want {a:1}", got)
+	}
+	got["b"] = "2"
+	if _, leaked := defaults["b"]; leaked {
+		t.Fatal("nil overrides returned the defaults map itself rather than a copy")
+	}
+}

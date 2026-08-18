@@ -41,10 +41,19 @@ type Sampling struct {
 }
 
 type chatRequest struct {
-	Messages           []Message      `json:"messages"`
-	Tools              []Tool         `json:"tools,omitempty"`
-	ToolChoice         string         `json:"tool_choice,omitempty"`
-	MaxTokens          int            `json:"max_tokens"`
+	Messages   []Message `json:"messages"`
+	Tools      []Tool    `json:"tools,omitempty"`
+	ToolChoice string    `json:"tool_choice,omitempty"`
+	MaxTokens  int       `json:"max_tokens"`
+
+	// ReasoningEffort is xhigh, medium or low, and it is a separate axis from
+	// enable_thinking rather than a finer version of it: thinking off is off, and
+	// with thinking on this decides how much of it there is. Qwen3.8 defaults to
+	// xhigh, which its own release notes describe as being for "complex tasks
+	// demanding thorough analysis" and which does not terminate on some of ours.
+	// Empty omits the field and leaves that default in force — recorded per run,
+	// because a thinking number without it does not say what was measured.
+	ReasoningEffort    string         `json:"reasoning_effort,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 	Sampling
 }

@@ -1,5 +1,5 @@
 {
-  "id": "patch-nil-check",
+  "id": "patch-sibling-merge",
   "kind": "patch",
   "max_tokens": 8192,
   "timeout_seconds": 240,
@@ -15,7 +15,7 @@
     },
     {
       "role": "user",
-      "content": "RefreshToken panics when given a nil token. Fix it so a nil token returns ErrNilToken and a nil result, leaving all other behaviour unchanged.\n\n```go\n{{BODY}}\n```"
+      "content": "Merge panics with \"assignment to entry in nil map\" when defaults is nil. Fix it.\n\n```go\n{{BODY}}\n```"
     }
   ]
 }
