@@ -199,6 +199,14 @@ to patch a file it had not been shown. Its `xhigh` runs complete once the cap is
 than 1024, so that task's non-termination really was a budget problem — unlike the
 contradiction task, where raising the cap only bought a longer spiral.
 
+> **Void as a thinking comparison.** Every row in this section was taken at the server's
+> default sampling, identical in both modes. The vision requires each mode to run at its own
+> recommended sampling — `temp 1.0 / top_p 0.95 / top_k 20` on, `temp 0.7 / top_p 0.80 /
+> top_k 20 / presence_penalty 1.5` off — and calls a fixed-sampling comparison of the toggle
+> void. So the `off` column cannot be compared with the others here. What *is* clean is the
+> comparison **among** `low`, `medium` and `xhigh`, which share both the toggle and the
+> sampling. 0005 owns the redo; `cmd/eval` now refuses to set the toggle without sampling.
+
 **Reasoning made this model worse where it moved at all — except where it did the opposite.**
 On the contradicted-specification task, off passes every time and thinking fails 3 of 6, always
 on the same assertion. On the read-only tool-choice task the direction reverses: off reaches for
