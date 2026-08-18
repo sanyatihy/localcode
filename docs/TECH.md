@@ -288,6 +288,55 @@ Qwen3.8 takes `low`/`medium`/`xhigh` and the next model will take something else
 that hardcodes one vendor's vocabulary has to be edited before it can measure anything new.
 What is guaranteed instead is that whatever was sent appears on every row.
 
+## Sampling and thinking, settled
+
+Each mode at its own model-card sampling; 9 ranking tasks, 3 passes, 32k/q8_0.
+
+| setting | pass | tool-call valid | wall |
+|---|---|---|---|
+| **off · `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5`** | **25/27** | 11/12 | **5.0 min** |
+| off · greedy | 21/27 | 9/12 | 4.4 min |
+| off · temp 0.3 | 23/27 | 10/12 | 4.3 min |
+| off · temp 1.0 | 24/27 | 11/12 | 8.4 min |
+| off · top_p 0.95 | 25/27 | 11/12 | 4.4 min |
+| **on/low · `temp 1.0 / top_p 0.95 / top_k 20`** | **25/27** | **12/12** | 18.6 min |
+| on/low · greedy | 24/27 | 12/12 | 16.4 min |
+| on/low · temp 0.7 | 24/27 | 12/12 | 18.0 min |
+| on/medium | 24/27 | 12/12 | 22.4 min |
+
+**Nothing beats the model card, in either mode.** Colder is monotonically worse without
+thinking — 21, 23, 25 as temperature rises to 0.7 — and `top_p` does nothing at all. **Greedy
+is the worst setting measured**, which is worth knowing because it is the tempting choice for
+a reproducible sweep.
+
+**Reasoning does not earn its cost at either profile.** It is 4× the wall clock for 25/27
+against 25/27. The one metric favouring it is tool-call validity, 12/12 against 11/12 — a
+single failure. Eight of nine tasks are 3/3 in every cell, so the claim is *no gain detectable
+on this suite*, not *no gain exists*.
+
+So both profiles take the same setting, which is a result and not an assumption:
+
+| profile | thinking | sampling |
+|---|---|---|
+| attended | **off** | `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5` |
+| unattended | **off** | as above — nothing was found for the 4× to buy |
+
+The modes fail *differently* on the one task that moves, which the pass rate hides: off fails
+the plain-arithmetic cases both readings of a contradictory spec agree on, while thinking gets
+the arithmetic right and then resolves the contradiction case by case. Any later claim that a
+mode is better must say at what.
+
+## Tool-call adherence is not a formatting problem
+
+Across **150 recorded tool-call runs**: 136 pass, 10 wrong-but-valid, 2 from a fixture since
+fixed, 2 truncated at a cap. **Zero unparseable, zero schema-invalid.** The entire remaining
+deficit is choosing the wrong tool under a stated constraint.
+
+Constrained decoding is therefore not pursued: a grammar makes malformed calls impossible and
+we have none, while it cannot fix tool choice and would cost sampling speed. The template also
+asks for an XML call form — `<function=name>` with `<parameter=key>` — so a JSON-schema
+constraint would fight it rather than help.
+
 ## Which tier-1 tasks carry signal
 
 Measured at `off` and `xhigh` across the full 14-task suite, and at all four levels for the
