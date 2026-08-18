@@ -118,6 +118,21 @@ The compositor **stalls** rather than saturates — the failing cell's peak sits
 passing cell's minimum, so the populations do not overlap — and it is flat from the first
 sample of the cell, which points at allocation time rather than at ingest.
 
+**That ceiling is conditional on what else is running, and the condition is doing more work
+than the number.** It was measured with browsers closed, at a 5.81 GB apparatus. A normal
+working set on this machine measures **20.32 GB** — a browser alone was 5.84 GB — and the
+model is 18.10 GB at 8k rising only to 20.30 GB at 64k:
+
+| apparatus | 8k | 32k | 64k | Q3_K_M weights alone |
+|---|---|---|---|---|
+| 5.81 GB, browsers closed | 23.9 GB | 24.9 GB | 26.1 GB | 19.6 GB |
+| 20.32 GB, normal use | 38.4 GB | 39.5 GB | 40.6 GB | 34.1 GB |
+
+**Nothing fits alongside a normal working set — not the smallest context, not the smallest
+quant in 0004's ladder.** And context is the wrong lever for it: an eightfold cut in context
+saves 2.2 GB, where closing a browser saves 5.8. Running this model locally means clearing
+the desk first; that is a property of a 27B on 32 GB, not a tuning problem.
+
 **The mechanism is not yet established.** Wired peak moves only 0.54 GB across a doubling of
 context, and the failing cell had 1.71 GB of headroom against an assumed 24 GB limit where
 the passing cell had 1.82 GB. That difference cannot explain a collapse, so either the limit

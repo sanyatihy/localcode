@@ -130,11 +130,11 @@ Three conditions on the run, all of which void it if missed:
   the cap at all. The raise experiment is what separates those, and it is now the decisive
   one rather than a formality — if the cap is genuinely 24 GB, raising it will change
   nothing, and that null result is the finding.
-- **Does the desktop die at load rather than under load?** The 64k compositor trace is flat
-  at 0.02 cores from its first sample, with no transition, where the fill was still 13
-  minutes of work to come. That points at allocation time, not ingest. If it holds, the
-  admissible range is a property of the served config alone and does not depend on how full
-  the context gets — which would make it much cheaper to test.
+- ~~Does the desktop die at load rather than under load?~~ **Answered: at load.** The trace
+  was flat from its first sample and the operator confirms the freeze began as the cell
+  started, not partway through. The admissible range is therefore a property of the served
+  config, not of how full the context gets, and a cell can be judged from a load plus a
+  minute of sampling instead of a full fill — a 13-minute verdict becomes a 90-second one.
 - Should the ladder refuse to run cells that are known to break the desktop? Leaning
   **no, but warn**: the unattended profile legitimately wants them, and a tool that hides
   a measurable state is worse than one that reports it.
@@ -189,3 +189,15 @@ Three conditions on the run, all of which void it if missed:
   not confirmed: what is confirmed is the failure and where it starts. The `default-assumed`
   label on the 24 GB limit is now carrying the whole disagreement, which is why it was
   recorded with provenance rather than as a reading.
+- 2026-08-18 — the freeze is confirmed to begin at load, from two independent directions: the
+  compositor trace is flat from its first sample, and the operator reports the desktop going
+  unusable as the cell began rather than partway through its 13-minute fill. This is the
+  cheapest finding here — verdicts no longer need a full fill, so the grid 0004 has to filter
+  costs minutes rather than hours.
+- 2026-08-18 — **the 56k ceiling is conditional on a cleared desk, and that condition matters
+  more than the number.** It was measured at a 5.81 GB apparatus, browsers closed on request.
+  A normal working set on this machine is 20.32 GB, and the model is 18.10 GB at 8k rising
+  only to 20.30 GB at 64k — so at a realistic footprint nothing fits at any context, and
+  Q3_K_M's weights alone would not fit either. Context is the wrong lever: an eightfold cut
+  saves 2.2 GB where closing one browser saves 5.8. `attended-worked-in` as a label has been
+  covering two very different machines, and today measured the generous one.
