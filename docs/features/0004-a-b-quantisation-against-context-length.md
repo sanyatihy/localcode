@@ -7,7 +7,7 @@ shipped:
 check:
 checked:
 review:
-needs: 0002, 0003
+needs: 0014
 related: 0001
 ---
 
@@ -33,11 +33,22 @@ A grid of **weight quant × context length**, run on 0002's harness. 0003 remove
 constraint this grid was designed around: nothing from 8k to 64k swaps, and 64k/q8_0 uses
 20.27 GB of 32 GB, so cells are not eliminated by memory the way the original plan assumed.
 
-Quants therefore run **upward**, not just downward: Q4_K_M, UD-Q4_K_XL, Q5_K_M and Q6_K.
-Q5_K_M and Q6_K were previously excluded on a memory argument the measurement does not
-support, and with roughly a third of the machine unused they are the most interesting
-cells in the grid — the question this feature actually answers is whether headroom is
-better spent on weight quality or on context length.
+Quants run upward as well as downward, but **which ones are worth downloading is 0014's
+answer, not an assumption here.** Q5_K_M and Q6_K were added on the strength of 0003's
+"headroom exists" finding, and that finding came from a ladder blind to the GPU wired
+ceiling — the constraint that actually makes the desktop unusable at 64k. The question is
+still whether headroom is better spent on weight quality or context length; what changed
+is that the headroom may not be spendable while someone is using the machine.
+
+The full ladder is 74.5 GB of downloads at a measured ~3 MB/s, most of a day, so the
+order matters. Projected against the only two points known — 19.13 GB resident is fine
+and 20.27 GB is not — Q5_K_M lands near 22 GB at 32k and Q6_K near 25 GB, which would put
+both outside the attended profile entirely. **That is an estimate, and estimates about
+this machine have been wrong repeatedly**, which is exactly why 0014 runs first and this
+feature downloads nothing until it has.
+
+Q3_K_M is the exception worth fetching regardless: it is the only quant that buys
+materially more context, and at 13.8 GB it is comfortably under any plausible threshold.
 
 Contexts stay 8k/16k/32k. Going higher is measurable but not useful: 0003 clocked a cold
 64k ingest at 13.1 minutes, which no attended profile can spend. **The grid's cost is now
@@ -75,7 +86,8 @@ answers, or the sweep will blame the model for a budget problem.
 - [ ] The harness distinguishes truncation failures from reasoning failures and reports them separately
 - [ ] Every feasible cell is run 3× and appended to the results file, with free memory and swap recorded per run so a contaminated cell is identifiable rather than silently averaged in
 - [ ] Cells whose cold ingest exceeds the attended threshold are marked unattended-only rather than dropped, since that is a real and useful answer
-- [ ] The larger quants Q5_K_M and Q6_K are measured, since 0003 showed the headroom they need exists and the plan had excluded them on an argument measurement refuted
+- [ ] The quant ladder is chosen from 0014's measured desktop threshold, and every quant excluded by it is recorded as unattended-only rather than dropped — the distinction 0010 also needs
+- [ ] Only the quants that survive that filter are downloaded, since the full ladder is 74.5 GB at ~3 MB/s
 - [ ] If a cell does meet a memory wall, the effect of raising `iogpu.wired_limit_mb` is measured there, with the exact revert command recorded — inherited from 0003, where nothing came close enough to the limit for it to mean anything
 - [ ] A winning config is identified per profile by the pre-written rules, with runner-up and margin for each, and it is stated plainly whether one config won both
 - [ ] The winner becomes the default config from 0001 — or two named configs if the profiles diverge — and `docs/TECH.md` records the table and both decisions
@@ -94,3 +106,9 @@ answers, or the sweep will blame the model for a budget problem.
 - 2026-08-17 — regrounded on 0003: the grid was built around a memory ceiling that does not
   exist, so quants now run upward as well as downward — Q5_K_M and Q6_K are in — and cells
   are gated on ingest seconds rather than gigabytes.
+- 2026-08-18 — gated on 0014. The larger quants entered this grid because 0003 reported
+  memory headroom, and 0003 could not see the GPU wired ceiling that makes 64k unusable
+  with a desktop running. Projected forward, Q5_K_M and Q6_K would sit outside the
+  attended profile before quality is measured at all, so downloading 74.5 GB to find that
+  out would be spending a day to learn something a threshold measurement answers first.
+  Q3_K_M stays justified on its own terms.
