@@ -16,7 +16,8 @@ Run `kit next` to be told which feature and task to pick up.
   One agent per feature; that keeps two agents out of the same code.
 - **One source of truth per fact.** While in flight the feature doc owns the spec.
   On ship, durable facts move to the as-built doc and this file freezes as history.
-- **`## Log` holds dated conclusions**, not debate. The argument lives in the PR.
+- **Each `## Log` entry names a change to the plan.** What the work did before it
+  converged lives in the PR; what is still true after ship lives in the as-built doc.
 - **As much as necessary and no more.** Cut restatement and hedging; never cut a
   decision, a constraint, or the evidence for it. Each section states its own budget.
 - **IDs are stable** (`0007`). Cite them in commits and branch names; files never move.
