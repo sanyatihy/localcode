@@ -80,6 +80,11 @@ compositor stalls for the whole run. Hermes' floor therefore sits inside the ina
 band with no overlap: the smallest context it will accept is one the machine cannot carry
 while someone is using it.
 
+The floor is a hard check in Hermes' own code, not a setting — `context_length` in
+`~/.hermes/config.yaml` selects what it asks for, and anything under 64,000 is refused before
+a request is made. Lowering it means patching Hermes, and a patched Hermes is a different
+harness than the one under comparison; if that is ever done it is scored under its own name.
+
 So Hermes is scored **unattended only**, and its numbers are not comparable to a challenger
 scored attended without saying so. Scoring it attended anyway would produce a quality figure
 for a configuration nobody can use, which is worse than a gap in the table. Whether it wins
