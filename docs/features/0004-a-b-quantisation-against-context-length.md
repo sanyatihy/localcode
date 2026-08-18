@@ -79,6 +79,25 @@ that agentic tasks fail by truncation rather than by reasoning. That is a real o
 and must be reported as such — truncation failures are counted separately from wrong
 answers, or the sweep will blame the model for a budget problem.
 
+**0014 has answered the gate, and it answered with a wired budget rather than a context.**
+The desktop survives 22.18 GB of wired memory and fails at 22.29, and the failure happens at
+**load**, not under load — so a config's admissibility is a property of what it allocates and
+can be judged from a load plus a minute of sampling. A 13-minute verdict is now a 90-second
+one, which is what makes this grid affordable to filter before downloading anything.
+
+Against that budget the projection this feature was gated on holds, and now has a measurement
+under it: Q4_K_M at 32k reaches 21.75 GB wired, leaving roughly 0.5 GB of admissible room.
+Q5_K_M is about 3 GB heavier and Q6_K about 6, so both land past the line for attended use
+before quality is measured at all. **Download order should therefore be Q3_K_M first**, and
+the larger quants only as unattended candidates — which is also where `iogpu.wired_limit_mb`
+becomes worth raising, since the question there is whether the cap is what stops them loading
+rather than whether the desktop survives.
+
+The attended ceiling of 57,344 also carries a condition that matters more than the number: it
+was measured with browsers closed, at a 5.81 GB apparatus. At a normal 20 GB working set no
+quant in this ladder fits at any context. Cells are admissible against a cleared desk, and the
+results file should say so.
+
 ## Tasks
 
 - [ ] The grid is defined in a committed file, with infeasible cells marked and the reason recorded
@@ -112,3 +131,9 @@ answers, or the sweep will blame the model for a budget problem.
   attended profile before quality is measured at all, so downloading 74.5 GB to find that
   out would be spending a day to learn something a threshold measurement answers first.
   Q3_K_M stays justified on its own terms.
+- 2026-08-18 — 0014 shipped and this feature is ungated. What it inherits: an admissible wired
+  budget of ~22.2 GB rather than a context length, a failure that occurs at load so cells can
+  be screened in 90 seconds instead of 13 minutes, and a projection — Q5_K_M and Q6_K past the
+  line for attended use — that now rests on a measurement instead of an extrapolation. The
+  `iogpu.wired_limit_mb` lever comes here too, as an unattended-profile question about what
+  stops a larger quant loading.
