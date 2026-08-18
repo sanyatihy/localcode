@@ -158,6 +158,14 @@ Each of these has already caused a wrong number in this repo.
   pressure it stops distinguishing configs exactly where the answer matters — peak RSS
   moved 0.82 GB across a fourfold context range while saturated, and more once pressure
   was gone. Time-to-ingest discriminates where RSS does not.
+- **A health check must not conclude "dead" before the process exists.** `serve.sh`
+  validates its config and only then `exec`s llama-server, so for the first instants after
+  launch there is nothing for `pgrep` to find. A poll that bails the moment the process is
+  absent — curl refused in a millisecond, pgrep finding nothing — records `load_failed` for
+  a server that goes on to load in 15 s, and leaves it running to collide with the next
+  cell. It fired only once the machine carried 20 GB of other processes, where the child is
+  slow to be scheduled: a race that hid through every earlier run appears exactly when the
+  measurement gets interesting.
 - **Killing an 18 GB server is not instant.** A fixed `sleep` after `pkill` lets the next
   server fail to bind while the health check passes against the *old* one, silently
   measuring the previous config under the next config's name. Poll until the process is

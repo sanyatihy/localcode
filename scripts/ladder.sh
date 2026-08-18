@@ -21,13 +21,21 @@ set -euo pipefail
 
 CONDITION="${CONDITION:-unlabelled}"
 OUT="${OUT:-results/ceiling.jsonl}"
+# Which cells to walk. A re-walk usually asks about one band — cells that are not in
+# question still cost their full ingest, and 64k alone is 13 minutes.
+#
+# `-` and not `:-`: if CELLS is set but empty the answer is "no cells", not "every cell".
+# The other way round, an empty variable silently walks the whole ladder, which is an
+# hour of the machine nobody asked for.
+CELLS="${CELLS-config/ladder-*.env}"
 FILL_FRACTION="${FILL_FRACTION:-0.90}"   # leave headroom for the reply
 
 # The desktop rule, written before the runs so it is a rule and not a preference. Units are
 # fractions of one core, derived from consecutive WindowServer CPU-time readings.
 #
-# Basis: attended, an editor rendering and no model loaded, measures 0.28-0.47 cores on
-# this machine over repeated samples.
+# Basis: attended with no model loaded measures 0.17-0.47 cores on this machine, the low
+# end being a near-static screen and the high end an editor actively rendering. Each run
+# records its own baseline in the apparatus row, because that spread is not a constant.
 # Saturation is set well above that; stall well below. Both are failures — a compositor
 # pinned at a core cannot keep up, and one doing nothing is not drawing.
 #
@@ -61,11 +69,21 @@ served_ctx() {
     | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null || echo 0
 }
 
+# The "has it died?" shortcut needs a grace period, or it fires before the server exists.
+# `serve.sh` is a shell script that validates its config and only then `exec`s llama-server,
+# so for the first instants after launch there is no llama-server to find. Without the
+# grace, the first poll — curl refused in a millisecond, pgrep finding nothing — returns
+# "load failed" for a server that goes on to load perfectly. It fired on a machine carrying
+# 20 GB of other processes, where the child is slow to be scheduled, which is exactly the
+# condition this ladder now runs in. The real timeout still bounds the wait.
 wait_healthy() { # seconds
   local deadline=$((SECONDS + $1))
+  local grace=$((SECONDS + 20))
   while [ $SECONDS -lt $deadline ]; do
     curl -s -m 2 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"ok"' && return 0
-    pgrep -f llama-server >/dev/null || return 1
+    if [ $SECONDS -ge $grace ] && ! pgrep -f llama-server >/dev/null; then
+      return 1
+    fi
     sleep 3
   done
   return 1
@@ -81,15 +99,32 @@ wait_healthy() { # seconds
 APPARATUS=$(ps -Ao rss,comm | awk '$1 > 102400 && $2 !~ /llama-server/ && $2 != "COMM" {
     n=split($2,p,"/"); printf "%s%.2fGB %s", (c++?"; ":""), $1/1048576, p[n]}')
 APPARATUS_TOTAL=$(ps -Ao rss,comm | awk '$2 !~ /llama-server/ {s+=$1} END {printf "%.2f", s/1048576}')
-export APPARATUS APPARATUS_TOTAL CONDITION
+# The compositor's rate before any model is loaded. Recorded per run so a verdict carries
+# the basis it was judged against, rather than inheriting a number measured once by hand
+# and quoted thereafter — the machine's baseline is not a constant.
+DESK_A=$(./scripts/deskprobe.sh); sleep 6; DESK_B=$(./scripts/deskprobe.sh)
+DESK_BASELINE=$(python3 -c "
+import json
+a=json.loads('''$DESK_A'''); b=json.loads('''$DESK_B''')
+span=b['t']-a['t']
+print(round((b['windowserver_cpu_seconds']-a['windowserver_cpu_seconds'])/span, 3) if span>0 else 0)")
+
+export APPARATUS APPARATUS_TOTAL CONDITION DESK_BASELINE
+# shellcheck disable=SC2086
+set -- $CELLS
+echo "walking $# cell(s): $*" >&2
 echo "apparatus resident before any cell: ${APPARATUS_TOTAL} GB" >&2
+echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
 python3 -c '
 import json, os
 print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
                   "resident_gb": float(os.environ["APPARATUS_TOTAL"]),
+                  "desktop_baseline_cores": float(os.environ["DESK_BASELINE"]),
                   "processes": os.environ["APPARATUS"]}))' >> "$OUT"
 
-for cfg in config/ladder-*.env; do
+# Unquoted on purpose: CELLS is a glob or a list of paths, and both must expand.
+# shellcheck disable=SC2086
+for cfg in $CELLS; do
   name=$(basename "$cfg" .env)
   ctx=$(grep '^CTX_SIZE=' "$cfg" | cut -d'"' -f2)
   kv=$(grep '^CACHE_TYPE_K=' "$cfg" | cut -d'"' -f2)
