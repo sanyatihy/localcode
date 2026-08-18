@@ -1,0 +1,20 @@
+{
+  "id": "patch-sibling-splitpath",
+  "kind": "patch",
+  "max_tokens": 2048,
+  "patch": {
+    "source": "broken.go.txt",
+    "test_file": "verify_test.go.txt",
+    "package": "main"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a careful Go engineer. Reply with the complete corrected file in a single ```go code block. No explanation."
+    },
+    {
+      "role": "user",
+      "content": "SplitPath(\"/a/b\") returns an empty first element instead of [\"a\", \"b\"]. Fix it.\n\n```go\n{{BODY}}\n```"
+    }
+  ]
+}
