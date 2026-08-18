@@ -61,7 +61,7 @@ to locate it.
 - [x] Two tool-choice tasks make the obvious tool the wrong one under a stated constraint
 - [x] One task presents a doc comment contradicting a test, with the check accepting either resolution provided it is applied consistently
 - [ ] The extended suite runs both thinking modes 3x, and the spread is reported — a flat result means the tasks failed and are rewritten before anything is concluded from them
-- [ ] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
+- [x] `docs/TECH.md` records which tasks discriminate and which do not, so later features know which subset carries signal
 
 ## Running the calibration
 
@@ -150,3 +150,21 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   looking at what the reasoning does* — bounded need converges, a spiral scales with the budget.
   One re-run at a multiple of the cap is the cheapest way to tell, and it should happen before a
   cap is written off as a fixture bug.
+- 2026-08-18 — **the "contradicted specs stop this model converging" entry above is wrong as
+  written, and the reason is the whole story.** Qwen3.8 has a `reasoning_effort` dial —
+  `xhigh` default, `medium`, `low` — which this harness never set, so every thinking-mode
+  number ever recorded here was taken at `xhigh`. It is `xhigh` that fails to terminate, not
+  contradiction as such. At `low` and `medium` the task converges in ~200 s and *fails the
+  trap*: 3 of 6 runs resolve the contradiction case by case instead of picking a rule, against
+  3/3 passing with reasoning off. So the task discriminates after all — the finding was real
+  and the mechanism attributed to it was not.
+- 2026-08-18 — which makes the first calibration's verdict wrong too. It compared `off` against
+  `xhigh`, the two ends, and never sampled between them; a suite read as flat was partly an
+  instrument set to a level that could not finish. `patch-off-by-one` is genuinely flat at all
+  four settings, so the rewrite is still owed for most of the suite — but it is owed for eleven
+  tasks and not for the one that was carrying signal all along.
+- 2026-08-18 — `toolcall-constraint-readonly`'s failures were the fixture's fault. Three times
+  the model declined to patch a file it had not seen, having been given no read tool: correct
+  behaviour with no legal way to express it, scored as a wrong tool choice. The source is now
+  supplied in the prompt rather than adding a read tool, which would have made reading first
+  legitimate and the task checks the *first* call. It needs re-measuring at all four levels.

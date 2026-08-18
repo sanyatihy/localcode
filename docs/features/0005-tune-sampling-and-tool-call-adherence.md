@@ -65,6 +65,19 @@ won both" is a finding worth stating explicitly rather than an assumption to sta
 
 Because template correctness can invalidate everything downstream of it, it is task one.
 
+**Thinking is not a binary and its default is the bad end.** Qwen3.8 exposes
+`reasoning_effort` — `xhigh` (default), `medium`, `low` — beside `enable_thinking`, so this
+feature's axis has four points, not two. 0013 measured all four on the tasks that move and
+found reasoning made the model *worse* where it moved at all: the contradicted-specification
+task passes 3/3 with reasoning off and fails 3 of 6 with it on, always on the same assertion.
+`xhigh`, the default, did not terminate at all.
+
+That inverts this feature's working assumption. The question is not how much thinking to buy
+but **whether thinking earns its cost on this workload at any level**, and `off` is a serious
+candidate rather than the cheap baseline the sweep was going to beat. Any run that does not
+record its effort level is uninterpretable — see `docs/TECH.md`, where every figure taken
+before 2026-08-18 is `xhigh` whether it says so or not.
+
 ## Tasks
 
 - [ ] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed
@@ -85,3 +98,6 @@ Because template correctness can invalidate everything downstream of it, it is t
 - 2026-08-17 — retitled and rescoped around thinking mode after live probes: 70 completion
   tokens with thinking against 28 without, for an identical correct tool call. Each mode has
   its own model-card sampling, so the toggle cannot be swept at a fixed temperature.
+- 2026-08-18 — inherited from 0013: `reasoning_effort` is a real axis with four points, its
+  default is `xhigh`, and `xhigh` does not terminate on some tier-1 tasks. Reasoning lowered
+  the score wherever it changed anything, so `off` is a candidate to beat rather than a floor.
