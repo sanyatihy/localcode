@@ -94,9 +94,17 @@ it is quoted for another model, quant, context or machine.
 | 49 152 | q8_0 | 19.72 GB | 543 s | 81.5 | 0.0 MB |
 | 65 536 | q8_0 | 20.27 GB | 788 s | 75.0 | 0.0 MB |
 
-Nothing swapped at any rung, so **no memory ceiling exists in this envelope**. What grows
-is ingest: the prompt rate decays with depth, making a cold 32k context cost 5.4 minutes
-and a cold 64k cost 13.1.
+Nothing swapped at any rung, so **no ceiling exists that swap or resident size can see**.
+What grows is ingest: the prompt rate decays with depth, making a cold 32k context cost
+5.4 minutes and a cold 64k cost 13.1.
+
+**A ceiling does exist, and this table cannot show it.** At 64k the desktop degrades —
+windows stop rendering correctly and the editor freezes — because `iogpu.wired_limit_mb`
+defaults to roughly 75% of 32 GB and the model holds 20.27 GB of mostly wired Metal
+buffers, leaving too little for the compositor. The ladder scored that cell `ok` because
+its pass criterion was whether the model completed, not whether the machine stayed usable.
+[0014](features/0014-measure-the-gpu-wired-ceiling-and-desktop-usability.md) measures the
+constraint properly. **Until it does, treat 64k as unattended-only.**
 
 **This does not mean memory never binds.** Only one quant was tested. Q6_K weights are
 roughly 6 GB heavier, and larger models and longer contexts are untested. 0004's quant
@@ -158,6 +166,14 @@ Each of these has already caused a wrong number in this repo.
 - **The HuggingFace cache stores snapshots as symlinks into `blobs/`.** BSD `stat -f%z`
   does not follow them and reports the link's own size, which reads as a 0 GB model and
   silently inflates any headroom estimate built on it. Use `stat -L -f%z`.
+- **Resident size and swap cannot see GPU-wired pressure.** A config can leave swap
+  untouched, report a comfortable resident size, and still starve the compositor:
+  `iogpu.wired_limit_mb` is a separate budget, defaulting to about 75% of physical memory,
+  and Metal buffers come out of it. The symptom is a glitching desktop, not a slow model —
+  and the model reports success throughout, because it is the process that got the memory.
+- **A pass criterion that only asks about the model is blind to the machine.** 0003's
+  ladder marked 64k `ok` while that context made the desktop unusable. Any measurement
+  meant to protect the machine has to take its verdict from outside the model process.
 - **zsh does not word-split unquoted variables.** Scripts here run under `bash` via
   shebang; a loop written interactively in zsh can produce config filenames with the value
   glued in, which the ladder will then glob and parse.
