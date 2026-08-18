@@ -93,7 +93,7 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 ## Tasks
 
 - [x] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed — **no mismatch; nothing to fix**
-- [ ] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
+- [x] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
 - [ ] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
 - [ ] Results are reported per profile, and the recommendation says which setting won attended and which won unattended
 - [ ] Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config, including its speed cost
@@ -107,6 +107,19 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
   model deficits that 0007 and 0010 need to see.
 
 ## Log
+- 2026-08-18 — **the feature's hypothesis is falsified: thinking earns its cost at neither
+  profile.** 81 runs, each mode at its own model-card sampling. Pass rate 25/27 off, 25/27 at
+  `low`, 24/27 at `medium`; wall clock 5.0 min against 18.6 and 22.4. The design predicted off
+  for attended and *on* for unattended, on the argument that an unattended run needs the care
+  nobody is there to supply — but there is no quality for unattended to buy with the 4×. The
+  one metric favouring thinking is tool-call validity, 12/12 against 11/12, which is a single
+  failure and a hint rather than a result. Eight of the nine tasks are 3/3 in every cell, so
+  the supportable claim is *no gain detectable on this suite*, not *no gain exists*.
+- 2026-08-18 — the two modes fail differently on the one task that moves, which the pass rate
+  hides: off fails `TestRoundHalfAwayFromHalves`, the plain-arithmetic cases both readings of
+  the spec agree on, while thinking fails `TestRoundHalfPicksOneRuleAndKeepsIt`, the
+  consistency trap. Reasoning fixes the arithmetic and then talks itself into an inconsistent
+  resolution. Any later claim that one mode is "better" has to say at what.
 - 2026-08-18 — template verified, no mismatch, and the verification changed what the other
   boxes must account for. `reasoning_effort` is **a system message the template injects**,
   not a sampling parameter: at `low` it renders "Keep your thinking brief and focused", at
