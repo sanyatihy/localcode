@@ -44,6 +44,31 @@ model process. Two candidates, both cheap:
 - **Wired-memory headroom** — total wired against the limit, sampled during a full-context
   run. This is the number that should have been on the ladder and was not.
 
+**WindowServer CPU is the one being used**, sampled every two seconds against the model
+under load and recorded as its own column beside the model's own `outcome`. The rule, fixed
+before any run so that it is a rule and not a preference, in fractions of one core:
+
+| verdict | condition |
+|---|---|
+| `fail_saturated` | sustained ≥ 0.90 cores over any 30 s window — the compositor cannot keep up |
+| `fail_stalled` | sustained ≤ 0.02 cores over any 30 s window — the compositor is not drawing |
+| `pass` | neither, over a run of at least 30 s |
+| `not_applicable` | the condition is unattended |
+| `insufficient_samples` | the fill was shorter than the sustain window |
+
+Attended baseline with an editor rendering and no model loaded measures **0.28–0.47 cores**,
+so both bounds sit well clear of normal operation. A brief spike is the compositor doing its
+job; the sustain window is what separates that from the compositor losing.
+
+**Two things this cannot do, stated now rather than discovered later.** Passive CPU cannot
+distinguish "nothing to draw" from "stuck and not drawing", so the verdict is only meaningful
+when someone is driving the machine and unattended cells report `not_applicable` rather than
+a pass they did not earn — which is why the scripted UI interaction is still worth building.
+And the *direction* of the signal at the failure is unverified: a starved compositor might
+saturate or might stall, and which one 64k produces is not yet known. The full series is
+recorded per cell for exactly that reason, so the first re-walk calibrates the threshold from
+a known-bad cell instead of confirming a guess.
+
 **Sweep the wired limit as a variable, not a fix.** `sudo sysctl iogpu.wired_limit_mb=N`
 raises the ceiling and takes the memory from everything else, so it trades model headroom
 against desktop headroom rather than creating any. Measure at the default and at one or
@@ -98,3 +123,10 @@ constraint rather than discover it as a bad result.
   against the affected data file. No conclusion in 0003 reverses — free memory reads as
   pinned near zero either way — but wired memory read off the same counter would have been
   wrong by the same factor, in the direction that makes an inadmissible config look fine.
+- 2026-08-18 — the desktop check is WindowServer CPU, sampled from outside the model process
+  and reported as `desktop_verdict` beside the model's `outcome`, because collapsing those
+  two columns is the mistake that produced this feature. Cumulative CPU *time* is recorded
+  and rates derived by the caller: `ps %cpu` is a decayed average over a window macOS does
+  not document, and a threshold set against an undocumented decay is not reproducible.
+  Thresholds are two-sided and provisional — the direction of the signal at the failure is
+  the one thing the re-walk still has to establish.
