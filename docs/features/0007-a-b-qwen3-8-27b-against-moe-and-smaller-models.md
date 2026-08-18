@@ -1,7 +1,7 @@
 ---
 id: 0007
 title: A/B Qwen3.8-27B against MoE and smaller models
-status: Draft
+status: Dropped
 created: 2026-08-17
 shipped:
 check:
@@ -64,6 +64,10 @@ The decision rule from 0004 applies unchanged, so results are comparable across 
   model that fails the task is not cheaper.
 
 ## Log
+- 2026-08-18 — **dropped.** Smaller models are ruled out by decision rather than by
+  measurement, which removes half this feature's scope; the MoE half was already a BACKLOG
+  line gated on a quant fitting 32 GB, and it stays there. Nothing here is falsified — the
+  comparison is simply not one this envelope will act on.
 - 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
   llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
   itself, under time pressure, in a comparison whose numbers then rest on it.
