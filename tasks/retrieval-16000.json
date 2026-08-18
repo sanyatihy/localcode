@@ -1,10 +1,17 @@
 {
   "id": "retrieval-16000",
   "kind": "retrieval",
-  "max_tokens": 64,
-  "retrieval": {"depth_tokens": 16000, "position": 0.5, "sentinel": "KEY-7F3A-16000",
-                "question": "What is the deployment key mentioned in the dump?"},
+  "max_tokens": 512,
+  "retrieval": {
+    "depth_tokens": 16000,
+    "position": 0.5,
+    "sentinel": "KEY-7F3A-16000",
+    "question": "What is the deployment key mentioned in the dump?"
+  },
   "messages": [
-    {"role": "user", "content": "{{BODY}}\n\nWhat is the deployment key mentioned above? Reply with the key and nothing else."}
+    {
+      "role": "user",
+      "content": "{{BODY}}\n\nWhat is the deployment key mentioned above? Reply with the key and nothing else."
+    }
   ]
 }
