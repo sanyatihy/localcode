@@ -1,9 +1,9 @@
 ---
 id: 0005
 title: Sweep thinking and sampling per profile
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
@@ -94,11 +94,11 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 
 - [x] The chat template and tool-call format `llama-server` applies are verified against the model's own definition, and any mismatch is fixed — **no mismatch; nothing to fix**
 - [x] Thinking on and thinking off are each swept at their own model-card sampling defaults, never at a shared temperature, and scored on tool-call validity and task success
-- [ ] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
-- [ ] Results are reported per profile, and the recommendation says which setting won attended and which won unattended
-- [ ] Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config, including its speed cost
-- [ ] Failures are classified by cause (unparseable, schema-invalid, wrong-but-valid) so the remaining deficit is named rather than counted
-- [ ] The chosen sampling config is committed, and `docs/TECH.md` records the validity rate before and after
+- [x] A sampling sweep within each mode — temperature and top-p around the defaults, plus greedy as a floor — is scored the same way
+- [x] Results are reported per profile, and the recommendation says which setting won attended and which won unattended — **both profiles take the same setting**
+- [~] ~~Constrained decoding via GBNF/JSON-schema is measured against the best unconstrained config~~ — **dropped**: zero malformed calls in 150 runs, so it has nothing to fix
+- [x] Failures are classified by cause (unparseable, schema-invalid, wrong-but-valid) so the remaining deficit is named rather than counted
+- [x] The chosen sampling config is committed, and `docs/TECH.md` records the validity rate before and after
 
 ## Open questions
 
@@ -138,3 +138,15 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
 - 2026-08-18 — inherited from 0013: `reasoning_effort` is a real axis with four points, its
   default is `xhigh`, and `xhigh` does not terminate on some tier-1 tasks. Reasoning lowered
   the score wherever it changed anything, so `off` is a candidate to beat rather than a floor.
+- 2026-08-18 — **nothing beats the model card, so the sweep confirms a default rather than
+  replacing one.** Colder is monotonically worse without thinking (21, 23, 25 as temperature
+  rises to 0.7), `top_p` does nothing, and greedy is the worst setting measured — which is the
+  useful half, since greedy is the tempting choice for a reproducible sweep.
+- 2026-08-18 — **constrained decoding dropped: it has nothing to fix.** 150 recorded tool-call
+  runs contain zero unparseable and zero schema-invalid calls; the whole deficit is 10
+  wrong-but-valid tool choices, which a grammar cannot correct and might entrench. The
+  template's XML call form would also fight a JSON-schema constraint. Backlogged against a
+  model that actually emits malformed calls.
+- 2026-08-18 — both profiles take the same setting, which the design treated as a possible
+  outcome rather than the expected one. The per-profile split this feature was built around
+  does not appear on this workload.
