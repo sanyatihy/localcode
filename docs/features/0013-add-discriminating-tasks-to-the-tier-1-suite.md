@@ -126,10 +126,27 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   answer; `toolcall-constraint-readonly` did the same at 1024. This is exactly the gotcha
   `docs/TECH.md` already records: a cap sized while testing with thinking off starves thinking
   mode. The new fixtures inherited 2048/1024 by copying the older, easier tasks, which is how a
-  documented trap got walked into again. Caps are now sized from measured usage — 8192 for
-  patch, 4096 for tool-call — so the cap cannot decide an outcome. Tasks whose cap never bound
+  documented trap got walked into again. Caps were raised to 8192 for patch
+  and 4096 for tool-call on that reading — correct for `toolcall-constraint-readonly`, and
+  **wrong for `patch-contradiction-rounding`**, see the entry below. Tasks whose cap never bound
   are unaffected in behaviour: `max_tokens` is a stop condition, not a target.
 - 2026-08-18 — what the run *did* establish is that the new tasks are genuinely harder in
   effort if not in outcome: reasoning ran 4000–7500 chars against 100–850 on the old suite, and
   mean wall went 30.5 s to 78.8 s per run in thinking mode. A suite that costs 2.5x and ranks
   nothing is worse than the one it replaced, so the rewrite is not optional.
+- 2026-08-18 — **the cap diagnosis was wrong for `patch-contradiction-rounding`, and the task
+  is the one thing in the suite that discriminates.** Re-run at 8192, four times the previous
+  cap, it emitted 27,234 and 25,091 chars of reasoning — 3.6x the previous figure — and still
+  never reached an answer, at ~15 minutes a run. Reasoning expands to whatever budget it is
+  given, so there is no cap that resolves this one: only a choice of how long to wait to learn
+  nothing. Against thinking=off passing 3/3 in 12 seconds with 101 tokens and no reasoning at
+  all, that is the sharpest split in the suite, and it was misread as a budget artifact because
+  truncation usually is one. A contradicted specification does not make this model slower; it
+  makes it fail to converge. That is a fact about Qwen3.8-27B worth more than the pass rate the
+  task was built to produce.
+- 2026-08-18 — the general lesson, since this repo has now been bitten from both directions: a
+  cap that binds means either the fixture underbudgeted or the model did not terminate, and the
+  two are indistinguishable from a single row. They are told apart by *raising the cap and
+  looking at what the reasoning does* — bounded need converges, a spiral scales with the budget.
+  One re-run at a multiple of the cap is the cheapest way to tell, and it should happen before a
+  cap is written off as a fixture bug.
