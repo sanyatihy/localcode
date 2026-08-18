@@ -95,9 +95,8 @@ all**, which makes cache-invalidating behaviour a first-class risk for 0010 to s
   belongs to 0004, where Q5_K_M and Q6_K are the first configs with a real chance of meeting
   a wall. It also needs `sudo`, which is a human's to grant.
 - 2026-08-17 — `scripts/rungs.sh` derives the rungs from the machine and names which
-  constraint binds. **They do not change at 128 GB, or with a 70 GB model**: memory allows
-  ~262k tokens in every case while a 20-minute ingest budget allows ~64k. More RAM buys
-  bigger quants and bigger models, not longer context.
+  constraint binds, replacing the hand-written ladder. It reproduces the same four rungs,
+  and modelling more memory does not move them — the numbers are in `docs/TECH.md`.
 - 2026-08-17 — open question settled: at 32k, q4_0 KV used 18.66 GB against q8_0's 19.13 and
   filled in 325 s against 326 — 0.47 GB and no time at all. Since memory does not bind here,
   **q4_0 buys nothing** and q8_0 is the better default. Worth revisiting only if a larger

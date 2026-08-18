@@ -151,12 +151,9 @@ Three conditions on the run, all of which void it if missed:
   headroom inherits that uncertainty. Idle wired measures 2.58 GB, which puts the 64k cell
   at roughly 22.9 GB against that assumed 24 GB — consistent with the reported failure, and
   the first number in this repo that could have predicted it.
-- 2026-08-18 — building the probe found the reason the metric was not merely missing but
-  unreadable: `memprobe.sh` assumed a 4 KB page and this machine uses 16 KB, so `vm_stat`
-  figures were understated 4×. Recorded as a gotcha in `docs/TECH.md` and as an erratum
-  against the affected data file. No conclusion in 0003 reverses — free memory reads as
-  pinned near zero either way — but wired memory read off the same counter would have been
-  wrong by the same factor, in the direction that makes an inadmissible config look fine.
+- 2026-08-18 — `memprobe.sh` assumed a 4 KB page where this machine uses 16 KB, so every
+  `vm_stat` figure recorded before today is understated 4×. Gotcha in `docs/TECH.md`,
+  erratum against the affected data file; no conclusion in 0003 reverses.
 - 2026-08-18 — the desktop check is WindowServer CPU, sampled from outside the model process
   and reported as `desktop_verdict` beside the model's `outcome`, because collapsing those
   two columns is the mistake that produced this feature. Cumulative CPU *time* is recorded
@@ -182,25 +179,19 @@ Three conditions on the run, all of which void it if missed:
   through 40k/48k/56k and sat at 0.02 for the whole of 64k; the failing cell's *peak* is
   below every passing cell's *minimum*, so the two populations do not overlap. The stall
   bound earned its place and the saturation bound has never fired.
-- 2026-08-18 — **the wired-ceiling explanation did not survive its own measurement.** Wired
-  peak moves only 21.75 → 22.29 GB across a doubling of context, and minimum headroom at the
-  failing cell (1.71 GB) is barely under the cell that passed (1.82 GB). A 0.11 GB difference
-  cannot produce a total compositor collapse. The mechanism stated in this doc's Problem is
-  not confirmed: what is confirmed is the failure and where it starts. The `default-assumed`
-  label on the 24 GB limit is now carrying the whole disagreement, which is why it was
-  recorded with provenance rather than as a reading.
+- 2026-08-18 — **the wired-ceiling explanation did not survive its own measurement**, so
+  the mechanism this doc's Problem states is unconfirmed: what is confirmed is the failure
+  and where it starts. The `default-assumed` label on the 24 GB limit carries the whole
+  disagreement, which is why it was recorded with provenance rather than as a reading.
 - 2026-08-18 — the freeze is confirmed to begin at load, from two independent directions: the
   compositor trace is flat from its first sample, and the operator reports the desktop going
   unusable as the cell began rather than partway through its 13-minute fill. This is the
   cheapest finding here — verdicts no longer need a full fill, so the grid 0004 has to filter
   costs minutes rather than hours.
-- 2026-08-18 — **the 56k ceiling is conditional on a cleared desk, and that condition matters
-  more than the number.** It was measured at a 5.81 GB apparatus, browsers closed on request.
-  A normal working set on this machine is 20.32 GB, and the model is 18.10 GB at 8k rising
-  only to 20.30 GB at 64k — so at a realistic footprint nothing fits at any context, and
-  Q3_K_M's weights alone would not fit either. Context is the wrong lever: an eightfold cut
-  saves 2.2 GB where closing one browser saves 5.8. `attended-worked-in` as a label has been
-  covering two very different machines, and today measured the generous one.
+- 2026-08-18 — **the 56k ceiling is conditional on a cleared desk, and the condition matters
+  more than the number** — the apparatus and working-set figures are in `docs/TECH.md`. The
+  consequence for this repo's labels: `attended-worked-in` has been covering two very
+  different machines, and this band measured the generous one.
 - 2026-08-18 — **box 4 dropped and the feature shipped at five of six.** Raising
   `iogpu.wired_limit_mb` would separate "the cap binds lower than assumed" from "the cap is
   not what binds", and nothing here turns on which. The admissible range is measured either
@@ -209,3 +200,7 @@ Three conditions on the run, all of which void it if missed:
   whether the cap is what stops a larger quant loading at all. The mechanism stays
   unresolved in the open questions rather than being quietly resolved by assumption, and
   `sudo sysctl iogpu.wired_limit_mb=0` remains the revert if anyone raises it later.
+- 2026-08-18 — kept over the 150-line alarm deliberately: what is long here is a design whose
+  thresholds had to be fixed before any run, a campaign that changed the plan eleven times,
+  and a mechanism left open on purpose. The instrument's durable half — the verdict rule, the
+  band, the conditions on the ceiling — is in `docs/TECH.md`, and what stays is why.
