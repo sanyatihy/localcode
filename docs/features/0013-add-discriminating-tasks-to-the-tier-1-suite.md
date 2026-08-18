@@ -113,3 +113,23 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   every key in the dump is a failure to discriminate rather than a hedge that earns a pass.
   The three pre-existing retrieval prompts are pinned by hash, since their numbers are already
   recorded in `docs/data` and a moved prompt would silently break comparability.
+- 2026-08-18 — **first calibration run: the suite still does not discriminate, and by this
+  feature's own rule that means the tasks are wrong.** 84 runs, 14 tasks, both modes, three
+  passes. Excluding cap artifacts there was exactly **one** genuine failure in 78 clean runs —
+  `toolcall-constraint-readonly` choosing `edit_file` once under a read-only mount. Every other
+  task returned 3/3 in both modes, the five new ones included. The traps are real: the fixture
+  self-tests prove the tempting answers fail. The model simply does not take them, which is a
+  fact about Qwen3.8-27B on these shapes rather than about the fixtures being broken.
+- 2026-08-18 — three tasks are **unresolved rather than flat**, because their caps decided the
+  outcome before quality could. `patch-contradiction-rounding` and `patch-off-by-one` spent
+  their entire 2048-token budget on reasoning — 7543 and 7386 chars — and never wrote an
+  answer; `toolcall-constraint-readonly` did the same at 1024. This is exactly the gotcha
+  `docs/TECH.md` already records: a cap sized while testing with thinking off starves thinking
+  mode. The new fixtures inherited 2048/1024 by copying the older, easier tasks, which is how a
+  documented trap got walked into again. Caps are now sized from measured usage — 8192 for
+  patch, 4096 for tool-call — so the cap cannot decide an outcome. Tasks whose cap never bound
+  are unaffected in behaviour: `max_tokens` is a stop condition, not a target.
+- 2026-08-18 — what the run *did* establish is that the new tasks are genuinely harder in
+  effort if not in outcome: reasoning ran 4000–7500 chars against 100–850 on the old suite, and
+  mean wall went 30.5 s to 78.8 s per run in thinking mode. A suite that costs 2.5x and ranks
+  nothing is worse than the one it replaced, so the rewrite is not optional.
