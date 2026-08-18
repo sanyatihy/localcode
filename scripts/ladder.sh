@@ -13,11 +13,40 @@
 # context fills, and a probe taken after curl returns can miss it — which is how a cell that
 # exhausted the GPU wired limit was recorded as `ok` with nothing in the row to contradict
 # the desktop freezing while it ran.
+#
+# The cell's outcome and the desktop's verdict are separate columns on purpose. `outcome`
+# says whether the model finished; `desktop_verdict` says whether the machine stayed usable
+# while it did. Collapsing them is the mistake this ladder already made once.
 set -euo pipefail
 
 CONDITION="${CONDITION:-unlabelled}"
 OUT="${OUT:-results/ceiling.jsonl}"
+# Which cells to walk. A re-walk usually asks about one band — cells that are not in
+# question still cost their full ingest, and 64k alone is 13 minutes.
+#
+# `-` and not `:-`: if CELLS is set but empty the answer is "no cells", not "every cell".
+# The other way round, an empty variable silently walks the whole ladder, which is an
+# hour of the machine nobody asked for.
+CELLS="${CELLS-config/ladder-*.env}"
 FILL_FRACTION="${FILL_FRACTION:-0.90}"   # leave headroom for the reply
+
+# The desktop rule, written before the runs so it is a rule and not a preference. Units are
+# fractions of one core, derived from consecutive WindowServer CPU-time readings.
+#
+# Basis: attended with no model loaded measures 0.17-0.47 cores on this machine, the low
+# end being a near-static screen and the high end an editor actively rendering. Each run
+# records its own baseline in the apparatus row, because that spread is not a constant.
+# Saturation is set well above that; stall well below. Both are failures — a compositor
+# pinned at a core cannot keep up, and one doing nothing is not drawing.
+#
+# Known limit, and the reason 0014 still wants a scripted UI interaction: passive CPU cannot
+# tell "nothing to draw" from "stuck and not drawing". So the verdict is only meaningful
+# when someone is driving the machine, and unattended cells report `not_applicable` rather
+# than a pass they did not earn. Direction is unverified until a known-bad cell is walked;
+# the full series is recorded so the threshold can be reset from evidence.
+DESK_SATURATED="${DESK_SATURATED:-0.90}"
+DESK_STALLED="${DESK_STALLED:-0.02}"
+DESK_SUSTAIN_SECONDS="${DESK_SUSTAIN_SECONDS:-30}"
 mkdir -p "$(dirname "$OUT")"
 
 # An 18 GB process does not exit on a fixed sleep. Poll until it is genuinely gone,
@@ -40,11 +69,21 @@ served_ctx() {
     | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null || echo 0
 }
 
+# The "has it died?" shortcut needs a grace period, or it fires before the server exists.
+# `serve.sh` is a shell script that validates its config and only then `exec`s llama-server,
+# so for the first instants after launch there is no llama-server to find. Without the
+# grace, the first poll — curl refused in a millisecond, pgrep finding nothing — returns
+# "load failed" for a server that goes on to load perfectly. It fired on a machine carrying
+# 20 GB of other processes, where the child is slow to be scheduled, which is exactly the
+# condition this ladder now runs in. The real timeout still bounds the wait.
 wait_healthy() { # seconds
   local deadline=$((SECONDS + $1))
+  local grace=$((SECONDS + 20))
   while [ $SECONDS -lt $deadline ]; do
     curl -s -m 2 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"ok"' && return 0
-    pgrep -f llama-server >/dev/null || return 1
+    if [ $SECONDS -ge $grace ] && ! pgrep -f llama-server >/dev/null; then
+      return 1
+    fi
     sleep 3
   done
   return 1
@@ -60,15 +99,32 @@ wait_healthy() { # seconds
 APPARATUS=$(ps -Ao rss,comm | awk '$1 > 102400 && $2 !~ /llama-server/ && $2 != "COMM" {
     n=split($2,p,"/"); printf "%s%.2fGB %s", (c++?"; ":""), $1/1048576, p[n]}')
 APPARATUS_TOTAL=$(ps -Ao rss,comm | awk '$2 !~ /llama-server/ {s+=$1} END {printf "%.2f", s/1048576}')
-export APPARATUS APPARATUS_TOTAL CONDITION
+# The compositor's rate before any model is loaded. Recorded per run so a verdict carries
+# the basis it was judged against, rather than inheriting a number measured once by hand
+# and quoted thereafter — the machine's baseline is not a constant.
+DESK_A=$(./scripts/deskprobe.sh); sleep 6; DESK_B=$(./scripts/deskprobe.sh)
+DESK_BASELINE=$(python3 -c "
+import json
+a=json.loads('''$DESK_A'''); b=json.loads('''$DESK_B''')
+span=b['t']-a['t']
+print(round((b['windowserver_cpu_seconds']-a['windowserver_cpu_seconds'])/span, 3) if span>0 else 0)")
+
+export APPARATUS APPARATUS_TOTAL CONDITION DESK_BASELINE
+# shellcheck disable=SC2086
+set -- $CELLS
+echo "walking $# cell(s): $*" >&2
 echo "apparatus resident before any cell: ${APPARATUS_TOTAL} GB" >&2
+echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
 python3 -c '
 import json, os
 print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
                   "resident_gb": float(os.environ["APPARATUS_TOTAL"]),
+                  "desktop_baseline_cores": float(os.environ["DESK_BASELINE"]),
                   "processes": os.environ["APPARATUS"]}))' >> "$OUT"
 
-for cfg in config/ladder-*.env; do
+# Unquoted on purpose: CELLS is a glob or a list of paths, and both must expand.
+# shellcheck disable=SC2086
+for cfg in $CELLS; do
   name=$(basename "$cfg" .env)
   ctx=$(grep '^CTX_SIZE=' "$cfg" | cut -d'"' -f2)
   kv=$(grep '^CACHE_TYPE_K=' "$cfg" | cut -d'"' -f2)
@@ -113,8 +169,13 @@ PY
   # A detached sampler for the duration of the request. Two seconds costs a vm_stat and a
   # ps; a short cell still yields a few samples and a 64k cell yields hundreds.
   samples="/tmp/ladder-wired-$name.jsonl"
-  : > "$samples"
-  ( while :; do ./scripts/memprobe.sh; sleep 2; done ) >> "$samples" 2>/dev/null &
+  desk="/tmp/ladder-desk-$name.jsonl"
+  : > "$samples"; : > "$desk"
+  ( while :; do
+      ./scripts/memprobe.sh >> "$samples"
+      ./scripts/deskprobe.sh >> "$desk"
+      sleep 2
+    done ) 2>/dev/null &
   sampler=$!
 
   fill_start=$SECONDS
@@ -156,6 +217,44 @@ except (OSError, ValueError):
 wired_peak=max(p["wired_gb"] for p in series)
 wired_headroom_min=min(p["wired_headroom_gb"] for p in series)
 
+# WindowServer's progress while the model was under load. Rates are derived here rather
+# than in the probe so the sampling interval stays visible in the raw series.
+desk=[]
+try:
+    desk=sorted((json.loads(x) for x in open("$desk") if x.strip()), key=lambda r: r["t"])
+except (OSError, ValueError):
+    pass
+
+def cores(a, b):
+    span=b["t"]-a["t"]
+    return None if span <= 0 else (b["windowserver_cpu_seconds"]-a["windowserver_cpu_seconds"])/span
+
+steps=[c for c in (cores(a, b) for a, b in zip(desk, desk[1:])) if c is not None]
+
+# Every window of at least the sustain length. A single spike is the compositor doing its
+# job; a spike that does not end is the compositor losing.
+sustained=[]
+for i in range(len(desk)):
+    k=i+1
+    while k < len(desk) and desk[k]["t"] - desk[i]["t"] < $DESK_SUSTAIN_SECONDS:
+        k += 1
+    if k < len(desk):
+        c=cores(desk[i], desk[k])
+        if c is not None:
+            sustained.append(c)
+
+condition="$CONDITION"
+if not condition.startswith("attended"):
+    verdict="not_applicable"
+elif not sustained:
+    verdict="insufficient_samples"
+elif max(sustained) >= $DESK_SATURATED:
+    verdict="fail_saturated"
+elif min(sustained) <= $DESK_STALLED:
+    verdict="fail_stalled"
+else:
+    verdict="pass"
+
 print(json.dumps({
   "condition": "$CONDITION", "cell": "$name", "ctx": $ctx, "kv": "$kv",
   "fill_target_tokens": $target, "outcome": "$outcome", "http": "$http",
@@ -170,10 +269,18 @@ print(json.dumps({
   "wired_headroom_min_gb": round(wired_headroom_min, 3),
   "wired_limit_gb": f["wired_limit_gb"], "wired_limit_source": f["wired_limit_source"],
   "wired_samples": len(series) - 2,
+  "desktop_verdict": verdict,
+  "ws_cpu_peak_cores": round(max(steps), 3) if steps else None,
+  "ws_cpu_sustained_max_cores": round(max(sustained), 3) if sustained else None,
+  "ws_cpu_sustained_min_cores": round(min(sustained), 3) if sustained else None,
+  "ws_span_seconds": round(desk[-1]["t"] - desk[0]["t"], 1) if len(desk) > 1 else 0,
+  "ws_samples": len(desk),
+  "desktop_thresholds": {"saturated_cores": $DESK_SATURATED, "stalled_cores": $DESK_STALLED,
+                         "sustain_seconds": $DESK_SUSTAIN_SECONDS},
 }))
-print("  -> $outcome  peak_rss=%.2f GB  wired_peak=%.2f GB  headroom_min=%.2f GB (%d samples)"
-      % (max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min,
-         len(series) - 2), file=sys.stderr)
+print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%.2f GB  headroom_min=%.2f GB"
+      % (verdict, max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min),
+      file=sys.stderr)
 PY
 done
 echo "=== ladder complete ===" >&2

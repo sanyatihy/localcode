@@ -73,8 +73,26 @@ quality. So each candidate is scored from a **cold state**, and any persistent m
 reset between runs. Whether that memory helps over a real week is a separate question and
 a BACKLOG line, not something this comparison can honestly measure.
 
+**Hermes cannot be scored attended on this machine, and that is a constraint rather than a
+result.** It refuses any context under 64,000 tokens. 0014 measured the attended ceiling at
+**57,344** — 65,536 completes every request while leaving the desktop unusable, and the
+compositor stalls for the whole run. Hermes' floor therefore sits inside the inadmissible
+band with no overlap: the smallest context it will accept is one the machine cannot carry
+while someone is using it.
+
+The floor is a hard check in Hermes' own code, not a setting — `context_length` in
+`~/.hermes/config.yaml` selects what it asks for, and anything under 64,000 is refused before
+a request is made. Lowering it means patching Hermes, and a patched Hermes is a different
+harness than the one under comparison; if that is ever done it is scored under its own name.
+
+So Hermes is scored **unattended only**, and its numbers are not comparable to a challenger
+scored attended without saying so. Scoring it attended anyway would produce a quality figure
+for a configuration nobody can use, which is worse than a gap in the table. Whether it wins
+unattended is still a real and useful question, and the grind profile is where it gets asked.
+
 ## Tasks
 
+- [ ] Hermes is scored under the unattended profile only, with its 64,000-token floor against 0014's 57,344 attended ceiling stated in the results table rather than left to be inferred from a missing row
 - [ ] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
 - [ ] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
 - [ ] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
@@ -105,3 +123,7 @@ a BACKLOG line, not something this comparison can honestly measure.
   cited `opencode-ai/opencode` is an archived predecessor, last pushed 2025-09-18.
 - 2026-08-17 — added offline capability as a scored criterion after 0008 established the
   baseline cannot have it.
+- 2026-08-18 — inherited from 0014: Hermes' 64,000-token floor is above the measured attended
+  ceiling of 57,344, so it is admissible only for unattended work on this hardware. Recorded
+  here before the comparison runs, so it is a stated constraint on the design rather than a
+  bad result discovered at scoring time.

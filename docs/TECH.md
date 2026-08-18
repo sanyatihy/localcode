@@ -98,13 +98,46 @@ Nothing swapped at any rung, so **no ceiling exists that swap or resident size c
 What grows is ingest: the prompt rate decays with depth, making a cold 32k context cost
 5.4 minutes and a cold 64k cost 13.1.
 
-**A ceiling does exist, and this table cannot show it.** At 64k the desktop degrades —
-windows stop rendering correctly and the editor freezes — because `iogpu.wired_limit_mb`
-defaults to roughly 75% of 32 GB and the model holds 20.27 GB of mostly wired Metal
-buffers, leaving too little for the compositor. The ladder scored that cell `ok` because
+**A ceiling does exist, and this table cannot show it.** The ladder scored 64k `ok` because
 its pass criterion was whether the model completed, not whether the machine stayed usable.
-[0014](features/0014-measure-the-gpu-wired-ceiling-and-desktop-usability.md) measures the
-constraint properly. **Until it does, treat 64k as unattended-only.**
+Re-walked against the desktop instead, with WindowServer sampled through each fill:
+
+| context | model | desktop | wired peak | WindowServer |
+|---|---|---|---|---|
+| 32 768 | ok | **pass** | 21.75 GB | 0.14–0.42 cores |
+| 40 960 | ok | **pass** | 21.96 GB | 0.16–0.29 |
+| 49 152 | ok | **pass** | 22.21 GB | 0.16–0.33 |
+| 57 344 | ok | **pass** | 22.18 GB | 0.15–0.32 |
+| 65 536 | ok | **fail** | 22.29 GB | 0.01–0.09 |
+
+**The two ranges are different, and both are real.** The model serves 8k–64k. A machine
+someone is using is admissible to **56k**; 64k is unattended-only. Every cell above
+completed its request, so nothing but the desktop column distinguishes the last row.
+
+The compositor **stalls** rather than saturates — the failing cell's peak sits below every
+passing cell's minimum, so the populations do not overlap — and it is flat from the first
+sample of the cell, which points at allocation time rather than at ingest.
+
+**That ceiling is conditional on what else is running, and the condition is doing more work
+than the number.** It was measured with browsers closed, at a 5.81 GB apparatus. A normal
+working set on this machine measures **20.32 GB** — a browser alone was 5.84 GB — and the
+model is 18.10 GB at 8k rising only to 20.30 GB at 64k:
+
+| apparatus | 8k | 32k | 64k | Q3_K_M weights alone |
+|---|---|---|---|---|
+| 5.81 GB, browsers closed | 23.9 GB | 24.9 GB | 26.1 GB | 19.6 GB |
+| 20.32 GB, normal use | 38.4 GB | 39.5 GB | 40.6 GB | 34.1 GB |
+
+**Nothing fits alongside a normal working set — not the smallest context, not the smallest
+quant in 0004's ladder.** And context is the wrong lever for it: an eightfold cut in context
+saves 2.2 GB, where closing a browser saves 5.8. Running this model locally means clearing
+the desk first; that is a property of a 27B on 32 GB, not a tuning problem.
+
+**The mechanism is not yet established.** Wired peak moves only 0.54 GB across a doubling of
+context, and the failing cell had 1.71 GB of headroom against an assumed 24 GB limit where
+the passing cell had 1.82 GB. That difference cannot explain a collapse, so either the limit
+sits near 22.3 GB rather than 24 — it is `default-assumed`, never read — or something other
+than the cap is binding. 0014's raise experiment separates the two.
 
 **This does not mean memory never binds.** Only one quant was tested. Q6_K weights are
 roughly 6 GB heavier, and larger models and longer contexts are untested. 0004's quant
@@ -158,6 +191,14 @@ Each of these has already caused a wrong number in this repo.
   pressure it stops distinguishing configs exactly where the answer matters — peak RSS
   moved 0.82 GB across a fourfold context range while saturated, and more once pressure
   was gone. Time-to-ingest discriminates where RSS does not.
+- **A health check must not conclude "dead" before the process exists.** `serve.sh`
+  validates its config and only then `exec`s llama-server, so for the first instants after
+  launch there is nothing for `pgrep` to find. A poll that bails the moment the process is
+  absent — curl refused in a millisecond, pgrep finding nothing — records `load_failed` for
+  a server that goes on to load in 15 s, and leaves it running to collide with the next
+  cell. It fired only once the machine carried 20 GB of other processes, where the child is
+  slow to be scheduled: a race that hid through every earlier run appears exactly when the
+  measurement gets interesting.
 - **Killing an 18 GB server is not instant.** A fixed `sleep` after `pkill` lets the next
   server fail to bind while the health check passes against the *old* one, silently
   measuring the previous config under the next config's name. Poll until the process is
