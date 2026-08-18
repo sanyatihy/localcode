@@ -90,12 +90,12 @@ constraint rather than discover it as a bad result.
 
 ## Tasks
 
-- [ ] Wired memory and its limit are sampled during a full-context run, and added to the ladder's row so the metric exists at all
-- [ ] A desktop-usability check runs alongside a loaded model and produces a pass/fail that does not depend on the model's own success
-- [ ] The context ladder is re-walked against that criterion at the default wired limit, and the degradation threshold between 32k and 64k is identified
+- [x] Wired memory and its limit are sampled during a full-context run, and added to the ladder's row so the metric exists at all
+- [x] A desktop-usability check runs alongside a loaded model and produces a pass/fail that does not depend on the model's own success
+- [x] The context ladder is re-walked against that criterion at the default wired limit, and the degradation threshold between 32k and 64k is identified
 - [ ] The effect of raising `iogpu.wired_limit_mb` is measured at one or two values, with the exact revert command recorded and the trade stated in both directions
-- [ ] `docs/TECH.md` records the admissible context range for a machine in use, separately from the range the model can serve
-- [ ] The consequence for Hermes' 64k floor is written down where 0010 will read it
+- [x] `docs/TECH.md` records the admissible context range for a machine in use, separately from the range the model can serve
+- [x] The consequence for Hermes' 64k floor is written down where 0010 will read it
 
 ## Running the re-walk
 
@@ -124,6 +124,17 @@ Three conditions on the run, all of which void it if missed:
   runs get the machine to themselves? Leaning **the third for the grind profile and a
   smaller context for attended** — but this is exactly what the measurement is for, and
   the answer may differ per profile, which the vision already expects.
+- **Where is the wired limit actually set?** The run makes the assumed 24 GB doubtful: the
+  desktop collapsed at 22.29 GB wired with 1.71 GB of assumed headroom left, having survived
+  22.18 GB at 56k. Either the limit is near 22.3 GB rather than 24, or the mechanism is not
+  the cap at all. The raise experiment is what separates those, and it is now the decisive
+  one rather than a formality — if the cap is genuinely 24 GB, raising it will change
+  nothing, and that null result is the finding.
+- **Does the desktop die at load rather than under load?** The 64k compositor trace is flat
+  at 0.02 cores from its first sample, with no transition, where the fill was still 13
+  minutes of work to come. That points at allocation time, not ingest. If it holds, the
+  admissible range is a property of the served config alone and does not depend on how full
+  the context gets — which would make it much cheaper to test.
 - Should the ladder refuse to run cells that are known to break the desktop? Leaning
   **no, but warn**: the unattended profile legitimately wants them, and a tool that hides
   a measurable state is worse than one that reports it.
@@ -161,3 +172,20 @@ Three conditions on the run, all of which void it if missed:
   `CELLS` used `:-`, so an explicitly empty value walked every cell instead of none. The
   first had hidden through every earlier run and appeared only under a 20 GB apparatus —
   the condition this feature exists to measure.
+- 2026-08-18 — the band was walked attended at the default wired limit: 32k, 40k, 48k and
+  56k pass; **64k fails**. Every cell returned `ok` from the model, so the ladder recorded
+  five successes and one unusable machine — the split this feature was opened to expose.
+  The attended ceiling is therefore **56k**, and it is a measurement rather than the
+  extrapolation 0004 was gated on.
+- 2026-08-18 — the direction of the signal is **stall, not saturation**, which answers the
+  question the thresholds had to be two-sided about. WindowServer held 0.16-0.18 cores
+  through 40k/48k/56k and sat at 0.02 for the whole of 64k; the failing cell's *peak* is
+  below every passing cell's *minimum*, so the two populations do not overlap. The stall
+  bound earned its place and the saturation bound has never fired.
+- 2026-08-18 — **the wired-ceiling explanation did not survive its own measurement.** Wired
+  peak moves only 21.75 → 22.29 GB across a doubling of context, and minimum headroom at the
+  failing cell (1.71 GB) is barely under the cell that passed (1.82 GB). A 0.11 GB difference
+  cannot produce a total compositor collapse. The mechanism stated in this doc's Problem is
+  not confirmed: what is confirmed is the failure and where it starts. The `default-assumed`
+  label on the 24 GB limit is now carrying the whole disagreement, which is why it was
+  recorded with provenance rather than as a reading.
