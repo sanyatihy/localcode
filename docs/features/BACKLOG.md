@@ -29,3 +29,15 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   supports calling a base URL from the client, which would remove the entire objection.
 - **docs/TECH.md as-built** — the vision expects durable facts to land there; it does not
   exist yet. Promote when: 0001 ships and there is a first fact to record.
+- **Harder tier-1 tasks that this model actually fails** — 0013 added seven traps and
+  Qwen3.8-27B took only one of them: eleven of fourteen tasks score 3/3 at every setting
+  measured. The traps are proven to trap (fixture self-tests fail the tempting answers), so
+  this is about the model being good at these shapes rather than the fixtures being soft.
+  Promote when: a comparison actually needs tier-1 to *rank* rather than to floor-check —
+  0004 finding two quant configs it cannot separate, or 0007 comparing models, would both do
+  it. Deliberately not scheduled: chasing traps a capable model will fail is open-ended, and
+  0010 ranks harnesses on tokens and turns instead, which needs no ranking from tier-1.
+- **One pass for floor-check tasks, three for the ones that move** — the twelve flat tasks are
+  3/3 at every setting, so their repeats measure nothing and cost most of a sweep's runtime.
+  Promote when: sweep runtime is the thing blocking a feature, which 0004's grid is the first
+  candidate for.
