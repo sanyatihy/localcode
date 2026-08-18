@@ -1,9 +1,9 @@
 ---
 id: 0014
 title: Measure the GPU wired ceiling and desktop usability
-status: Draft
+status: Shipped
 created: 2026-08-18
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
@@ -93,7 +93,7 @@ constraint rather than discover it as a bad result.
 - [x] Wired memory and its limit are sampled during a full-context run, and added to the ladder's row so the metric exists at all
 - [x] A desktop-usability check runs alongside a loaded model and produces a pass/fail that does not depend on the model's own success
 - [x] The context ladder is re-walked against that criterion at the default wired limit, and the degradation threshold between 32k and 64k is identified
-- [ ] The effect of raising `iogpu.wired_limit_mb` is measured at one or two values, with the exact revert command recorded and the trade stated in both directions
+- [~] ~~The effect of raising `iogpu.wired_limit_mb` is measured at one or two values~~ — **dropped**, see the log entry of 2026-08-18. Diagnostic only; no decision here turns on the answer, and the lever passes to 0004 for the unattended profile
 - [x] `docs/TECH.md` records the admissible context range for a machine in use, separately from the range the model can serve
 - [x] The consequence for Hermes' 64k floor is written down where 0010 will read it
 
@@ -201,3 +201,11 @@ Three conditions on the run, all of which void it if missed:
   Q3_K_M's weights alone would not fit either. Context is the wrong lever: an eightfold cut
   saves 2.2 GB where closing one browser saves 5.8. `attended-worked-in` as a label has been
   covering two very different machines, and today measured the generous one.
+- 2026-08-18 — **box 4 dropped and the feature shipped at five of six.** Raising
+  `iogpu.wired_limit_mb` would separate "the cap binds lower than assumed" from "the cap is
+  not what binds", and nothing here turns on which. The admissible range is measured either
+  way; the remedy is a cleared desk either way; and Hermes is out for attended work either
+  way. The lever passes to 0004, where it is a real question for the *unattended* profile —
+  whether the cap is what stops a larger quant loading at all. The mechanism stays
+  unresolved in the open questions rather than being quietly resolved by assumption, and
+  `sudo sysctl iogpu.wired_limit_mb=0` remains the revert if anyone raises it later.
