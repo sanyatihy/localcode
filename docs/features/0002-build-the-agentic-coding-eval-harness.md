@@ -90,17 +90,7 @@ sweep multiplies it by the config count.
 **Tier 2 — through a real harness, for multi-turn behaviour tier 1 cannot see:**
 
 - [x] Each candidate harness is confirmed to run non-interactively against the local endpoint, with the exact provider configuration recorded — or the blocker is written up
-- [ ] An adapter interface drives at least two harnesses through the same tier-2 task in a scratch checkout, pass checked by the repo's own tests
-
-## Open questions
-
-- Does every candidate expose a scriptable non-interactive mode? This is the assumption
-  the whole design rests on, hence task one. If one cannot be driven headlessly it leaves
-  0010 by default, and that should be recorded as the reason rather than presented as a
-  quality result.
-- Is a fixed task suite representative of real agentic work? Leaning: **no, not fully** —
-  which is why 0008 exists and why divergence between live use and this suite is a finding
-  the suite has to answer for.
+- [x] An adapter interface drives at least two harnesses through the same tier-2 task in a scratch checkout, pass checked by the repo's own tests
 
 ## Log
 
@@ -236,3 +226,29 @@ sweep multiplies it by the config count.
   Verified on patch-nil-check with the unseen test passing: Pi 38.5 s at 32k, OpenCode
   3 m 06 s at 32k, Hermes 4 m 45 s at 64k. Hermes also took 3 m 13 s to answer a trivial
   prompt, pointing at a large fixed system prompt ingested every turn.
+- 2026-08-18 — tier 2 lands. `Driver` is declared in the consumer and kept to two methods,
+  because that is all three harnesses agree on; `internal/harness` hides each CLI behind
+  one type. **All three drove patch-nil-check to a pass through the adapter**, scored by
+  the unseen test: pi 35.0 s, opencode 142.5 s, hermes 302.7 s — same model, same 64k
+  server, same fixture, an 8.6x spread.
+- 2026-08-18 — two bugs that appeared only through the adapter, never by hand. Relative
+  config paths resolved against the scratch checkout because `cmd.Dir` is the workdir, so
+  pi hunted for its extension under /tmp; paths are now absolute at validation, where the
+  error can name what is wrong. And `cmd.Dir` does not update `PWD`, which Go replaces
+  wholesale when `Env` is set — a tool resolving its project from `PWD` rather than
+  `getcwd()` looks in the launching directory, and OpenCode reported that as "Unexpected
+  server error". Reproducible under the adapter and never by hand, which is the shape of
+  thing that gets dismissed as flakiness.
+- 2026-08-18 — `RunTier2` refuses a fixture that passes before the harness runs, and
+  refuses it without calling the driver: the tier-1 lesson encoded, since a fixture that
+  cannot fail scores every config as correct.
+- 2026-08-18 — both open questions settled. **Every candidate does expose a scriptable
+  mode**, and all three are now driven by the adapter: `pi -p`, `opencode run`,
+  `hermes -z`. Nobody leaves 0010 by default. The assumption the design rested on held,
+  though the configuration to reach it was different for each and documented in
+  `harness/`.
+  The second question — whether a fixed suite represents real agentic work — is answered
+  **no, and it is now measured rather than suspected**: tier 1 returned 21/21 in both
+  thinking modes, so the suite cannot rank configs at all. That is 0013's whole subject,
+  and 0008 remains where live divergence gets caught. Settling it here rather than
+  carrying it: the question produced two features, which is what an open question is for.
