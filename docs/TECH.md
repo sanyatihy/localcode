@@ -144,10 +144,16 @@ does not care how much memory is spare.
 
 Each of these has already caused a wrong number in this repo.
 
-- **Free memory is not a pressure signal on macOS.** It sits at 0.01–0.02 GB whether the
+- **Free memory is not a pressure signal on macOS.** It sits at 0.04–0.08 GB whether the
   machine is idle with zero swap or deep in paging. Use swap used, swap delta and
   compressor size. An entire "the config does not fit" argument was built on free memory
   and was wrong.
+- **`vm_stat` counts pages, and this machine's page is 16 KB.** `memprobe.sh` divided by a
+  hardcoded 4096, so every free and compressor figure recorded before 2026-08-18 is
+  understated fourfold — see the erratum in [data/README.md](data/README.md). It reversed
+  no conclusion, because free memory is pinned near zero at any scale factor, but it would
+  have corrupted wired memory the moment 0014 read it off the same counter to decide which
+  configs are admissible. Read the size from `pagesize`, never assume it.
 - **`ps rss` is clamped by what physically fits, not by what a process wants.** Under
   pressure it stops distinguishing configs exactly where the answer matters — peak RSS
   moved 0.82 GB across a fourfold context range while saturated, and more once pressure
