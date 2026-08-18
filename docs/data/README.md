@@ -19,6 +19,19 @@ here should be compared across machines without saying so.
 | `2026-08-17-m2max-32gb-ceiling-ladder.jsonl` | 12 cells + apparatus | Context ladder 8k–64k, two conditions: `unattended` (clean boot, swap zero) and `attended-worked-in` (4 h uptime, 13.7 GB swap already allocated). The worked-in rows carry `instrument: pre-timing` and have no `fill_seconds` — they predate that metric and cannot be compared on speed. |
 | `2026-08-17-m2max-32gb-tier1-matrix.jsonl` | 42 runs | Thinking on vs off at model-card sampling, baseline 32k/q8_0, three passes over seven tasks. |
 
+## Erratum: page size, 2026-08-18
+
+`2026-08-17-m2max-32gb-ceiling-ladder.jsonl` was written by a `memprobe.sh` that assumed a
+4 KB page. This machine pages at 16 KB, so in every row **`free_gb` and `compressed_gb` —
+inside `before`, `loaded` and `filled` — and `free_at_peak_gb` are understated by exactly
+4×.** Multiply, or re-derive from the raw counters.
+
+`swap_used_mb` comes from `sysctl` and `llama_rss_gb` from `ps`; neither is affected, and
+those are the fields the file's conclusions rest on. The rows are left as written rather
+than rewritten in place: they are what the instrument recorded, and a results file that is
+quietly edited after the fact is no longer evidence. The instrument is fixed going forward,
+and rows carrying `wired_gb` are the ones taken after the fix.
+
 ## How these get here
 
 `results/*.jsonl` in a worktree is **live scratch** and stays gitignored — it accumulates
