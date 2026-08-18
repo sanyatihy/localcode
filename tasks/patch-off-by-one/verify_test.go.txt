@@ -20,7 +20,15 @@ func TestWindow(t *testing.T) {
 		{[]int{}, 2, []int{}},
 	}
 	for _, c := range cases {
-		if got := Window(c.xs, c.n); !reflect.DeepEqual(got, c.want) {
+		got := Window(c.xs, c.n)
+		// A nil slice and an empty one are both "an empty slice" — len 0, ranges and
+		// appends identically — and the doc comment does not distinguish them.
+		// reflect.DeepEqual does, so comparing with it alone would fail an answer that
+		// is correct about the off-by-one this task is actually asking about.
+		if len(got) == 0 && len(c.want) == 0 {
+			continue
+		}
+		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("Window(%v, %d) = %v, want %v", c.xs, c.n, got, c.want)
 		}
 	}

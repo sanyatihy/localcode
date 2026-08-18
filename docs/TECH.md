@@ -237,6 +237,16 @@ into `docs/data/`.
 - **A tier-1 task must have exactly one defensible action.** A task that scores a style
   preference — reading a file before editing it — fails every config identically and ranks
   nothing.
+- **The suite is split by what a task can detect.** `tasks/` ranks — nine patch and
+  tool-call fixtures, ~95 s a pass. `tasks/depth/` floor-checks recall at 2k–16k and is run
+  only when the KV cache type, the backend or the model changes, because that is what could
+  damage it. It was 71% of a pass's runtime (227 s of 321 s) while returning 3/3 at every
+  setting ever measured, which is most of the clock for no ranking.
+- **A fixture is proved against answers that are merely different, not just against wrong
+  ones.** `patch-off-by-one` failed a correct fix that returned `nil` rather than `[]int{}`
+  for the empty cases — a distinction `reflect.DeepEqual` draws and the spec does not. That
+  is the same defect as scoring a style preference, and it costs a config marks for being
+  right, so the fixture self-tests now assert that equally-defensible answers pass.
 - **Patch fixtures are proved to discriminate before any model time is spent on them.**
   `TestPatchFixturesDiscriminate` runs a correct answer and the tempting wrong one through
   the real patch runner and requires the first to pass and the second to fail. Both halves
