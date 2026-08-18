@@ -186,6 +186,12 @@ Qwen3.8 ships a `reasoning_effort` dial — `xhigh` (default), `medium`, `low` �
 `chat_template_kwargs`, with identical results; the harness sends the top-level form the model
 card documents and records the level on every row.
 
+**It is a system message the template injects, not a sampling parameter** — `low` renders
+"Keep your thinking brief and focused", `xhigh` "think carefully… validate key assumptions…
+consider plausible alternatives". It is prepended to the task's own system prompt rather than
+replacing it, and is absent entirely when `enable_thinking` is false, so the two knobs compose.
+With nothing set the template injects the `xhigh` text, which puts the default beyond inference.
+
 **The default is `xhigh`, and it is not a sane default for agentic work.** Qwen's own notes
 scope it to "complex tasks demanding thorough analysis", and on this suite it does not
 terminate: three tier-1 tasks burned their entire budget on reasoning and never wrote an

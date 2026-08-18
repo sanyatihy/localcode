@@ -107,46 +107,22 @@ rate, tokens per completed task, and wall clock, all of which the scorer already
   model deficits that 0007 and 0010 need to see.
 
 ## Log
-- 2026-08-18 — **the feature's hypothesis is falsified: thinking earns its cost at neither
-  profile.** 81 runs, each mode at its own model-card sampling. Pass rate 25/27 off, 25/27 at
-  `low`, 24/27 at `medium`; wall clock 5.0 min against 18.6 and 22.4. The design predicted off
-  for attended and *on* for unattended, on the argument that an unattended run needs the care
-  nobody is there to supply — but there is no quality for unattended to buy with the 4×. The
-  one metric favouring thinking is tool-call validity, 12/12 against 11/12, which is a single
-  failure and a hint rather than a result. Eight of the nine tasks are 3/3 in every cell, so
-  the supportable claim is *no gain detectable on this suite*, not *no gain exists*.
-- 2026-08-18 — the two modes fail differently on the one task that moves, which the pass rate
-  hides: off fails `TestRoundHalfAwayFromHalves`, the plain-arithmetic cases both readings of
-  the spec agree on, while thinking fails `TestRoundHalfPicksOneRuleAndKeepsIt`, the
-  consistency trap. Reasoning fixes the arithmetic and then talks itself into an inconsistent
-  resolution. Any later claim that one mode is "better" has to say at what.
-- 2026-08-18 — template verified, no mismatch, and the verification changed what the other
-  boxes must account for. `reasoning_effort` is **a system message the template injects**,
-  not a sampling parameter: at `low` it renders "Keep your thinking brief and focused", at
-  `xhigh` "think carefully through the task, validate key assumptions, consider plausible
-  alternatives". It is prepended to the task's own system prompt rather than replacing it,
-  and with `enable_thinking:false` it is not injected at all — so the two knobs compose. With
-  nothing set the template injects the `xhigh` text, which puts the default beyond inference.
-  The tool-call format the template asks for is **XML-style** — `<function=name>` with
-  `<parameter=key>` blocks — not JSON inside `<tool_call>`, and `llama-server` converts it to
-  OpenAI `tool_calls` with JSON arguments correctly. That is a constraint on the constrained-
-  decoding box: a GBNF grammar has to target the XML form, and a JSON-schema constraint would
-  fight the template rather than help it.
 - 2026-08-17 — retitled and rescoped around thinking mode after live probes: 70 completion
   tokens with thinking against 28 without, for an identical correct tool call. Each mode has
   its own model-card sampling, so the toggle cannot be swept at a fixed temperature.
-- 2026-08-18 — inherited from 0013: `reasoning_effort` is a real axis with four points, its
-  default is `xhigh`, and `xhigh` does not terminate on some tier-1 tasks. Reasoning lowered
-  the score wherever it changed anything, so `off` is a candidate to beat rather than a floor.
-- 2026-08-18 — **nothing beats the model card, so the sweep confirms a default rather than
-  replacing one.** Colder is monotonically worse without thinking (21, 23, 25 as temperature
-  rises to 0.7), `top_p` does nothing, and greedy is the worst setting measured — which is the
-  useful half, since greedy is the tempting choice for a reproducible sweep.
-- 2026-08-18 — **constrained decoding dropped: it has nothing to fix.** 150 recorded tool-call
-  runs contain zero unparseable and zero schema-invalid calls; the whole deficit is 10
-  wrong-but-valid tool choices, which a grammar cannot correct and might entrench. The
-  template's XML call form would also fight a JSON-schema constraint. Backlogged against a
-  model that actually emits malformed calls.
-- 2026-08-18 — both profiles take the same setting, which the design treated as a possible
-  outcome rather than the expected one. The per-profile split this feature was built around
-  does not appear on this workload.
+- 2026-08-18 — the axis gained a third point. `reasoning_effort` is a real setting with
+  `xhigh` as its default, so the sweep is four-valued rather than two, and `off` becomes a
+  candidate to beat rather than the floor the design assumed it was.
+- 2026-08-18 — this feature gained a correction it did not have: 0013's 114 toggle rows were
+  taken at one fixed sampling, which the vision voids, so redoing that comparison is a box
+  here rather than a finding there.
+- 2026-08-18 — box 5 rewritten by the template check. The tool-call form the template asks for
+  is XML, not JSON, so a JSON-schema constraint would fight it and only a GBNF grammar
+  targeting the XML form was ever a candidate.
+- 2026-08-18 — **the hypothesis is falsified.** The design predicted thinking off for attended
+  and on for unattended, on the argument that an unattended run needs care nobody is there to
+  supply. Both profiles take the same setting, so the per-profile split this feature was built
+  around does not exist on this workload, and 0008 inherits one config rather than two.
+- 2026-08-18 — **box 5 dropped rather than run.** The failure it targets has never occurred:
+  the deficit is entirely tool *choice*, which a grammar cannot correct and might entrench.
+  Backlogged against a model whose failures are format rather than choice.
