@@ -1,9 +1,9 @@
 ---
 id: 0013
 title: Add discriminating tasks to the tier-1 suite
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-18
 check:
 checked:
 review:
@@ -183,3 +183,16 @@ reason, and if truncation shows up in the thinking pass the cap is the finding, 
   reasoning level is recorded on every row, and that no task can run unbounded. The first
   calibration was reported as a failure; with the effort axis included it reads as one
   discriminating task, one flawed and fixed, and twelve honest floor checks.
+- 2026-08-18 — `toolcall-constraint-readonly` re-measured with its fixture fixed, twelve runs
+  across all four levels: **off 2/3, low 3/3, medium 3/3, xhigh 3/3**. So it does discriminate,
+  weakly and in the *opposite* direction to the contradiction task — without reasoning the model
+  reaches for the forbidden `edit_file` once in three; with it, never. Two discriminating tasks
+  now point opposite ways, which is enough to retire "more thinking is better" as an assumption
+  and not enough to put anything in its place. Its `xhigh` runs also complete once the cap is
+  4096 rather than 1024, so that task's non-termination was a budget problem after all — the
+  diagnosis that was wrong for the contradiction task was right for this one, which is why they
+  had to be told apart by measurement rather than by pattern.
+- 2026-08-18 — the per-task budget has not fired on real work: the worst cell now finishes at
+  95 s against 120 s. It is covered by a unit test rather than by a live firing, which is worth
+  stating plainly since a guard that has never triggered is a guard that has never been tested
+  where it matters.
