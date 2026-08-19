@@ -37,37 +37,29 @@ no tool from the request. See the table in [../README.md](../README.md).
 
 ## Driving it from the editor
 
-The extension reads `claudeCode.environmentVariables` before it launches, so that is where
-the configuration has to be — values in `~/.claude/settings.json` reach the spawned process
-but not the extension's own login check.
+The extension does not read the env file — it spawns its own process. What it does read is
+`env` in the project-scoped `.claude/settings.local.json` of the directory it was opened
+on, so that is where the configuration goes:
 
-**Put it in the folder's settings, not the user's.** These variables point Claude Code at a
-27B model on loopback; in user settings they would do that to *every* session on the
-machine, including whatever else the editor is open on. `.vscode/settings.json` in the
-checkout you are testing applies only while that folder is open. The extension honours
-folder scope for this setting — `initialPermissionMode` is documented as the one that
-ignores workspace values.
+    scripts/claude-code-settings.sh          # writes .claude/settings.local.json here
 
-The file is [`claude-code.env`](claude-code.env) in the editor's form:
+Generated from [`claude-code.env`](claude-code.env) rather than copied, because two forms
+of one configuration drift. The file stays untracked: committed, it would route every
+session anybody opens on this repository at a 27B model on loopback.
 
-```json
-{
-  "claudeCode.environmentVariables": [
-    { "name": "ANTHROPIC_BASE_URL", "value": "http://127.0.0.1:8081" },
-    { "name": "ANTHROPIC_AUTH_TOKEN", "value": "local" }
-  ],
-  "claudeCode.disableLoginPrompt": true
-}
-```
+**Scope is the whole point.** These variables must not go in user settings or
+`~/.claude/settings.json` — from there they would redirect every Claude Code session on the
+machine, including whatever else the editor is open on. Project scope is keyed by the
+directory, so only sessions started in this checkout are affected.
 
-Every variable from the env file goes in that array; keep the two in step or the terminal
-and the editor are running different configurations. It is deliberately not committed: a
-tracked `.vscode/settings.json` would route every session opened on this repository at the
-local model, which is a decision for whoever opens it and not for the repository.
+VS Code's own `claudeCode.environmentVariables` is what the general instructions name, and
+in a workspace `.vscode/settings.json` it does **not** take: an extension session opened on
+this checkout with it set kept using the hosted backend and the local server saw no
+request. Only the user-settings form of it works, which is the scope this must not use.
 
-Confirm it took with `/status`, which names the base URL in force. If the server is not
-running the session fails to connect rather than falling back to a hosted model, because
-the base URL is fixed to loopback.
+Confirmed by running the CLI in a checkout with **no environment set at all** — the session
+answered and the request arrived at the local server, so the settings file supplied both
+the endpoint and the credential.
 
 ## It cannot be offline
 
