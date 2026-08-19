@@ -54,6 +54,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs.SetOutput(stderr)
 	path := fs.String("results", "results/tier1.jsonl", "results file to summarise")
 	only := fs.String("config", "", "summarise only this config label")
+	baseline := fs.String("baseline", "", "harness to report the others against, e.g. claude-code")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -170,7 +171,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		// task cost, and in how many turns. Its columns say so rather than leaving
 		// "toolcall valid" reading n/a beside a column of zeroes.
 		if harnesses {
-			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-10s %-18s %-18s %-18s %s\n",
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-14s %-22s %-22s %-20s %s\n",
 				"harness", "pass", "turns", "prompt tok", "cached tok", "predicted tok", "wall s")
 		} else {
 			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
@@ -189,9 +190,18 @@ func run(args []string, stdout, stderr *os.File) error {
 				pass = fmt.Sprintf("%d/%d", a.pass, a.total)
 			}
 			if harnesses {
-				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-10s %-18s %-18s %-18s %s\n",
-					th, pass, rangeI(a.turns), rangeI(a.prompt), rangeI(a.cached),
+				name := th
+				if th == *baseline {
+					name += "*"
+				}
+				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-14s %-22s %-22s %-20s %s\n",
+					name, pass, rangeI(a.turns), rangeI(a.prompt), rangeI(a.cached),
 					rangeI(a.completion), rangeF(a.wall))
+				// A challenger that ties has lost — switching costs something — so the
+				// numbers that decide are the ratios, not the absolutes beside them.
+				if base := byConfig[cfg][*baseline]; base != nil && th != *baseline {
+					_, _ = fmt.Fprintf(stdout, "  %-12s vs %s: %s\n", "", *baseline, versus(a, base))
+				}
 			} else {
 				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
 					th, pass, tc,
@@ -218,6 +228,78 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	_, _ = fmt.Fprintln(stdout)
 	return nil
+}
+
+// versus reads a challenger against the baseline. Pass rate is stated as a difference —
+// two more tasks passed is two more tasks — and everything else as a ratio, because what
+// the comparison turns on is proportion: half the tokens is the finding, not 1,600 fewer.
+func versus(a, base *agg) string {
+	// Tasks, when both were asked the same number of them; otherwise the rate, since a
+	// harness the profile excluded from some of them has a different denominator and a
+	// count would be comparing two different questions.
+	quality := fmt.Sprintf("pass %+d", a.pass-base.pass)
+	if a.total != base.total {
+		quality = fmt.Sprintf("pass %+.0f pp", 100*(rate(a.pass, a.total)-rate(base.pass, base.total)))
+	}
+	parts := []string{quality}
+	for _, m := range []struct {
+		name string
+		xs   []int
+	}{
+		{"turns", a.turns}, {"prompt", a.prompt}, {"cached", a.cached}, {"out", a.completion},
+	} {
+		parts = append(parts, ratio(m.name, meanI(m.xs), meanI(baseOf(base, m.name))))
+	}
+	parts = append(parts, ratio("wall", meanF(a.wall), meanF(base.wall)))
+	return strings.Join(parts, "  ")
+}
+
+func rate(pass, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(pass) / float64(total)
+}
+
+func baseOf(base *agg, name string) []int {
+	switch name {
+	case "turns":
+		return base.turns
+	case "prompt":
+		return base.prompt
+	case "cached":
+		return base.cached
+	default:
+		return base.completion
+	}
+}
+
+// ratio says "half" as ×0.50 rather than −50%, which reads the same for a doubling and a
+// halving. A baseline of zero has no ratio and says so instead of dividing.
+func ratio(name string, got, want float64) string {
+	if want == 0 {
+		return name + " n/a"
+	}
+	return fmt.Sprintf("%s ×%.2f", name, got/want)
+}
+
+func meanI(xs []int) float64 {
+	f := make([]float64, len(xs))
+	for i, x := range xs {
+		f[i] = float64(x)
+	}
+	return meanF(f)
+}
+
+func meanF(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, x := range xs {
+		sum += x
+	}
+	return sum / float64(len(xs))
 }
 
 func failSummary(m map[eval.Outcome]int) string {
