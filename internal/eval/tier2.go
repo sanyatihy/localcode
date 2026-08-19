@@ -181,8 +181,16 @@ type Conditions struct {
 	Desk    DeskProfile
 	Served  ServerProps
 	Sandbox string // sandbox profile the harness runs under; empty leaves it online
+	Budget  time.Duration
 	Keep    bool
 }
+
+// DefaultBudget bounds one tier-2 run. Generous against what a harness legitimately takes
+// here — the slowest honest run measured five minutes, most take one — and bounded because
+// a harness that loops does not stop on its own: one spent 45 minutes and 90 turns on a
+// fixture the others finished in three, which at 15 fixtures a sweep is a day of machine
+// time for no result.
+const DefaultBudget = 10 * time.Minute
 
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
 // outcome by running the fixture's own tests. It returns the scratch directory, which is
@@ -243,8 +251,15 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 	// measured the pager. It matters more here — a tier-2 run is minutes of a harness and
 	// a model working together, at a context the desktop was already measured to strain.
 	memBefore := sampleMemory()
+	budget := c.Budget
+	if budget <= 0 {
+		budget = DefaultBudget
+	}
+	runCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+
 	start := time.Now()
-	driveErr := d.Drive(ctx, Run{
+	driveErr := d.Drive(runCtx, Run{
 		Workdir: work, StateDir: state, Instruction: t.Instruction, SandboxProfile: c.Sandbox,
 	})
 	res.WallSeconds = time.Since(start).Seconds()
@@ -254,6 +269,15 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 	res.MemMeasured = memBefore.OK && memAfter.OK
 
 	if driveErr != nil {
+		// Out of budget is not a broken adapter and not a wrong answer: the harness was
+		// still working when its clock ran out. Kept distinct because the two take
+		// different fixes — one is a bug, the other is a harness that does not converge,
+		// which is a result about the harness and one this comparison is looking for.
+		if runCtx.Err() != nil && ctx.Err() == nil {
+			res.Outcome = FailOverBudget
+			res.Detail = fmt.Sprintf("still working after its %s budget", budget)
+			return res, work, nil
+		}
 		// The harness failed, which is not the model answering badly. Kept distinct so a
 		// broken adapter is never recorded as a quality result.
 		res.Outcome, res.Detail = FailServer, truncate(driveErr.Error(), 200)

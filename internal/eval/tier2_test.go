@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeDriver is a hand-written double rather than a generated mock: it records what it
@@ -506,4 +507,41 @@ func TestRunTier2KeepsStateOutOfTheCheckout(t *testing.T) {
 	if d.gotState == d.gotDir || strings.HasPrefix(d.gotState, d.gotDir+string(filepath.Separator)) {
 		t.Errorf("state directory %q is inside the checkout %q", d.gotState, d.gotDir)
 	}
+}
+
+// A harness still working when its budget expires is over budget, not broken: the two
+// take different fixes, and an unbounded sweep is what a looping harness turns into — one
+// spent 45 minutes and 90 turns on a fixture the others finished in three.
+func TestRunTier2StopsAHarnessThatRunsPastItsBudget(t *testing.T) {
+	d := &slowDriver{}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t),
+		Conditions{Desk: unattended(t), Budget: 50 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != FailOverBudget {
+		t.Errorf("outcome = %s (%s), want %s", res.Outcome, res.Detail, FailOverBudget)
+	}
+	if !strings.Contains(res.Detail, "budget") {
+		t.Errorf("detail %q does not say what stopped it", res.Detail)
+	}
+	// The clock is the finding when a harness runs long, so it has to be recorded.
+	if res.WallSeconds <= 0 {
+		t.Error("an over-budget run recorded no wall time")
+	}
+}
+
+// slowDriver works until it is stopped, which is what a looping harness looks like from
+// outside: it does not fail, it does not finish.
+type slowDriver struct{}
+
+func (s *slowDriver) Name() string { return "slow" }
+
+func (s *slowDriver) Drive(ctx context.Context, r Run) error {
+	if err := os.WriteFile(filepath.Join(r.StateDir, "session"), []byte("x"), 0o644); err != nil {
+		return err
+	}
+	<-ctx.Done()
+	return ctx.Err()
 }

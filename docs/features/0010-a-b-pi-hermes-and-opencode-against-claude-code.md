@@ -100,6 +100,7 @@ unattended is still a real and useful question, and the grind profile is where i
 - [x] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
 - [x] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
 - [x] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
+- [x] A tier-2 run is bounded by a budget, and a harness still working when it expires is recorded as over budget rather than as a broken adapter
 - [ ] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
 - [ ] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
 - [ ] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
@@ -129,6 +130,12 @@ unattended is still a real and useful question, and the grind profile is where i
   ceiling of 57,344, so it is admissible only for unattended work on this hardware. Recorded
   here before the comparison runs, so it is a stated constraint on the design rather than a
   bad result discovered at scoring time.
+- 2026-08-19 — added a box above the sweep for bounding a run. Hermes spent 45 minutes and
+  90 turns on `patch-sibling-merge` before the adapter's timeout stopped it, and that was
+  recorded as a broken adapter — which it was not. A looping harness is a result about the
+  harness, and an unbounded one makes a 3× sweep unschedulable: 15 fixtures at 45 minutes
+  is a day. What this changes: the sweep restarts once runs are bounded, and the partial
+  rows already taken keep their own conditions.
 - 2026-08-19 — the sweep's wall-clock is not usable as a headline number on this machine.
   At 65,536 the model wires ~21 GB and an editor holds ~6.6 of the ~11 GB left, so runs
   swap and the vision calls a swapped run void rather than slow. Every row carries its swap

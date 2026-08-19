@@ -73,6 +73,7 @@ type config struct {
 	label       string
 	repeats     int
 	sandbox     string // sandbox profile applied to the harness; empty runs it online
+	budget      time.Duration
 	keep        bool
 }
 
@@ -93,6 +94,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		label    = fs.String("label", "unlabelled", "serving config label recorded with each row")
 		repeats  = fs.Int("n", 1, "passes over the whole set; a pass is every harness over every fixture")
+		budget   = fs.Duration("budget", eval.DefaultBudget, "how long one harness may spend on one fixture before it is over budget")
 		offline  = fs.Bool("offline", false, "run each harness with no network but the loopback the model is on")
 		sandbox  = fs.String("sandbox-profile", "harness/offline.sb", "sandbox profile -offline applies")
 		keep     = fs.Bool("keep", false, "leave the scratch checkout in place and print its path")
@@ -108,7 +110,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
 		desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
-		results: *results, label: *label, repeats: *repeats, keep: *keep,
+		results: *results, label: *label, repeats: *repeats, budget: *budget, keep: *keep,
 	}
 	if *offline {
 		cfg.sandbox = *sandbox
@@ -198,7 +200,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	before, _ := client.Metrics(ctx)
 	turns := client.CountTurns(ctx, turnPollInterval)
 	res, work, err := eval.RunTier2(ctx, d, task, eval.Conditions{
-		Desk: cfg.desk, Served: props, Sandbox: cfg.sandbox, Keep: cfg.keep,
+		Desk: cfg.desk, Served: props, Sandbox: cfg.sandbox, Budget: cfg.budget, Keep: cfg.keep,
 	})
 	turnCount := turns.Stop()
 	if err != nil {
