@@ -129,6 +129,12 @@ unattended is still a real and useful question, and the grind profile is where i
   ceiling of 57,344, so it is admissible only for unattended work on this hardware. Recorded
   here before the comparison runs, so it is a stated constraint on the design rather than a
   bad result discovered at scoring time.
+- 2026-08-19 — the sweep's wall-clock is not usable as a headline number on this machine.
+  At 65,536 the model wires ~21 GB and an editor holds ~6.6 of the ~11 GB left, so runs
+  swap and the vision calls a swapped run void rather than slow. Every row carries its swap
+  delta, so timings are separated at analysis time rather than averaged; the deciding metric
+  is unaffected, being the server's own token counters. What this changes: the margin is
+  read on tokens, and wall-clock is reported only from rows that did not swap.
 - 2026-08-19 — added a box for staging the unseen test after the run. `RunTier2` writes it
   into the scratch module before the harness starts, so "tests the harness never saw" is not
   what is being measured — and the candidates differ in exactly how much of the workdir they
