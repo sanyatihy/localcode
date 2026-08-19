@@ -1,5 +1,9 @@
-// Command tier2 drives a coding harness through a fixture in a scratch checkout and
-// scores it by running tests the harness never saw.
+// Command tier2 drives a coding harness through one fixture or a whole suite of them, each
+// in a scratch checkout, and scores it by running tests the harness never saw.
+//
+// What the harness is told comes from the fixture, never from a flag: the bug statement is
+// the one a tier-1 request would carry, minus the source it inlines, so a row's task id is
+// enough to recover the instruction that produced it.
 //
 // Tier 1 measures a single request; this measures a whole agent loop, which is the only
 // way to see multi-turn behaviour — how many turns a harness spends, whether it recovers
@@ -51,11 +55,8 @@ func main() {
 // error names the harness that needed them.
 type config struct {
 	drivers     []string
-	fixture     string
-	source      string
-	testFile    string
-	answerName  string
-	instruction string
+	fixture     string // one fixture directory
+	fixtures    string // directory of them, scanned for what tier 2 can drive
 	desk        eval.DeskProfile
 	endpoint    string
 	piExtension string
@@ -72,11 +73,8 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs.SetOutput(stderr)
 	var (
 		drivers  = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
-		fixture  = fs.String("fixture", "tasks/patch-nil-check", "fixture directory")
-		source   = fs.String("source", "broken.go.txt", "file in the fixture the harness must fix")
-		test     = fs.String("test", "verify_test.go.txt", "unseen test staged beside the answer")
-		answer   = fs.String("answer-name", "session.go", "name the source takes in the scratch module")
-		instr    = fs.String("instruction", "", "what to tell the harness (required)")
+		fixture  = fs.String("fixture", "", "one fixture directory")
+		fixtures = fs.String("fixtures", "", "directory of fixtures; every one tier 2 can drive is run")
 		profile  = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
 		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "endpoint the harnesses are pointed at, asked what it serves")
 		piExt    = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
@@ -95,8 +93,8 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 	cfg := config{
-		drivers: splitNonEmpty(*drivers), fixture: *fixture, source: *source,
-		testFile: *test, answerName: *answer, instruction: *instr, desk: desk, endpoint: *endpoint,
+		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
+		desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, model: *model,
 		results: *results, label: *label, keep: *keep,
 	}
@@ -109,15 +107,9 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 
-	task := eval.Tier2Task{
-		// Base name, not the resolved path: the id is a grouping key in results and
-		// must not change because the repo moved.
-		ID:          filepath.Base(cfg.fixture),
-		Dir:         cfg.fixture,
-		Source:      cfg.source,
-		TestFile:    cfg.testFile,
-		AnswerName:  cfg.answerName,
-		Instruction: cfg.instruction,
+	tasks, err := loadTasks(cfg)
+	if err != nil {
+		return err
 	}
 
 	ctx := context.Background()
@@ -143,46 +135,90 @@ func run(args []string, stdout, stderr *os.File) error {
 			"or score this run as unattended", props.NCtx, cfg.desk.Name, cfg.desk.Ceiling)
 	}
 
-	failures := 0
-	// Sequential: the server runs one slot, so concurrent harnesses would queue and
-	// every duration would measure the queue rather than the harness.
+	failures, runs := 0, 0
+	// Sequential, and driver-major: the server runs one slot, so concurrent harnesses
+	// would queue and every duration would measure the queue. Whole harnesses rather
+	// than whole tasks because a comparison reads as one harness against another, and
+	// because a harness keeps whatever state it keeps across its own suite.
 	for _, d := range ds {
-		res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
-		if err != nil {
-			// A staging or fixture problem is not a result about the harness.
-			return fmt.Errorf("%s: %w", d.Name(), err)
-		}
-		status := "PASS"
-		switch {
-		case res.Outcome == eval.Inadmissible:
-			// Not a failure: the harness was never asked. Counting it as one would
-			// make a profile's exclusions look like a suite the harnesses failed.
-			status = "SKIP"
-		case !res.Passed():
-			status = "FAIL"
-			failures++
-		}
-		_, _ = fmt.Fprintf(stdout, "%-4s %-10s %-24s %s %s\n",
-			status, d.Name(), res.TaskID, res.Outcome, res.Detail)
-		_, _ = fmt.Fprintf(stdout, "     %.1fs\n", res.WallSeconds)
-		if cfg.keep {
-			_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
-		}
-		if cfg.results != "" {
-			// Empty effort, and honestly so: tier-2 drives an external harness that
-			// builds its own requests, so what it asked for is the harness's business
-			// and not something this process can claim to have set.
-			row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, props, "tier2", res)
-			row.Harness, row.Profile = d.Name(), cfg.desk.Name
-			if err := eval.AppendRow(cfg.results, row); err != nil {
-				return fmt.Errorf("append result: %w", err)
+		for _, task := range tasks {
+			res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
+			if err != nil {
+				// A staging or fixture problem is not a result about the harness.
+				return fmt.Errorf("%s: %s: %w", d.Name(), task.ID, err)
+			}
+			runs++
+			status := "PASS"
+			switch {
+			case res.Outcome == eval.Inadmissible:
+				// Not a failure: the harness was never asked. Counting it as one would
+				// make a profile's exclusions look like a suite the harnesses failed.
+				status = "SKIP"
+			case !res.Passed():
+				status = "FAIL"
+				failures++
+			}
+			_, _ = fmt.Fprintf(stdout, "%-4s %-12s %-30s %s %s\n",
+				status, d.Name(), res.TaskID, res.Outcome, res.Detail)
+			_, _ = fmt.Fprintf(stdout, "     %.1fs\n", res.WallSeconds)
+			if cfg.keep {
+				_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
+			}
+			if cfg.results != "" {
+				// Empty effort, and honestly so: tier-2 drives an external harness that
+				// builds its own requests, so what it asked for is the harness's business
+				// and not something this process can claim to have set.
+				row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, props, "tier2", res)
+				row.Harness, row.Profile = d.Name(), cfg.desk.Name
+				if err := eval.AppendRow(cfg.results, row); err != nil {
+					return fmt.Errorf("append result: %w", err)
+				}
 			}
 		}
 	}
 	if failures > 0 {
-		return fmt.Errorf("%w: %d of %d", errTaskFailed, failures, len(ds))
+		return fmt.Errorf("%w: %d of %d", errTaskFailed, failures, runs)
 	}
 	return nil
+}
+
+// loadTasks resolves what will be run. A fixture describes itself — what the bug is, which
+// file carries it, which test grades it — so nothing here is typed at the command line and
+// a row's task id is enough to find the instruction that produced it.
+func loadTasks(c config) ([]eval.Tier2Task, error) {
+	if c.fixture != "" {
+		t, err := tier2Task(filepath.Join(c.fixture, "task.json"))
+		if err != nil {
+			return nil, err
+		}
+		return []eval.Tier2Task{t}, nil
+	}
+	paths, err := eval.DiscoverTasks(c.fixtures)
+	if err != nil {
+		return nil, err
+	}
+	var out []eval.Tier2Task
+	for _, p := range paths {
+		// A tool-call fixture is a single request by nature, so a suite scan passes over
+		// what tier 2 cannot drive instead of refusing to start.
+		t, err := tier2Task(p)
+		if err != nil {
+			continue
+		}
+		out = append(out, t)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no fixture under %s can be driven as tier 2", c.fixtures)
+	}
+	return out, nil
+}
+
+func tier2Task(path string) (eval.Tier2Task, error) {
+	t, err := eval.LoadTask(path)
+	if err != nil {
+		return eval.Tier2Task{}, err
+	}
+	return eval.Tier2From(t)
 }
 
 // validate checks the run can be carried out and resolves every path to absolute.
@@ -193,21 +229,21 @@ func run(args []string, stdout, stderr *os.File) error {
 // for its extension inside /tmp and fails with a message about the extension rather than
 // about the path.
 func (c *config) validate() error {
-	if c.instruction == "" {
-		return errors.New("-instruction is required")
+	if (c.fixture == "") == (c.fixtures == "") {
+		return errors.New("give exactly one of -fixture or -fixtures")
 	}
 	if len(c.drivers) == 0 {
 		return errors.New("-drivers named none")
 	}
-	for _, p := range []*string{&c.fixture, &c.piExtension, &c.ocConfig, &c.ccEnv} {
+	for _, p := range []*string{&c.fixture, &c.fixtures, &c.piExtension, &c.ocConfig, &c.ccEnv} {
+		if *p == "" {
+			continue
+		}
 		abs, err := filepath.Abs(*p)
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", *p, err)
 		}
 		*p = abs
-	}
-	if _, err := os.Stat(c.fixture); err != nil {
-		return fmt.Errorf("fixture directory: %w", err)
 	}
 	return nil
 }

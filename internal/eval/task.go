@@ -35,6 +35,17 @@ type Task struct {
 	Expect    Expect     `json:"expect"`
 	Patch     *Patch     `json:"patch,omitempty"`
 	Retrieval *Retrieval `json:"retrieval,omitempty"`
+
+	// Tier2 marks a fixture as drivable by a harness as well as answerable in one
+	// request, and carries the one thing tier 2 needs and tier 1 does not: the name the
+	// broken file takes in a scratch checkout. What the bug is stays in Messages, so a
+	// fixture cannot pose one problem to a harness and a different one to the model.
+	Tier2 *Tier2Spec `json:"tier2,omitempty"`
+}
+
+// Tier2Spec is a patch fixture's tier-2 half.
+type Tier2Spec struct {
+	AnswerName string `json:"answer_name"`
 }
 
 type Expect struct {
