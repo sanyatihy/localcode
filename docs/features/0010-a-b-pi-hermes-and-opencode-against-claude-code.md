@@ -103,23 +103,13 @@ unattended is still a real and useful question, and the grind profile is where i
 - [x] A tier-2 run is bounded by a budget, and a harness still working when it expires is recorded as over budget rather than as a broken adapter
 - [x] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
 - [x] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
-- [ ] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
-
-## Open questions
-
-- If Pi wins cold but Hermes' memory would plausibly win warm, what is the default?
-  Leaning **Pi**, on the grounds that a cold-state result is the one this project can
-  actually reproduce — with the warm question raised as a BACKLOG line rather than settled
-  by argument here.
-- How large a margin justifies leaving Claude Code? Leaning: **a clear win on tokens per
-  completed task**, since that is the constraint this hardware actually imposes — a small
-  success-rate edge is not worth relearning a tool.
-- If the best challenger is the only offline-capable option but loses on quality, is the
-  answer one harness or two? Leaning **two, kept deliberately**: the incumbent for ordinary
-  work and an offline harness for when there is no network. Naming that as a supported
-  outcome now stops the comparison being forced into a single winner it does not have.
+- [x] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
 
 ## Log
+- 2026-08-19 — the three open questions are answered and the section goes with them: Pi did
+  not win cold, so the Hermes-warm tiebreak never arose; the switching bar was a token win
+  that cost no quality, and Pi's costs two tasks in fifteen; and the offline axis separates
+  nothing, since the incumbent holds it too. The answers are in `docs/TECH.md`.
 - 2026-08-17 — added OpenCode, and made Claude Code the baseline rather than an
   omission: it is the incumbent, so the comparison is challengers-versus-it.
 - 2026-08-17 — corrected the OpenCode identifier to `anomalyco/opencode`; the previously
