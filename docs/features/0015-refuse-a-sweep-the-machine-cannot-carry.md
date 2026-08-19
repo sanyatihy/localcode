@@ -49,7 +49,7 @@ headroom is a property of the machine, and this repo already keeps machine prope
 
 ## Tasks
 
-- [ ] `internal/eval` gains a preflight that reads free memory and swap and reports whether a sweep can be carried, with the numbers it read
+- [x] `internal/eval` gains a preflight that reads free memory and swap and reports whether a sweep can be carried, with the numbers it read
 - [ ] The threshold lives in a config file, and its default is justified by 0014's measured figures rather than chosen
 - [ ] `cmd/eval` and `cmd/tier2` refuse to start when the preflight fails, and `-force` overrides it and marks the rows as forced
 - [ ] A test covers both sides: a machine with headroom starts, one without is refused, and neither needs a running server
@@ -61,3 +61,11 @@ headroom is a property of the machine, and this repo already keeps machine prope
   convention that 2 means the run could not be carried out.
 
 ## Log
+
+- 2026-08-19 — Task 1: `internal/eval/preflight.go` gains the preflight. `SamplePreflight`
+  takes one reading through the existing sampler (a package variable, for the same reason
+  `Now` is), and `CheckPreflight` decides from a fixed reading against a threshold passed
+  in — free memory is the pre-run signal, swap in use is carried on the verdict so a
+  refusal fails loudly with both numbers it read. A platform that does not answer refuses
+  rather than guesses. The test covers both sides of the verdict on injected readings and
+  checks the refusal names its numbers; neither side needs a machine or a running server.
