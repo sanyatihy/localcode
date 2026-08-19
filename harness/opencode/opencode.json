@@ -4,7 +4,7 @@
     "local": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "llama-server (local)",
-      "options": { "baseURL": "http://127.0.0.1:8080/v1" },
+      "options": { "baseURL": "http://127.0.0.1:8081/v1" },
       "models": {
         "bartowski/Qwen3.8-27B-GGUF:Q4_K_M": {
           "name": "Qwen3.8-27B Q4_K_M (local)",
