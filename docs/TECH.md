@@ -259,14 +259,18 @@ reasoning is not a free upgrade here, which is the opposite of what 0005 was bui
 
 ## Claude Code against the local endpoint
 
-`config/agent.env` is the serving config for an editor agent. It serves **57,344**
+`config/agent.env` is the serving config for an editor agent. It serves **49,152**
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
 what it loads. The context is capacity, not tuning: an extension session's first request
-measures **36,297 tokens** — the full tool set, the project's instructions and the
+measures **36,309 tokens** — the full tool set, the project's instructions and the
 editor's context — which does not fit 32,768 before anybody types. A terminal session
-avoids that with `--tools`; the extension has no equivalent. 57,344 is the attended
-ceiling 0014 measured, and prompt throughput decays with depth, so it costs roughly a
-tenth of the ingest rate. Sampling and the
+avoids that with `--tools`; the extension has no equivalent.
+
+**Raising the context buys no speed.** Prefill costs what the prompt is, not what the
+context reserves. That 36,309-token turn measured **434 s of ingest at 83.7 tok/s**, then
+generated 82 tokens at **5.54 tok/s** — 7.5 minutes end to end. Decode decays with depth
+too: the same server answers a short prompt at 9.8 tok/s, so depth costs both halves and
+not just the prefill. Sampling and the
 thinking toggle are per-request for the scorer, and a client that builds its own request
 body sends neither — so 0005's settled pair and `enable_thinking: false` are served as
 defaults. Without that, this model answers at its `xhigh` default.

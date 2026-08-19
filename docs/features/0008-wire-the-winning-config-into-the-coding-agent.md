@@ -88,14 +88,15 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
 
 ## Log
 - 2026-08-19 — **the editor flow does not fit the scorer's context, so `config/agent.env`
-  serves 57,344.** An extension session's first request measured 36,297 tokens — the full
+  serves 49,152.** An extension session's first request measured 36,309 tokens — the full
   tool set, the project's instructions and the editor's own context — against a 32,768
-  server, and took llama-server's 400 before anything was typed. The terminal avoided this
-  with `--tools`, which the extension has no equivalent of. 57,344 is 0014's attended
-  ceiling and costs roughly a tenth of the ingest rate. It also corrects a claim made two
-  entries below: the declared window catches an overflow **between turns**, not the
-  preamble a session starts with — that request went out with the window declared at
-  28,672.
+  server, and took llama-server's 400 before anything was typed. The terminal avoids this
+  with `--tools`, which the extension has no equivalent of. That turn then cost **7.5
+  minutes**: 434 s of ingest and 82 tokens at 5.54 tok/s, against 9.8 tok/s on a short
+  prompt — so depth taxes decode as well as prefill, and raising the context further would
+  buy nothing, since prefill costs what the prompt is rather than what is reserved. It
+  also corrects a claim made below: the declared window catches an overflow **between
+  turns**, not the preamble a session starts with.
 
 - 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
   above. It said this flow cannot be made offline and handed the offline claim to 0010; as
