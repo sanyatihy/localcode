@@ -84,7 +84,7 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
 - [x] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
 - [x] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
-- [ ] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
+- [x] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Log
 - 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
