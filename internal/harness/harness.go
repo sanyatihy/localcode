@@ -14,25 +14,19 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/sanyatihy/localcode/internal/eval"
 )
-
-// DefaultTimeout bounds a single harness run. Generous because a 64k cold ingest alone
-// measured 13.1 minutes, and a harness that is merely slow must not be recorded as broken.
-const DefaultTimeout = 45 * time.Minute
 
 // run executes a harness command and returns a useful error. Shared because all four
 // adapters need identical treatment of a non-zero exit: the tail of combined output, not
 // "exit status 1", which tells nobody anything — and because the offline condition is
 // applied here, so no adapter can be scored offline by forgetting to.
 func run(ctx context.Context, r eval.Run, name string, env []string, args ...string) error {
-	runCtx, cancel := context.WithTimeout(ctx, DefaultTimeout)
-	defer cancel()
-
+	// No clock of its own: the run's budget is the caller's, so that a harness stopped
+	// for taking too long is recorded as over budget rather than as this adapter failing.
 	name, args = sandboxed(r, name, args)
-	cmd := exec.CommandContext(runCtx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = r.Workdir
 	// Setting Dir does not update PWD, and Go replaces the whole environment when Env
 	// is set. Tools that resolve their project from PWD rather than getcwd() then look
@@ -45,8 +39,8 @@ func run(ctx context.Context, r eval.Run, name string, env []string, args ...str
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		if runCtx.Err() != nil {
-			return fmt.Errorf("%s timed out after %s", name, DefaultTimeout)
+		if ctx.Err() != nil {
+			return fmt.Errorf("%s was stopped: %w", name, ctx.Err())
 		}
 		return fmt.Errorf("%s: %w: %s", name, err, tail(out.String(), 300))
 	}
