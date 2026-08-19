@@ -71,6 +71,7 @@ type config struct {
 	model       string
 	results     string
 	label       string
+	repeats     int
 	keep        bool
 }
 
@@ -90,6 +91,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		model    = fs.String("model", "bartowski/Qwen3.8-27B-GGUF:Q4_K_M", "served model id")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		label    = fs.String("label", "unlabelled", "serving config label recorded with each row")
+		repeats  = fs.Int("n", 1, "passes over the whole set; a pass is every harness over every fixture")
 		keep     = fs.Bool("keep", false, "leave the scratch checkout in place and print its path")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -103,7 +105,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
 		desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
-		results: *results, label: *label, keep: *keep,
+		results: *results, label: *label, repeats: *repeats, keep: *keep,
 	}
 	if err := (&cfg).validate(); err != nil {
 		return err
@@ -150,64 +152,24 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	failures, runs := 0, 0
-	// Sequential, and driver-major: the server runs one slot, so concurrent harnesses
-	// would queue and every duration would measure the queue. Whole harnesses rather
-	// than whole tasks because a comparison reads as one harness against another, and
-	// because a harness keeps whatever state it keeps across its own suite.
-	for _, d := range ds {
-		for _, task := range tasks {
-			// The counters are the server's, not this run's, so anything else talking to
-			// the endpoint while a harness works lands in its numbers. Runs are
-			// sequential for the same reason the timings are.
-			before, _ := client.Metrics(ctx)
-			turns := client.CountTurns(ctx, turnPollInterval)
-			res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
-			turnCount := turns.Stop()
-			if err != nil {
-				// A staging or fixture problem is not a result about the harness.
-				return fmt.Errorf("%s: %s: %w", d.Name(), task.ID, err)
-			}
-			after, _ := client.Metrics(ctx)
-			runs++
-			status := "PASS"
-			switch {
-			case res.Outcome == eval.Inadmissible:
-				// Not a failure: the harness was never asked. Counting it as one would
-				// make a profile's exclusions look like a suite the harnesses failed.
-				status = "SKIP"
-			case !res.Passed():
-				status = "FAIL"
-				failures++
-			}
-			_, _ = fmt.Fprintf(stdout, "%-4s %-12s %-30s %s %s\n",
-				status, d.Name(), res.TaskID, res.Outcome, res.Detail)
-			spent := after.Sub(before)
-			_, _ = fmt.Fprintf(stdout, "     %.1fs", res.WallSeconds)
-			if spent.Available {
-				_, _ = fmt.Fprintf(stdout, "  %d in (%d cached), %d out, %d turns",
-					spent.PromptTokens, spent.CachedTokens, spent.PredictedTokens, turnCount)
-			}
-			_, _ = fmt.Fprintln(stdout)
-			if cfg.keep {
-				_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
-			}
-			if cfg.results != "" {
-				// Empty effort, and honestly so: tier-2 drives an external harness that
-				// builds its own requests, so what it asked for is the harness's business
-				// and not something this process can claim to have set.
-				row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, props, "tier2", res)
-				row.Harness, row.Profile = d.Name(), cfg.desk.Name
-				// What the run cost the server: ingested, reused from cache, generated.
-				// Tier 1 reads the same three off a response body; a harness never shows
-				// this process one, so they come off the counters instead.
-				if spent := after.Sub(before); spent.Available {
-					row.PromptTokens = spent.PromptTokens
-					row.CachedTokens = spent.CachedTokens
-					row.CompletionTokens = spent.PredictedTokens
+	// Sequential, and driver-major within a pass: the server runs one slot, so concurrent
+	// harnesses would queue and every duration would measure the queue. Whole harnesses
+	// rather than whole tasks because a comparison reads as one harness against another.
+	//
+	// Repeats are the outer loop rather than the inner one. Three runs of one fixture back
+	// to back would leave the second and third reading a prefix the first warmed, so the
+	// harness that happened to go first would pay the ingest for the other two. A pass is
+	// the whole set, and passes are what repeat.
+	for rep := range cfg.repeats {
+		for _, d := range ds {
+			for _, task := range tasks {
+				failed, err := runOne(ctx, stdout, client, d, task, props, cfg, rep)
+				if err != nil {
+					return err
 				}
-				row.Turns = turnCount
-				if err := eval.AppendRow(cfg.results, row); err != nil {
-					return fmt.Errorf("append result: %w", err)
+				runs++
+				if failed {
+					failures++
 				}
 			}
 		}
@@ -216,6 +178,70 @@ func run(args []string, stdout, stderr *os.File) error {
 		return fmt.Errorf("%w: %d of %d", errTaskFailed, failures, runs)
 	}
 	return nil
+}
+
+// runOne drives one harness through one fixture, prints the line for it and records the
+// row. It returns whether the harness failed the task — which a harness the profile
+// excluded did not, because it was never asked.
+func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Driver,
+	task eval.Tier2Task, props eval.ServerProps, cfg config, rep int) (failed bool, err error) {
+
+	// The counters are the server's, not this run's, so anything else talking to the
+	// endpoint while a harness works lands in its numbers. Runs are sequential for the
+	// same reason the timings are.
+	before, _ := client.Metrics(ctx)
+	turns := client.CountTurns(ctx, turnPollInterval)
+	res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
+	turnCount := turns.Stop()
+	if err != nil {
+		// A staging or fixture problem is not a result about the harness.
+		return false, fmt.Errorf("%s: %s: %w", d.Name(), task.ID, err)
+	}
+	after, _ := client.Metrics(ctx)
+
+	status := "PASS"
+	switch {
+	case res.Outcome == eval.Inadmissible:
+		// Not a failure: the harness was never asked. Counting it as one would make a
+		// profile's exclusions look like a suite the harnesses failed.
+		status = "SKIP"
+	case !res.Passed():
+		status = "FAIL"
+		failed = true
+	}
+	_, _ = fmt.Fprintf(stdout, "%-4s %-12s %-30s %s %s\n",
+		status, d.Name(), res.TaskID, res.Outcome, res.Detail)
+	spent := after.Sub(before)
+	_, _ = fmt.Fprintf(stdout, "     %.1fs", res.WallSeconds)
+	if spent.Available {
+		_, _ = fmt.Fprintf(stdout, "  %d in (%d cached), %d out, %d turns",
+			spent.PromptTokens, spent.CachedTokens, spent.PredictedTokens, turnCount)
+	}
+	_, _ = fmt.Fprintln(stdout)
+	if cfg.keep {
+		_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
+	}
+	if cfg.results == "" {
+		return failed, nil
+	}
+	// Empty effort, and honestly so: tier-2 drives an external harness that builds its own
+	// requests, so what it asked for is the harness's business and not something this
+	// process can claim to have set.
+	row := eval.NewRow(cfg.label, rep, "", "", eval.Sampling{}, props, "tier2", res)
+	row.Harness, row.Profile = d.Name(), cfg.desk.Name
+	// What the run cost the server: ingested, reused from a held prefix, generated. Tier 1
+	// reads the same three off a response body; a harness never shows this process one, so
+	// they come off the counters instead.
+	if spent.Available {
+		row.PromptTokens = spent.PromptTokens
+		row.CachedTokens = spent.CachedTokens
+		row.CompletionTokens = spent.PredictedTokens
+	}
+	row.Turns = turnCount
+	if err := eval.AppendRow(cfg.results, row); err != nil {
+		return failed, fmt.Errorf("append result: %w", err)
+	}
+	return failed, nil
 }
 
 // loadTasks resolves what will be run. A fixture describes itself — what the bug is, which
