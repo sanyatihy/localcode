@@ -45,7 +45,7 @@ func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
 	// History, project state and any user-level instructions live under this directory.
 	// Pointed at a fresh one, the session starts with nothing the machine has learned.
 	env = append(env, "CLAUDE_CONFIG_DIR="+r.StateDir)
-	return run(ctx, c.bin, r.Workdir, env,
+	return run(ctx, r, c.bin, env,
 		"-p", // non-interactive: process the prompt and exit
 		"--tools", c.tools,
 		"--permission-mode", "acceptEdits", // the scratch checkout is disposable

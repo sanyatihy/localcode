@@ -49,7 +49,7 @@ func (h *Hermes) Drive(ctx context.Context, r eval.Run) error {
 	if err := h.seedHome(r.StateDir); err != nil {
 		return err
 	}
-	if err := run(ctx, h.bin, r.Workdir, append(os.Environ(), "HERMES_HOME="+r.StateDir),
+	if err := run(ctx, r, h.bin, append(os.Environ(), "HERMES_HOME="+r.StateDir),
 		"--yolo", // auto-approve tools; the scratch dir is disposable
 		"--cli",
 		"--in", r.Workdir,

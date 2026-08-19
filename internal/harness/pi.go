@@ -42,7 +42,7 @@ func (p *Pi) Drive(ctx context.Context, r eval.Run) error {
 		return fmt.Errorf("pi extension not readable: %w", err)
 	}
 	env := append(os.Environ(), "LOCAL_OPENAI_API_KEY="+p.apiKey)
-	return run(ctx, p.bin, r.Workdir, env,
+	return run(ctx, r, p.bin, env,
 		"-p", // non-interactive: process the prompt and exit
 		"-e", p.extension,
 		"--provider", p.provider,

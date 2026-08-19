@@ -172,7 +172,7 @@ func TestRunTier2Outcomes(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), unattended(t), ServerProps{}, false)
+			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), unattended(t), ServerProps{}, "", false)
 			if err != nil {
 				t.Fatalf("RunTier2: %v", err)
 			}
@@ -193,7 +193,7 @@ func TestRunTier2RejectsAFixtureThatIsNotBroken(t *testing.T) {
 	write(t, filepath.Join(task.Dir, task.Source), fixedSource)
 
 	d := &fakeDriver{name: "fake"}
-	_, _, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, false)
+	_, _, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, "", false)
 	if !errors.Is(err, ErrFixtureNotBroken) {
 		t.Fatalf("err = %v, want ErrFixtureNotBroken", err)
 	}
@@ -206,7 +206,7 @@ func TestRunTier2StagesTheWorkdirForTheDriver(t *testing.T) {
 	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
 	task := brokenFixture(t)
 
-	_, work, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, true)
+	_, work, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, "", true)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestRunTier2ExcludesAHarnessTheProfileCannotServe(t *testing.T) {
 	}
 	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: attended.Ceiling + 1}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), attended, ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), attended, ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestRunTier2ScoresAFlooredHarnessThatFits(t *testing.T) {
 		floor:      p.Ceiling,
 	}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestRunTier2ExcludesAHarnessTheServerIsNotServingFor(t *testing.T) {
 	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: p.Ceiling}
 	served := ServerProps{NCtx: 32768, ModelPath: "/models/m.gguf", Available: true}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, served, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, served, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestRunTier2ScoresWhenTheServerCannotBeAsked(t *testing.T) {
 		floor:      p.Ceiling,
 	}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestRunTier2ScoresWhenTheServerCannotBeAsked(t *testing.T) {
 func TestRunTier2WithholdsTheTestFromTheHarness(t *testing.T) {
 	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestNothing(t *testing.T) {}
 `
 	d := &fakeDriver{name: "fake", writes: map[string]string{testName: permissive}}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestEveryCommittedPatchFixtureIsDrivable(t *testing.T) {
 func TestRunTier2RefusesARunItCannotCallCold(t *testing.T) {
 	d := &fakeDriver{name: "fake", keepsNoState: true, writes: map[string]string{"head.go": fixedSource}}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, "", false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -497,7 +497,7 @@ func TestRunTier2RefusesARunItCannotCallCold(t *testing.T) {
 func TestRunTier2KeepsStateOutOfTheCheckout(t *testing.T) {
 	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
 
-	if _, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false); err != nil {
+	if _, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, "", false); err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
 	if d.gotState == "" {

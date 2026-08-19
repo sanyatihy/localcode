@@ -40,5 +40,5 @@ func (o *OpenCode) Drive(ctx context.Context, r eval.Run) error {
 	// share a database with the last. The cache is deliberately left alone: it holds
 	// provider metadata that is fetched, not learned.
 	env := append(os.Environ(), "XDG_DATA_HOME="+r.StateDir)
-	return run(ctx, o.bin, r.Workdir, env, "run", "-m", o.model, r.Instruction)
+	return run(ctx, r, o.bin, env, "run", "-m", o.model, r.Instruction)
 }
