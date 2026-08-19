@@ -96,7 +96,7 @@ unattended is still a real and useful question, and the grind profile is where i
 - [x] A tier-2 row carries the context the server reported serving, and a harness whose floor that server does not meet is recorded as inadmissible rather than driven
 - [x] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
 - [x] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
-- [ ] The unseen test is staged only once the harness has stopped, so a harness that reads or runs the workdir cannot score against it
+- [x] The unseen test is staged only once the harness has stopped, so a harness that reads or runs the workdir cannot score against it
 - [ ] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
 - [ ] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
 - [ ] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
