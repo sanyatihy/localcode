@@ -31,6 +31,13 @@ type agg struct {
 	// them into an average that looks fine.
 	swapped, unmeasured int
 	maxSwap             float64
+
+	// A harness the desk profile excluded never ran, so it is held apart from the pass
+	// rate and printed with the reason. Folded in, it would read as a harness that
+	// failed everything; left out, its absence from the table would read as an
+	// oversight rather than as the constraint it is.
+	inadmissible int
+	whyExcluded  string
 }
 
 func main() {
@@ -57,6 +64,9 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
+	// Which groups compare harnesses rather than thinking modes, so the first column
+	// can be named after what is in it.
+	byHarness := map[string]bool{}
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<20)
@@ -72,17 +82,47 @@ func run(args []string, stdout, stderr *os.File) error {
 		if *only != "" && r.Config != *only {
 			continue
 		}
-		if byConfig[r.Config] == nil {
-			byConfig[r.Config] = map[string]*agg{}
+		// The desk profile is part of the group, not a label on it: two profiles cap
+		// the context differently, so their rows are not comparable and a harness may
+		// be admissible under only one of them. Filtering stays on the config label,
+		// which is what a human types.
+		group := r.Config
+		if r.Profile != "" {
+			group += " · " + r.Profile
 		}
+		if byConfig[group] == nil {
+			byConfig[group] = map[string]*agg{}
+		}
+		// Tier-2 rows are one harness each at one serving config, and the thinking
+		// toggle on that path is the harness's own business and never set — so the
+		// harness is what separates them, exactly as thinking separates tier-1 rows.
 		key := r.Thinking
+		if r.Harness != "" {
+			key = r.Harness
+			byHarness[group] = true
+		}
 		if key == "" {
 			key = "(default)"
 		}
-		a := byConfig[r.Config][key]
+		a := byConfig[group][key]
 		if a == nil {
 			a = &agg{outcomes: map[eval.Outcome]int{}}
-			byConfig[r.Config][key] = a
+			byConfig[group][key] = a
+		}
+
+		// A tier-2 row records no served config — it drives a harness that builds its
+		// own requests — and printing ctx=0 there would read as a server serving no
+		// context rather than as a figure nobody took.
+		props := "served config unrecorded"
+		if r.ServedNCtx > 0 {
+			props = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
+		}
+		served[group] = props
+
+		if r.Outcome == eval.Inadmissible {
+			a.inadmissible++
+			a.whyExcluded = r.Detail
+			continue
 		}
 		a.total++
 		a.outcomes[r.Outcome]++
@@ -109,7 +149,6 @@ func run(args []string, stdout, stderr *os.File) error {
 		a.gen = append(a.gen, r.GenPerSecond)
 		a.wall = append(a.wall, r.WallSeconds)
 		a.completion = append(a.completion, r.CompletionTokens)
-		served[r.Config] = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
 	}
 	if err := sc.Err(); err != nil {
 		return err
@@ -120,18 +159,31 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	for _, cfg := range sortedKeys(byConfig) {
+		first := "thinking"
+		if byHarness[cfg] {
+			first = "harness"
+		}
 		_, _ = fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
 		_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-			"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
+			first, "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
 		for _, th := range sortedKeys(byConfig[cfg]) {
 			a := byConfig[cfg][th]
 			tc := "n/a"
 			if a.tcSeen > 0 {
 				tc = fmt.Sprintf("%d/%d", a.tcValid, a.tcSeen)
 			}
+			// A group with nothing but excluded rows has no pass rate, and "0/0"
+			// there would read as a harness that failed every task it was given.
+			pass := "-"
+			if a.total > 0 {
+				pass = fmt.Sprintf("%d/%d", a.pass, a.total)
+			}
 			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-				th, fmt.Sprintf("%d/%d", a.pass, a.total), tc,
+				th, pass, tc,
 				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
+			if a.inadmissible > 0 {
+				_, _ = fmt.Fprintf(stdout, "  %-12s NOT ADMISSIBLE: %s\n", "", a.whyExcluded)
+			}
 			if s := failSummary(a.outcomes); s != "" {
 				_, _ = fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
 			}

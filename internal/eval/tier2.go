@@ -28,6 +28,60 @@ type Driver interface {
 	Drive(ctx context.Context, workdir, instruction string) error
 }
 
+// ContextFloorer is the optional half of Driver: a harness that refuses to run below a
+// context window of its own choosing. Optional rather than a third method on Driver
+// because one harness has a floor and the others do not, and a method every adapter but
+// one answers zero to is a field with extra steps rather than a seam.
+type ContextFloorer interface {
+	// ContextFloor is the smallest context window, in tokens, the harness will accept.
+	ContextFloor() int
+}
+
+// A DeskProfile is how the machine is being used while a harness is scored, and it caps
+// the context that may be served. It is the machine's profile; Profile in this package is
+// the model's, and the two are unrelated.
+//
+// Both ceilings are 0014's, measured against the desktop rather than against the model:
+// every context up to 57,344 left the compositor working, and 65,536 stalled it for the
+// whole run while still completing every request. So the two profiles differ in the
+// desktop column alone, and the unattended ceiling is simply the largest context measured
+// to serve.
+type DeskProfile struct {
+	Name    string
+	Ceiling int
+}
+
+var deskProfiles = []DeskProfile{
+	{Name: "attended", Ceiling: 57344},
+	{Name: "unattended", Ceiling: 65536},
+}
+
+// LookupDeskProfile resolves a profile by name. There is no default: a tier-2 row that
+// does not say which profile it was taken under cannot be compared with one that does.
+func LookupDeskProfile(name string) (DeskProfile, error) {
+	for _, p := range deskProfiles {
+		if p.Name == name {
+			return p, nil
+		}
+	}
+	known := make([]string, 0, len(deskProfiles))
+	for _, p := range deskProfiles {
+		known = append(known, p.Name)
+	}
+	return DeskProfile{}, fmt.Errorf("unknown desk profile %q; known: %s", name, strings.Join(known, ", "))
+}
+
+// Admits reports whether a driver's context floor fits under this profile's ceiling, and
+// the floor it asked for. A driver that declares no floor is admitted everywhere.
+func (p DeskProfile) Admits(d Driver) (admitted bool, floor int) {
+	f, ok := d.(ContextFloorer)
+	if !ok {
+		return true, 0
+	}
+	floor = f.ContextFloor()
+	return floor <= p.Ceiling, floor
+}
+
 // Tier2Task is a fixture a harness is asked to fix. Unlike tier 1 it does not describe a
 // single request: the harness decides how many turns to take and which tools to use, and
 // the only thing scored is whether the result compiles and passes tests it never saw.
@@ -52,8 +106,18 @@ var ErrFixtureNotBroken = errors.New("fixture passes its own tests before the ha
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
 // outcome by running the fixture's own tests. keep leaves the scratch directory in place
 // for inspection and returns its path.
-func RunTier2(ctx context.Context, d Driver, t Tier2Task, keep bool) (Result, string, error) {
+func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, keep bool) (Result, string, error) {
 	res := Result{TaskID: t.ID}
+
+	// Checked before anything is staged, and returned as a result rather than an error:
+	// scoring a harness at a context the profile excludes produces a quality figure for
+	// a configuration nobody can use, which is worse than having no figure at all.
+	if admitted, floor := p.Admits(d); !admitted {
+		res.Outcome = Inadmissible
+		res.Detail = fmt.Sprintf("context floor %d exceeds the %s ceiling %d",
+			floor, p.Name, p.Ceiling)
+		return res, "", nil
+	}
 
 	work, err := os.MkdirTemp("", "localcode-tier2-")
 	if err != nil {
