@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ type fakeDriver struct {
 	writes  map[string]string // filename -> contents, applied to the workdir
 	gotDir  string
 	gotText string
+	saw     []string // what was in the workdir when the harness was handed it
 	calls   int
 }
 
@@ -27,6 +29,12 @@ func (f *fakeDriver) Name() string { return f.name }
 func (f *fakeDriver) Drive(_ context.Context, workdir, instruction string) error {
 	f.calls++
 	f.gotDir, f.gotText = workdir, instruction
+	if entries, err := os.ReadDir(workdir); err == nil {
+		f.saw = nil
+		for _, e := range entries {
+			f.saw = append(f.saw, e.Name())
+		}
+	}
 	if f.err != nil {
 		return f.err
 	}
@@ -319,5 +327,46 @@ func TestRunTier2ScoresWhenTheServerCannotBeAsked(t *testing.T) {
 	}
 	if res.Outcome != Pass {
 		t.Errorf("outcome = %s (%s), want %s", res.Outcome, res.Detail, Pass)
+	}
+}
+
+// The unseen test must not be in the working directory while the harness runs. Every
+// candidate has a Read tool and they differ in how much of the directory they read, so a
+// test left lying there is both a leak and a per-harness one.
+func TestRunTier2WithholdsTheTestFromTheHarness(t *testing.T) {
+	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if slices.Contains(d.saw, testName) {
+		t.Errorf("the harness was handed %v, which includes the test it is scored by", d.saw)
+	}
+	// Withholding it must not cost the run its scoring: it comes back to grade with.
+	if res.Outcome != Pass {
+		t.Errorf("outcome = %s (%s), want %s", res.Outcome, res.Detail, Pass)
+	}
+}
+
+// A harness that writes a file where the test goes is scored by the fixture's test, not by
+// its own. Without the write-back this passes anything: the harness supplies both the
+// answer and the marking.
+func TestRunTier2ScoresAgainstTheFixturesTestNotTheHarnesss(t *testing.T) {
+	permissive := `package main
+
+import "testing"
+
+func TestNothing(t *testing.T) {}
+`
+	d := &fakeDriver{name: "fake", writes: map[string]string{testName: permissive}}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != FailTest {
+		t.Errorf("outcome = %s (%s), want %s — the harness marked its own work",
+			res.Outcome, res.Detail, FailTest)
 	}
 }

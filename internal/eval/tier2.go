@@ -140,12 +140,24 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	if err := stageFixture(t, work); err != nil {
 		return res, work, err
 	}
+	if err := stageTest(t, work); err != nil {
+		return res, work, err
+	}
 
 	// A fixture that already passes cannot measure anything.
 	if out, err := goTest(ctx, work); err == nil {
 		return res, work, ErrFixtureNotBroken
 	} else if isBuildFailure(out) {
 		return res, work, fmt.Errorf("fixture does not compile before the run: %s", firstUseful(string(out)))
+	}
+
+	// The test is taken away for the duration of the run and put back to score with. It
+	// has to be present for the check above and absent for the harness, and "a test the
+	// harness never saw" is otherwise just a description of a file sitting in its working
+	// directory: every candidate here has a Read tool, and they differ in how much of the
+	// directory they look at, which would make the leak a per-harness advantage.
+	if err := os.Remove(filepath.Join(work, testName)); err != nil {
+		return res, work, fmt.Errorf("withhold the test: %w", err)
 	}
 
 	start := time.Now()
@@ -157,6 +169,12 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 		// broken adapter is never recorded as a quality result.
 		res.Outcome, res.Detail = FailServer, truncate(driveErr.Error(), 200)
 		return res, work, nil
+	}
+
+	// Written back unconditionally, so a harness that left a file of this name behind is
+	// scored against the fixture's test rather than its own.
+	if err := stageTest(t, work); err != nil {
+		return res, work, err
 	}
 
 	out, err := goTest(ctx, work)
@@ -171,28 +189,43 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	return res, work, nil
 }
 
+// testName is what the fixture's test is called inside the scratch module. Fixed rather
+// than derived from the fixture: the runner takes it away and puts it back, and both ends
+// of that have to name the same file.
+const testName = "verify_test.go"
+
+// stageFixture writes the module and the broken source — everything the harness is meant
+// to see. The test is staged separately by stageTest.
 func stageFixture(t Tier2Task, work string) error {
 	src, err := os.ReadFile(filepath.Join(t.Dir, t.Source))
 	if err != nil {
 		return fmt.Errorf("fixture source: %w", err)
-	}
-	test, err := os.ReadFile(filepath.Join(t.Dir, t.TestFile))
-	if err != nil {
-		return fmt.Errorf("fixture test: %w", err)
 	}
 	answer := t.AnswerName
 	if answer == "" {
 		answer = "answer.go"
 	}
 	files := map[string][]byte{
-		"go.mod":         []byte("module scratch\n\ngo 1.26\n"),
-		answer:           src,
-		"verify_test.go": test,
+		"go.mod": []byte("module scratch\n\ngo 1.26\n"),
+		answer:   src,
 	}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(work, name), data, 0o644); err != nil {
 			return fmt.Errorf("stage %s: %w", name, err)
 		}
+	}
+	return nil
+}
+
+// stageTest writes the fixture's test into the scratch module, overwriting whatever is
+// there. Called twice: once to prove the fixture is broken, once to score with.
+func stageTest(t Tier2Task, work string) error {
+	test, err := os.ReadFile(filepath.Join(t.Dir, t.TestFile))
+	if err != nil {
+		return fmt.Errorf("fixture test: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(work, testName), test, 0o644); err != nil {
+		return fmt.Errorf("stage %s: %w", testName, err)
 	}
 	return nil
 }
