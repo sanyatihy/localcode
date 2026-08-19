@@ -95,6 +95,11 @@ type Response struct {
 type Client struct {
 	Endpoint string
 	HTTP     *http.Client
+
+	// API selects the dialect: APIChat is chat-completions, APIMessages is the
+	// Anthropic Messages path llama-server converts internally. Empty means APIChat,
+	// so every existing caller keeps the path its numbers were taken on.
+	API string
 }
 
 func NewClient(endpoint string, timeout time.Duration) *Client {
@@ -106,6 +111,9 @@ func NewClient(endpoint string, timeout time.Duration) *Client {
 // record it as a task failure rather than a harness failure — the distinction
 // matters when a config is rejected for exceeding context.
 func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, error) {
+	if c.API == APIMessages {
+		return c.completeMessages(ctx, req)
+	}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)

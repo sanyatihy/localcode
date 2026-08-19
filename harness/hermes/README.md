@@ -12,7 +12,7 @@ Hermes has **no project-local config**. This is global machine state at
 model:
   default: bartowski/Qwen3.8-27B-GGUF:Q4_K_M
   provider: custom          # first-class; routes to any OpenAI-compatible endpoint
-  base_url: http://127.0.0.1:8080/v1
+  base_url: http://127.0.0.1:8081/v1
   api_key: ''               # llama-server checks nothing
   context_length: 65536
 ```

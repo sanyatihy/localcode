@@ -49,6 +49,7 @@ type config struct {
 	instruction string
 	piExtension string
 	ocConfig    string
+	ccEnv       string
 	model       string
 	results     string
 	label       string
@@ -59,7 +60,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("tier2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		drivers = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes")
+		drivers = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
 		fixture = fs.String("fixture", "tasks/patch-nil-check", "fixture directory")
 		source  = fs.String("source", "broken.go.txt", "file in the fixture the harness must fix")
 		test    = fs.String("test", "verify_test.go.txt", "unseen test staged beside the answer")
@@ -67,6 +68,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		instr   = fs.String("instruction", "", "what to tell the harness (required)")
 		piExt   = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
 		ocCfg   = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
+		ccEnv   = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
 		model   = fs.String("model", "bartowski/Qwen3.8-27B-GGUF:Q4_K_M", "served model id")
 		results = fs.String("results", "", "append a JSONL row here; empty writes none")
 		label   = fs.String("label", "unlabelled", "serving config label recorded with each row")
@@ -78,7 +80,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	cfg := config{
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, source: *source,
 		testFile: *test, answerName: *answer, instruction: *instr,
-		piExtension: *piExt, ocConfig: *ocCfg, model: *model,
+		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, model: *model,
 		results: *results, label: *label, keep: *keep,
 	}
 	if err := (&cfg).validate(); err != nil {
@@ -153,7 +155,7 @@ func (c *config) validate() error {
 	if len(c.drivers) == 0 {
 		return errors.New("-drivers named none")
 	}
-	for _, p := range []*string{&c.fixture, &c.piExtension, &c.ocConfig} {
+	for _, p := range []*string{&c.fixture, &c.piExtension, &c.ocConfig, &c.ccEnv} {
 		abs, err := filepath.Abs(*p)
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", *p, err)
@@ -175,6 +177,8 @@ func buildDrivers(c config) ([]eval.Driver, error) {
 			ds = append(ds, harness.NewPi(c.piExtension, "local", c.model))
 		case "opencode":
 			ds = append(ds, harness.NewOpenCode(c.ocConfig, "local/"+c.model))
+		case "claude-code":
+			ds = append(ds, harness.NewClaudeCode(c.ccEnv))
 		case "hermes":
 			// Hermes reads a global config and refuses anything under 64k context, so
 			// it takes no per-run parameters here — see internal/harness/hermes.go.

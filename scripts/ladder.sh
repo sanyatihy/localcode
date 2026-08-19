@@ -65,7 +65,7 @@ stop_server() {
 # The guard that would have caught the above: ask the server what it is serving and
 # refuse to measure if it disagrees with the config we launched.
 served_ctx() {
-  curl -s -m 5 http://127.0.0.1:8080/props 2>/dev/null \
+  curl -s -m 5 http://127.0.0.1:8081/props 2>/dev/null \
     | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null || echo 0
 }
 
@@ -80,7 +80,7 @@ wait_healthy() { # seconds
   local deadline=$((SECONDS + $1))
   local grace=$((SECONDS + 20))
   while [ $SECONDS -lt $deadline ]; do
-    curl -s -m 2 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"ok"' && return 0
+    curl -s -m 2 http://127.0.0.1:8081/health 2>/dev/null | grep -q '"ok"' && return 0
     if [ $SECONDS -ge $grace ] && ! pgrep -f llama-server >/dev/null; then
       return 1
     fi
@@ -186,7 +186,7 @@ PY
 
   fill_start=$SECONDS
   http=$(curl -s -m 3600 -o /tmp/ladder-fill-resp.json -w '%{http_code}' \
-        http://127.0.0.1:8080/v1/chat/completions \
+        http://127.0.0.1:8081/v1/chat/completions \
         -H 'Content-Type: application/json' -d @/tmp/ladder-fill.json || echo 000)
   fill_seconds=$((SECONDS - fill_start))
   kill "$sampler" 2>/dev/null || true

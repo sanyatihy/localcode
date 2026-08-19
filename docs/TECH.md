@@ -11,6 +11,15 @@ flags of its own. `make serve` runs it against `config/baseline.env`;
 per variant rather than editing the baseline — that is what keeps 0003's ladder and
 0004's grid mechanical instead of hand-run.
 
+**A config may also name request-level defaults**, which most do not: `TEMP`, `TOP_P`,
+`TOP_K`, `PRESENCE_PENALTY`, `CHAT_TEMPLATE_KWARGS` and `CHAT_TEMPLATE_FILE` become
+flags only when set. They exist for clients that build their own request bodies. The
+scorer sends sampling and the thinking toggle per request and must be served by a
+config that sets none of them, or the run measures something the row does not say.
+
+**The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
+development machine takes first.
+
 ### Baseline, as measured 2026-08-17
 
 | | |
@@ -57,9 +66,11 @@ strings /opt/homebrew/lib/libllama.dylib | grep -c '^qwen35$'   # expect 1
 ```
 
 That build also serves the **Anthropic Messages API** at `/v1/messages` and
-`/v1/messages/count_tokens`, converting to chat-completions internally. Claude Code
-can therefore point at this server with `ANTHROPIC_BASE_URL` and no proxy — see
-[0008](features/0008-wire-the-winning-config-into-the-coding-agent.md).
+`/v1/messages/count_tokens`, converting to chat-completions internally, and both
+endpoints matter: the second is how a client counts a conversation against the served
+tokeniser instead of guessing. Claude Code points at this server with
+`ANTHROPIC_BASE_URL` and no proxy, though not with the model's own chat template — see
+[Claude Code against the local endpoint](#claude-code-against-the-local-endpoint).
 
 ## Checks
 
@@ -245,6 +256,67 @@ task, off passes every time and thinking fails 3 of 6 — always on the same ass
 resolving the contradiction case by case rather than picking one rule. `medium` beating `low`
 is within the noise of three runs and is not a ranking. What the data supports is that more
 reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
+
+## Claude Code against the local endpoint
+
+`config/agent.env` is the serving config for an editor agent. It serves **49,152**
+rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
+what it loads. The context is capacity, not tuning: an extension session's first request
+measures **36,309 tokens** — the full tool set, the project's instructions and the
+editor's context — which does not fit 32,768 before anybody types. A terminal session
+avoids that with `--tools`; the extension has no equivalent.
+
+**Raising the context buys no speed.** Prefill costs what the prompt is, not what the
+context reserves. That 36,309-token turn measured **434 s of ingest at 83.7 tok/s**, then
+generated 82 tokens at **5.54 tok/s** — 7.5 minutes end to end. Decode decays with depth
+too: the same server answers a short prompt at 9.8 tok/s, so depth costs both halves and
+not just the prefill. Sampling and the
+thinking toggle are per-request for the scorer, and a client that builds its own request
+body sends neither — so 0005's settled pair and `enable_thinking: false` are served as
+defaults. Without that, this model answers at its `xhigh` default.
+
+**The model's own chat template cannot serve this client.** Claude Code sends a
+`role: "system"` message after the user turn — the `mid-conversation-system` capability —
+on every request, with 21 tools defined and with none, and no documented variable stops
+it. Qwen3.8's template raises `System message must be at the beginning`, llama.cpp
+returns that as a 500, and the client retries ten times and dies.
+`config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template in one
+line: a non-leading system message renders as its own ChatML block.
+
+**A declared window catches an overflow between turns, not the preamble a session starts
+with.** `CLAUDE_CODE_MAX_CONTEXT_TOKENS` makes Claude Code count the conversation through
+`count_tokens` and refuse before sending — but a first request larger than the window is
+sent anyway, and comes back as the server's 400.
+
+**An error whose wording is not Anthropic's costs two documented recoveries.** Claude Code
+retries and disables the capability after a mid-conversation-system rejection, and
+compacts after a too-long rejection — both by matching the upstream's error text. A Jinja
+exception and llama.cpp's `exceed_context_size_error` match neither, so both recoveries
+are unavailable here and the corresponding limits have to be declared up front instead.
+
+**No prompt and no host leaves the machine.** Measured with a CONNECT proxy that records
+hosts and tunnels TLS untouched: a session doing a real task contacts nothing, and
+completes unchanged with every remote host refused. With
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` unset the same task makes 9 connections to
+`api.anthropic.com` and reaches no other host. A session with no credential refuses to
+start, which is a credential problem rather than a reachability one. The claim is scoped
+to token authentication: no claude.ai login is stored on this machine, so the OAuth
+refresh path is untested.
+
+**The Anthropic→OpenAI conversion changes no result.** The four tool-call fixtures down
+`/v1/messages` at three passes are identical to the native path cell for cell — 12/12
+valid, 11/12 passing, the same task failing at the same rate. `cmd/eval -api messages`
+sends the other dialect to the same grader and refuses sampling flags the Messages body
+cannot carry.
+
+**Cursor's built-in assistant was rejected on architecture.** It does not call the
+configured base URL from this machine: it routes model requests through Cursor's backend
+and rejects plain HTTP, so a local model needs a public HTTPS tunnel and the path becomes
+Cursor → its backend → tunnel → here. Code leaves the machine even though inference does
+not. The extension hosting Claude Code has none of that, because the agent runs locally.
+
+Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
+other harnesses, not here.
 
 ## The harness
 
