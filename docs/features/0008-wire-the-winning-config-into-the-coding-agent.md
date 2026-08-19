@@ -81,7 +81,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 - [x] The half of the winning config that is per-request — thinking off and its sampling — is served as a default, since Claude Code sends neither
 - [x] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
 - [x] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
-- [ ] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
+- [x] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
 - [ ] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
 - [ ] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
@@ -95,6 +95,14 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **the ceiling is visible either way, and declaring it is what makes the
+  failure cheap.** Undeclared, the overflowing request is sent and llama-server's 400
+  comes back verbatim, unrecovered. Declared, the conversation is counted through
+  `count_tokens` against the served tokeniser and refused before ingest. The documented
+  variable for an unrecognised id defers compaction until Anthropic's too-long error
+  arrives, which this server never sends — the same wording mismatch that killed the
+  mid-conversation-system retry, now twice.
+
 - 2026-08-19 — **the conversion costs nothing measurable.** The four tool-call fixtures
   down `/v1/messages`, three passes: 12/12 valid calls and 11/12 passing, the same
   `fail_wrong_tool` on the same fixture at the same rate as 0005's native-path rows —
