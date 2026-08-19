@@ -47,24 +47,34 @@ Each "works" above means the harness completed the `patch-nil-check` fixture in 
 Go module and the **unseen test passed afterwards** — not that it started, and not that it
 claimed success.
 
-    Pi           38.5 s   at 32k
-    Claude Code  59.8 s   at 32k, --tools Read,Edit,Write
-    OpenCode    3 m 06 s  at 32k
-    Hermes      4 m 45 s  at 64k — it refuses anything under 64k
-
 All four run under `cmd/tier2`, which stages the fixture in a scratch module and scores
-what the harness left behind:
+what the harness left behind. One command, one endpoint, one instruction, one context:
 
-    go run ./cmd/tier2 -drivers claude-code -fixture tasks/patch-nil-check \
-      -instruction "session.go has a bug: RefreshToken panics when given a nil token. …"
+    go run ./cmd/tier2 -drivers claude-code,pi,opencode,hermes -profile unattended \
+      -endpoint http://127.0.0.1:8081 -fixture tasks/patch-nil-check \
+      -instruction "session.go has a bug: RefreshToken panics when given a nil token. \
+    Fix it so a nil token returns ErrNilToken and a nil result, leaving all other behaviour unchanged."
 
-The instruction behind the three earlier timings was not recorded, so their numbers and
-Claude Code's are single runs of the same fixture rather than a matched comparison.
+| harness | patch-nil-check | outcome |
+|---|---|---|
+| **Pi** | 47.1 s | pass |
+| **Claude Code** | 62.5 s | pass |
+| **OpenCode** | 2 m 13 s | pass |
+| **Hermes** | 4 m 07 s | pass |
 
-All four produced a correct fix. The gap is behavioural rather than model-related: OpenCode
-spent turns running `go build` and `go vet` where Pi went straight to the edit. That is
-0010's context-frugality question showing up before 0010 runs, and it is one task, so it
-is a signal and not a result.
+Served by [`config/harness.env`](../config/harness.env) at **65,536**, which is not a
+capacity decision: Hermes refuses anything below 64,000, so the next rung above its floor is
+the only context all four share. 0014 measured that context as leaving the desktop unusable,
+so these are unattended numbers and `cmd/tier2` records them as such.
+
+The timings this section carried before were taken at 32k for three of the four and against
+an instruction nobody wrote down; the run above supersedes them rather than being compared
+with them.
+
+All four produced a correct fix and none edited the test staged beside it. The spread is
+behavioural rather than model-related: OpenCode spends turns running `go build` and `go vet`
+where Pi goes straight to the edit. It is one task at one context, so it is a signal and not
+a result — 0010 is where it gets ranked.
 
 ## Reproducing
 
