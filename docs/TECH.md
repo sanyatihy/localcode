@@ -316,6 +316,7 @@ driven through the same scorer at 0005's settled config, 42 rows each.
 | runs that swapped | 7 | **0** |
 | cold depth prompts | **3–9% faster** | |
 | short prompts | | **faster** |
+| decode, client-side | 8.89 tok/s | **10.35 tok/s** |
 | warm reuse, identical request | 20s → 2s (10×) | **19.6s → 0.5s (39×)** |
 
 **They differ in where the KV cache comes from, and that is the whole story.** llama.cpp
@@ -337,11 +338,21 @@ needs for the editor flow; it reports no served config or timings, so a run cann
 against the label it was given; and its failure mode under memory pressure is a hard stall
 rather than degradation, which took three misconfigurations to diagnose.
 
+Decode is measured client-side because `mlx_lm` reports no server-side rate; llama.cpp's own
+figure for pure decode is 9.51 tok/s, so MLX's true decode is higher than the 10.35 shown,
+which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB of weights per
+token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
+configuration change reaches the figures quoted for speculative decoding.
+
+**Multi-token prediction is not reachable here.** `mlx-community/Qwen3.8-27B-MTP-4bit` is
+256 MB of heads meant to be passed as a draft model, and `mlx_lm` 0.31.3 — the current release
+— rejects it: `Model type qwen3_5_mtp not supported`. So MTP is not a lever we declined to
+pull; it does not exist in this server yet.
+
 **What would reverse it:** a 128 GB machine, where slot count stops competing with the model
-and MLX's reuse advantage runs unconstrained. An `MTP-4bit` build beating llama.cpp's own
-draft-model path — multi-token prediction is the only mechanism that beats the memory
-bandwidth ceiling, since 16.1 GB of weights per token caps dense decode near 25 tok/s here
-against the 9.5 measured. Or MLX gaining `/v1/messages`.
+and MLX's reuse advantage runs unconstrained. `mlx_lm` gaining `qwen3_5_mtp` support *and*
+beating llama.cpp's own draft-model path, which is the symmetric comparison since MTP is
+consumed as a draft model rather than as a runtime feature. Or MLX gaining `/v1/messages`.
 
 **One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
 repeating any, which is what forced the slot-count problem. A real agent session is one
