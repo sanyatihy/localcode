@@ -95,3 +95,7 @@ loses at 16k has lost the case that matters.
   interleaves 14 prompts before repeating any, which is what makes MLX's per-slot allocation
   bind. One agent conversation needs one or two slots, so the comparison understates MLX for
   the workload the project exists for.
+- 2026-08-19 — the MTP reversal condition is restated. It requires `mlx_lm` to gain
+  `qwen3_5_mtp` support, which the current release rejects outright, and then to beat
+  llama.cpp's draft-model path — MTP is consumed as a draft model, so the comparison is
+  symmetric rather than technique-against-runtime as first recorded.
