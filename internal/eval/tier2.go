@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-// Driver is the seam this package consumes: something that can be pointed at a working
-// directory with an instruction and left to act.
+// Driver is the seam this package consumes: something that can be handed a checkout and
+// an instruction and left to act.
 //
 // Declared here, in the consumer, rather than beside the adapters — and kept to two
-// methods because that is all three harnesses genuinely agree on. They differ in almost
+// methods because that is all four harnesses genuinely agree on. They differ in almost
 // everything else: where configuration lives, whether it is repo-local, what context
-// window they will accept. An interface wide enough to express those differences would
-// have one implementation each and no seam at all.
+// window they will accept, where they keep what they learn. An interface wide enough to
+// express those differences would have one implementation each and no seam at all.
 type Driver interface {
 	// Name identifies the driver in results. Stable, because it is a grouping key.
 	Name() string
@@ -174,17 +174,27 @@ func Tier2From(t *Task) (Tier2Task, error) {
 // correct behaviour and was only caught by running it.
 var ErrFixtureNotBroken = errors.New("fixture passes its own tests before the harness runs")
 
+// Conditions are the terms a run is conducted under, as opposed to what is being run:
+// which desk profile its numbers count against, what the server reports serving, whether
+// the harness is denied the network, and whether the checkout survives for inspection.
+type Conditions struct {
+	Desk    DeskProfile
+	Served  ServerProps
+	Sandbox string // sandbox profile the harness runs under; empty leaves it online
+	Keep    bool
+}
+
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
-// outcome by running the fixture's own tests. keep leaves the scratch directory in place
-// for inspection and returns its path.
-func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served ServerProps, sandbox string, keep bool) (Result, string, error) {
+// outcome by running the fixture's own tests. It returns the scratch directory, which is
+// removed unless the conditions keep it.
+func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result, string, error) {
 	res := Result{TaskID: t.ID}
 
 	// Checked before anything is staged, and returned as a result rather than an error:
 	// scoring a harness at a context it refuses produces either a quality figure for a
 	// configuration nobody can use or a harness failure that reads as the model
 	// answering badly. Both are worse than having no figure at all.
-	if why := p.Excludes(d, served); why != "" {
+	if why := c.Desk.Excludes(d, c.Served); why != "" {
 		res.Outcome, res.Detail = Inadmissible, why
 		return res, "", nil
 	}
@@ -193,7 +203,7 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	if err != nil {
 		return res, "", fmt.Errorf("scratch dir: %w", err)
 	}
-	if !keep {
+	if !c.Keep {
 		defer func() { _ = os.RemoveAll(work) }()
 	}
 
@@ -216,7 +226,7 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	if err != nil {
 		return res, work, fmt.Errorf("state dir: %w", err)
 	}
-	if !keep {
+	if !c.Keep {
 		defer func() { _ = os.RemoveAll(state) }()
 	}
 
@@ -235,7 +245,7 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	memBefore := sampleMemory()
 	start := time.Now()
 	driveErr := d.Drive(ctx, Run{
-		Workdir: work, StateDir: state, Instruction: t.Instruction, SandboxProfile: sandbox,
+		Workdir: work, StateDir: state, Instruction: t.Instruction, SandboxProfile: c.Sandbox,
 	})
 	res.WallSeconds = time.Since(start).Seconds()
 	memAfter := sampleMemory()
