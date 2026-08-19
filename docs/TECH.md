@@ -302,6 +302,53 @@ into `docs/data/`.
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
+## llama.cpp against MLX
+
+Same model, matched by footprint — llama.cpp Q4_K_M at 17 GB against MLX 4bit at 16.1 GB —
+driven through the same scorer at 0005's settled config, 42 rows each.
+
+| | llama.cpp | MLX |
+|---|---|---|
+| pass | 40/42 | 39/42 |
+| tool-call validity | 12/12 | 12/12 |
+| wired, model serving | 20.89 GB | **18.02 GB** |
+| minimum free memory | 0.06 GB | **2.64 GB** |
+| runs that swapped | 7 | **0** |
+| cold depth prompts | **3–9% faster** | |
+| short prompts | | **faster** |
+| warm reuse, identical request | 20s → 2s (10×) | **19.6s → 0.5s (39×)** |
+
+**They differ in where the KV cache comes from, and that is the whole story.** llama.cpp
+reserves its cache at load against `--ctx-size`, so reuse is free within that reservation and
+the cost is paid once. `mlx_lm` allocates cache capacity **eagerly per slot at startup**:
+`--prompt-cache-size 16` left 0.11 GB free on the first request, where 2 slots left 5.38 GB.
+Cache capacity is bought from the same wired pool the weights sit in, so on 32 GB reuse
+breadth and depth headroom trade directly against each other.
+
+**Unbounded is not an option.** `mlx_lm`'s LRU is unbounded by default, and one 16k prompt
+drove free memory to zero — with swap flat, because wired pages cannot be paged out. Every
+later request stalled rather than slowed. `--prompt-cache-bytes` and `--prompt-cache-size`
+are mandatory on this hardware, not tuning.
+
+**The decision is to stay on llama.cpp**, and it is closer than the table suggests. MLX wins
+on memory, which is the constraint 0014 showed binds here, and on warm reuse. It loses on
+three things that matter more today: it serves no Anthropic `/v1/messages`, which is what 0008
+needs for the editor flow; it reports no served config or timings, so a run cannot be checked
+against the label it was given; and its failure mode under memory pressure is a hard stall
+rather than degradation, which took three misconfigurations to diagnose.
+
+**What would reverse it:** a 128 GB machine, where slot count stops competing with the model
+and MLX's reuse advantage runs unconstrained. An `MTP-4bit` build beating llama.cpp's own
+draft-model path — multi-token prediction is the only mechanism that beats the memory
+bandwidth ceiling, since 16.1 GB of weights per token caps dense decode near 25 tok/s here
+against the 9.5 measured. Or MLX gaining `/v1/messages`.
+
+**One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
+repeating any, which is what forced the slot-count problem. A real agent session is one
+conversation resending a growing prefix, needing one or two slots — the configuration that is
+memory-safe. So this comparison understates MLX for the workload the project actually cares
+about, and the honest reading is that neither runtime is disqualified.
+
 ## The suite is bounded on purpose
 
 Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
