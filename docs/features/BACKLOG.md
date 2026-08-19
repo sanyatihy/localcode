@@ -56,3 +56,9 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   3/3 at every setting, so their repeats measure nothing and cost most of a sweep's runtime.
   Promote when: sweep runtime is the thing blocking a feature, which 0004's grid is the first
   candidate for.
+- **`--tools` is variadic, so the instruction can be swallowed** — the claude-code adapter
+  passes `--tools Read,Edit,Write --permission-mode acceptEdits <instruction>`, and it works
+  only because `--permission-mode` terminates the tool list. Drop that flag and the
+  instruction joins the tools, the run dies asking for input, and nothing says why. Promote
+  when: the adapter is edited for any other reason — a `--` separator or the instruction on
+  stdin costs one line. Found driving the same CLI by hand for 0011.
