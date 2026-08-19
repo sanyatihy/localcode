@@ -58,24 +58,6 @@ loses at 16k has lost the case that matters.
   but this is close enough that the numbers should decide it in the open.
 
 ## Log
-- 2026-08-19 — **the MLX config gained cache bounds, and they are the difference between the
-  runtime working and not.** `mlx_lm` wires its KV caches and its LRU keeps them unbounded by
-  default: one 16k prompt drove free memory to zero and every later request stalled, with *no
-  swap growth at all*, because wired pages cannot be paged out. That is 0014's wired ceiling
-  reached through a different door. `--prompt-cache-bytes` and `--prompt-cache-size` are now
-  in the committed config, sized against the ~22.2 GB budget 0014 measured.
-- 2026-08-19 — the binding limit is the cache **count**, not the byte bound. The suite
-  interleaves 14 distinct prompts before repeating any, so two slots evict every entry before
-  its repeat — which reads as "MLX has no prompt reuse" when an identical back-to-back request
-  returns in 0.5 s against 19.6 s cold. Slots raised to 16; the five depth caches total roughly
-  2.3 GB at this model'"'"'s 64 KB/token, so 4 GB of bytes was never the constraint.
-- 2026-08-19 — **box 5'"'"'s decision has to separate runtime from technique.** The MLX hub
-  carries an `MTP-4bit` build, and multi-token prediction is the one mechanism that can beat
-  the memory-bandwidth ceiling: a 27B at 4-bit reads 16.1 GB per token, so an M2 Max at
-  ~400 GB/s caps dense decode near 25 tok/s and we measure 9.5. Reported figures above that
-  are speculative decoding, not a faster runtime. llama.cpp has its own draft-model path on
-  BACKLOG, so MLX+MTP against plain llama.cpp would score a technique; the matched result is
-  plain against plain, with MTP recorded separately.
 - 2026-08-18 — **`reasoning_effort` cannot be sent the same way to both runtimes, so 0006 does
   not send it.** `llama-server` accepts it top-level; `mlx_lm` has no such field and would
   silently ignore it, running at the template's `xhigh` default while llama.cpp ran at
@@ -98,3 +80,11 @@ loses at 16k has lost the case that matters.
 - 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
   llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
   itself, under time pressure, in a comparison whose numbers then rest on it.
+- 2026-08-19 — the MLX config gains prompt-cache bounds, in bytes and in slots. `mlx_lm`
+  wires its KV caches and leaves the LRU unbounded, which exhausts the machine without ever
+  touching swap; slots are sized to the count of distinct prompts a suite interleaves, not to
+  the byte budget.
+- 2026-08-19 — box 5 is rewritten: the decision separates runtime from technique. An `MTP-4bit`
+  build exists, and multi-token prediction is the only mechanism that beats the memory
+  bandwidth ceiling — 16.1 GB of weights per token caps dense decode near 25 tok/s here. It is
+  therefore measured against llama.cpp's own draft-model path, never against plain llama.cpp.
