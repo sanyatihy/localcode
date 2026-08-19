@@ -83,10 +83,15 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
 - [x] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
 - [x] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
 - [x] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
-- [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
+- [x] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [x] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Log
+- 2026-08-19 — the editor flow is confirmed and recorded in
+  `harness/claude-code/editor-session.md`: the same question, the same model and the same
+  server cost **462 s in the extension and 45 s in a terminal** — 36,309 preamble tokens
+  against 3,767. Pi was checked by hand at the same time and works.
+
 - 2026-08-19 — **the editor flow does not fit the scorer's context, so `config/agent.env`
   serves 49,152.** An extension session's first request measured 36,309 tokens — the full
   tool set, the project's instructions and the editor's own context — against a 32,768
