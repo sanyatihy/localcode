@@ -80,7 +80,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 - [x] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
 - [x] The half of the winning config that is per-request — thinking off and its sampling — is served as a default, since Claude Code sends neither
 - [x] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
-- [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
+- [x] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
 - [ ] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
 - [ ] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
 - [ ] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
@@ -95,6 +95,13 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **the conversion costs nothing measurable.** The four tool-call fixtures
+  down `/v1/messages`, three passes: 12/12 valid calls and 11/12 passing, the same
+  `fail_wrong_tool` on the same fixture at the same rate as 0005's native-path rows —
+  identical cell for cell. `cmd/eval -api messages` sends the fixture down the other
+  dialect and the grader is untouched, which is what makes the two comparable; it is not
+  the backend seam 0012 owns.
+
 - 2026-08-19 — the editor box moves below the four that need nobody at the keyboard. It
   is the only one that cannot be run unattended, and list order is the order of work.
 
