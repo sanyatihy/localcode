@@ -83,7 +83,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 - [x] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
 - [x] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
 - [x] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
-- [ ] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
+- [x] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
@@ -99,6 +99,13 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   claim is scoped to token auth.
 
 ## Log
+- 2026-08-19 — **unreachable Anthropic hosts degrade the session, they do not block or
+  refuse it.** With every remote CONNECT refused the task completes either way: as
+  committed nothing is attempted, and with non-essential traffic enabled the 9 refusals
+  cost about two seconds. What refuses to start is a session with no credential, which is
+  a credential problem rather than a reachability one. Same task warm is 42 s against
+  280 s cold, so the cold figure is the page cache and not the proxy.
+
 - 2026-08-19 — **the flow contacts no host at all**, which the leaning in the open
   question said it would not. One variable carries it: with
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` unset the same task makes 9 connections to
