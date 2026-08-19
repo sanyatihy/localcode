@@ -63,17 +63,16 @@ Three risks, in the order they will bite:
    the server. That is a new surface 0005 never measured, so tool-call validity is checked
    through this path specifically, not assumed to carry over.
 
-**This flow is not offline, and cannot be made so.** Claude Code's documented network
-requirements include `platform.claude.com` for OAuth token exchange and refresh, and
-`api.anthropic.com` for feature-flag fetches — and the fast-mode availability check is
-documented as calling `api.anthropic.com` rather than the configured base URL. Telemetry
-to the Datadog intakes is optional and switches off with
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`; authentication does not.
+**This flow is offline under token authentication.** Reasoned from Anthropic's documented
+network requirements it is not: OAuth refresh and feature-flag fetches are described as
+reaching Anthropic whatever `ANTHROPIC_BASE_URL` says. Measured, a session doing a real
+task with `ANTHROPIC_AUTH_TOKEN` set and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
+contacts **no host at all**, and completes unchanged with every remote host unreachable.
 
-So this feature delivers **local inference, not an offline harness** — the vision's weaker
-property. That is an honest and probably acceptable outcome, since no prompt or file
-content reaches a remote model. What it may not do is claim the stronger one. The offline
-proof belongs to a harness that needs no vendor reachability, which is 0010's business.
+The claim is scoped to token auth, and the scope is not a formality: without a credential
+the session refuses to start, and the OAuth path is untested here because no claude.ai
+login is stored on this machine. What the configuration costs is the feature-flag set —
+auto mode as a starting permission mode, Remote Control, cross-session messaging.
 
 ## Tasks
 
@@ -87,79 +86,39 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
-## Open questions
-
-- ~~Does an API-key credential via `ANTHROPIC_AUTH_TOKEN` avoid the OAuth refresh path,
-  and if so does anything besides feature flags still require reachability?~~ **Answered
-  by measurement, and the leaning was wrong.** With the token set and non-essential
-  traffic disabled, a session doing a real task contacts *nothing*; with only that one
-  variable unset it makes 9 connections to `api.anthropic.com` and no other host. The
-  OAuth path itself is untested here because this machine stores no claude.ai login —
-  without the token the session refuses to start rather than reaching for one — so the
-  claim is scoped to token auth.
-
 ## Log
-- 2026-08-19 — **unreachable Anthropic hosts degrade the session, they do not block or
-  refuse it.** With every remote CONNECT refused the task completes either way: as
-  committed nothing is attempted, and with non-essential traffic enabled the 9 refusals
-  cost about two seconds. What refuses to start is a session with no credential, which is
-  a credential problem rather than a reachability one. Same task warm is 42 s against
-  280 s cold, so the cold figure is the page cache and not the proxy.
-
-- 2026-08-19 — **the flow contacts no host at all**, which the leaning in the open
-  question said it would not. One variable carries it: with
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` unset the same task makes 9 connections to
-  `api.anthropic.com` and nothing else. Measured through a proxy that records hosts and
-  tunnels TLS untouched, so the instrument could not see a prompt even in principle.
-
-- 2026-08-19 — **the ceiling is visible either way, and declaring it is what makes the
-  failure cheap.** Undeclared, the overflowing request is sent and llama-server's 400
-  comes back verbatim, unrecovered. Declared, the conversation is counted through
-  `count_tokens` against the served tokeniser and refused before ingest. The documented
-  variable for an unrecognised id defers compaction until Anthropic's too-long error
-  arrives, which this server never sends — the same wording mismatch that killed the
-  mid-conversation-system retry, now twice.
-
-- 2026-08-19 — **the conversion costs nothing measurable.** The four tool-call fixtures
-  down `/v1/messages`, three passes: 12/12 valid calls and 11/12 passing, the same
-  `fail_wrong_tool` on the same fixture at the same rate as 0005's native-path rows —
-  identical cell for cell. `cmd/eval -api messages` sends the fixture down the other
-  dialect and the grader is untouched, which is what makes the two comparable; it is not
-  the backend seam 0012 owns.
-
-- 2026-08-19 — the editor box moves below the four that need nobody at the keyboard. It
-  is the only one that cannot be run unattended, and list order is the order of work.
-
+- 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
+  above. It said this flow cannot be made offline and handed the offline claim to 0010; as
+  committed the session contacts no host, and with every remote CONNECT refused it still
+  completes. Unset `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and the same task makes 9
+  connections to `api.anthropic.com` and reaches no other host. Refusing to start is a
+  missing credential, not an unreachable one.
+- 2026-08-19 — **the context ceiling is declared rather than discovered.** Undeclared, the
+  overflowing request goes out and llama-server's 400 comes back verbatim, unrecovered;
+  declared, the conversation is counted through `count_tokens` against the served tokeniser
+  and refused before ingest. The documented variable for an unrecognised id waits for
+  Anthropic's too-long error, which this server never sends — the same wording mismatch
+  that killed the mid-conversation-system retry, now twice.
+- 2026-08-19 — **the Anthropic→OpenAI conversion costs nothing measurable**: the tool-call
+  fixtures down `/v1/messages` are identical to 0005's native-path rows cell for cell.
+  `cmd/eval -api messages` sends the other dialect to the same grader, which is what makes
+  them comparable; it is not the backend seam 0012 owns.
 - 2026-08-19 — **Claude Code becomes one harness among four rather than the destination.**
-  Its configuration moves to `harness/claude-code/` beside the other three, and
-  `internal/harness` gains an adapter so `cmd/tier2` drives it on the same terms; it
-  passes `patch-nil-check` against the unseen test in 59.8 s. What the overhead
-  measurement below argues is that a comparison taking each harness's defaults ranks tool
-  inventories rather than harnesses, and this one is the extreme case: the same harness is
-  both the most and the least expensive row.
-
-- 2026-08-19 — **a harness's fixed cost is measurable without running the model, and
-  Claude Code's default tool set is what makes it expensive** — 18,388 tokens of a 32,768
-  context before the user's first word, against 3,711 at `--tools Bash,Edit,Read,Write`.
-  The documented `CLAUDE_CODE_DISABLE_*` variables move that by 7% and remove no tool.
-  All four harnesses in `harness/README.md`, rows in `docs/data/`.
-
-- 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to
-  go.** Claude Code sends a `role: "system"` message *after* the user turn — the
-  `mid-conversation-system-2026-04-07` capability — on every request, with 21 tools
-  defined or with none, and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` does not stop
-  it. Qwen3.8's template raises on a non-leading system message, llama.cpp returns
-  that as a 500, and Claude Code retries ten times and dies. Anthropic documents an
-  automatic retry that disables the capability after such a rejection, but it matches
-  on the upstream's error wording, which a Jinja exception does not carry.
-  `config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template in
-  one line and the flow works, with nothing in the request path.
-
-- 2026-08-19 — **a box is inserted before the terminal run: half the winning config
-  could not reach the model.** Sampling and the thinking toggle are per-request
-  everywhere else here, and Claude Code sends its own body with neither, so through
-  `/v1/messages` this model serves at its `xhigh` default. `config/agent.env` and five
-  optional flags in `scripts/serve.sh` make both server defaults.
+  Its configuration moves to `harness/claude-code/`, `internal/harness` gains an adapter so
+  `cmd/tier2` drives it on the same terms, and it passes `patch-nil-check` against the
+  unseen test. Measuring all four first: its fixed preamble is the largest of the four on
+  its defaults and the smallest under `--tools`, so a comparison taking defaults would rank
+  tool inventories rather than harnesses. The editor box moves below the boxes that need
+  nobody at the keyboard.
+- 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to go.**
+  Claude Code sends a `role: "system"` message after the user turn on every request, with
+  21 tools defined or with none, and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` does not
+  stop it; Qwen3.8's template raises on it and llama.cpp returns a 500.
+  `config/templates/qwen3.8-system-anywhere.jinja` differs in one line.
+- 2026-08-19 — **a box is inserted before the terminal run: half the winning config could
+  not reach the model.** Sampling and the thinking toggle are per-request everywhere else
+  here and Claude Code sends neither, so this model served at its `xhigh` default.
+  `config/agent.env` and five optional flags in `scripts/serve.sh` make them defaults.
 - 2026-08-19 — the endpoint moves to port **8081**; 8080 was already held on the machine
   this is developed on.
 
