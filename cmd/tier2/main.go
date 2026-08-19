@@ -197,7 +197,9 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	// same reason the timings are.
 	before, _ := client.Metrics(ctx)
 	turns := client.CountTurns(ctx, turnPollInterval)
-	res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.sandbox, cfg.keep)
+	res, work, err := eval.RunTier2(ctx, d, task, eval.Conditions{
+		Desk: cfg.desk, Served: props, Sandbox: cfg.sandbox, Keep: cfg.keep,
+	})
 	turnCount := turns.Stop()
 	if err != nil {
 		// A staging or fixture problem is not a result about the harness.
