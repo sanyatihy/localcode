@@ -95,6 +95,14 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **Claude Code becomes one harness among four rather than the destination.**
+  Its configuration moves to `harness/claude-code/` beside the other three, and
+  `internal/harness` gains an adapter so `cmd/tier2` drives it on the same terms; it
+  passes `patch-nil-check` against the unseen test in 59.8 s. What the overhead
+  measurement below argues is that a comparison taking each harness's defaults ranks tool
+  inventories rather than harnesses, and this one is the extreme case: the same harness is
+  both the most and the least expensive row.
+
 - 2026-08-19 — **the fixed cost of a harness is measurable without running the model, and
   Claude Code's default tool set is what makes it expensive.** Pointing each harness at an
   endpoint that records the request and answers 400, then tokenising the rendered prompt:
