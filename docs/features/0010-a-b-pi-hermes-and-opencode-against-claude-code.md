@@ -99,7 +99,7 @@ unattended is still a real and useful question, and the grind profile is where i
 - [x] The unseen test is staged only once the harness has stopped, so a harness that reads or runs the workdir cannot score against it
 - [x] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
 - [x] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
-- [ ] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
+- [x] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
 - [ ] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
 - [ ] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
 - [ ] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result

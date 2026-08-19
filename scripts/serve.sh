@@ -23,6 +23,10 @@ args=(
   --parallel "$PARALLEL"
 )
 [ "${JINJA:-0}" = "1" ] && args+=(--jinja)
+# Prometheus counters at /metrics, off by default in llama-server. A harness builds its own
+# requests, so what a run cost is only countable at the server: 0010 reads the token
+# counters either side of a run and the difference is that run's.
+[ "${METRICS:-0}" = "1" ] && args+=(--metrics)
 
 # Optional serving defaults, absent from every config the scorer drives. The scorer
 # sends sampling and the thinking toggle on each request; an editor agent sends its

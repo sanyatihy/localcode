@@ -40,6 +40,11 @@ var errTaskFailed = errors.New("one or more harnesses failed the task")
 // harness timeout discovering the server is not there.
 const propsTimeout = 15 * time.Second
 
+// turnPollInterval is how often the server's slot is asked what it is working on. Short
+// enough that no turn fits inside it: at the contexts this comparison runs, a turn spends
+// seconds ingesting before it generates anything.
+const turnPollInterval = 150 * time.Millisecond
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		if errors.Is(err, errTaskFailed) {
@@ -137,6 +142,13 @@ func run(args []string, stdout, stderr *os.File) error {
 			"or score this run as unattended", props.NCtx, cfg.desk.Name, cfg.desk.Ceiling)
 	}
 
+	// Sampled once here so a server without --metrics is reported before the sweep
+	// rather than as a column of zeroes afterwards.
+	if _, err := client.Metrics(ctx); err != nil {
+		_, _ = fmt.Fprintf(stderr, "tier2: %s counts no tokens (%v); rows will carry none. "+
+			"Serve with METRICS=1 to record what each run cost\n", cfg.endpoint, err)
+	}
+
 	failures, runs := 0, 0
 	// Sequential, and driver-major: the server runs one slot, so concurrent harnesses
 	// would queue and every duration would measure the queue. Whole harnesses rather
@@ -144,11 +156,18 @@ func run(args []string, stdout, stderr *os.File) error {
 	// because a harness keeps whatever state it keeps across its own suite.
 	for _, d := range ds {
 		for _, task := range tasks {
+			// The counters are the server's, not this run's, so anything else talking to
+			// the endpoint while a harness works lands in its numbers. Runs are
+			// sequential for the same reason the timings are.
+			before, _ := client.Metrics(ctx)
+			turns := client.CountTurns(ctx, turnPollInterval)
 			res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
+			turnCount := turns.Stop()
 			if err != nil {
 				// A staging or fixture problem is not a result about the harness.
 				return fmt.Errorf("%s: %s: %w", d.Name(), task.ID, err)
 			}
+			after, _ := client.Metrics(ctx)
 			runs++
 			status := "PASS"
 			switch {
@@ -162,7 +181,13 @@ func run(args []string, stdout, stderr *os.File) error {
 			}
 			_, _ = fmt.Fprintf(stdout, "%-4s %-12s %-30s %s %s\n",
 				status, d.Name(), res.TaskID, res.Outcome, res.Detail)
-			_, _ = fmt.Fprintf(stdout, "     %.1fs\n", res.WallSeconds)
+			spent := after.Sub(before)
+			_, _ = fmt.Fprintf(stdout, "     %.1fs", res.WallSeconds)
+			if spent.Available {
+				_, _ = fmt.Fprintf(stdout, "  %d in (%d cached), %d out, %d turns",
+					spent.PromptTokens, spent.CachedTokens, spent.PredictedTokens, turnCount)
+			}
+			_, _ = fmt.Fprintln(stdout)
 			if cfg.keep {
 				_, _ = fmt.Fprintf(stdout, "     scratch: %s\n", work)
 			}
@@ -172,6 +197,15 @@ func run(args []string, stdout, stderr *os.File) error {
 				// and not something this process can claim to have set.
 				row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, props, "tier2", res)
 				row.Harness, row.Profile = d.Name(), cfg.desk.Name
+				// What the run cost the server: ingested, reused from cache, generated.
+				// Tier 1 reads the same three off a response body; a harness never shows
+				// this process one, so they come off the counters instead.
+				if spent := after.Sub(before); spent.Available {
+					row.PromptTokens = spent.PromptTokens
+					row.CachedTokens = spent.CachedTokens
+					row.CompletionTokens = spent.PredictedTokens
+				}
+				row.Turns = turnCount
 				if err := eval.AppendRow(cfg.results, row); err != nil {
 					return fmt.Errorf("append result: %w", err)
 				}

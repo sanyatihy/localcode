@@ -24,6 +24,8 @@ type agg struct {
 	tcValid, tcSeen int
 	gen, wall       []float64
 	completion      []int
+	prompt, cached  []int
+	turns           []int
 	outcomes        map[eval.Outcome]int
 
 	// A swapped run is void rather than slow, and a run that measured no memory cannot
@@ -149,6 +151,9 @@ func run(args []string, stdout, stderr *os.File) error {
 		a.gen = append(a.gen, r.GenPerSecond)
 		a.wall = append(a.wall, r.WallSeconds)
 		a.completion = append(a.completion, r.CompletionTokens)
+		a.prompt = append(a.prompt, r.PromptTokens)
+		a.cached = append(a.cached, r.CachedTokens)
+		a.turns = append(a.turns, r.Turns)
 	}
 	if err := sc.Err(); err != nil {
 		return err
@@ -159,13 +164,18 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	for _, cfg := range sortedKeys(byConfig) {
-		first := "thinking"
-		if byHarness[cfg] {
-			first = "harness"
-		}
+		harnesses := byHarness[cfg]
 		_, _ = fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
-		_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-			first, "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
+		// A tier-2 group answers different questions from a tier-1 one: what a whole
+		// task cost, and in how many turns. Its columns say so rather than leaving
+		// "toolcall valid" reading n/a beside a column of zeroes.
+		if harnesses {
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-10s %-18s %-18s %-18s %s\n",
+				"harness", "pass", "turns", "prompt tok", "cached tok", "predicted tok", "wall s")
+		} else {
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+				"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
+		}
 		for _, th := range sortedKeys(byConfig[cfg]) {
 			a := byConfig[cfg][th]
 			tc := "n/a"
@@ -178,9 +188,15 @@ func run(args []string, stdout, stderr *os.File) error {
 			if a.total > 0 {
 				pass = fmt.Sprintf("%d/%d", a.pass, a.total)
 			}
-			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-				th, pass, tc,
-				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
+			if harnesses {
+				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-10s %-18s %-18s %-18s %s\n",
+					th, pass, rangeI(a.turns), rangeI(a.prompt), rangeI(a.cached),
+					rangeI(a.completion), rangeF(a.wall))
+			} else {
+				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+					th, pass, tc,
+					rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
+			}
 			if a.inadmissible > 0 {
 				_, _ = fmt.Fprintf(stdout, "  %-12s NOT ADMISSIBLE: %s\n", "", a.whyExcluded)
 			}
