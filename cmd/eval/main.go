@@ -40,7 +40,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("eval", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		endpoint = fs.String("endpoint", "http://127.0.0.1:8080", "OpenAI-compatible endpoint")
+		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "OpenAI-compatible endpoint")
 		taskPath = fs.String("task", "", "path to a single task fixture")
 		tasksDir = fs.String("tasks", "", "directory of task fixtures to run as a suite")
 		repeats  = fs.Int("n", 1, "passes over the suite")
@@ -63,6 +63,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		topK        = fs.Int("top-k", -1, "top_k; negative leaves it unset")
 		presPen     = fs.Float64("presence-penalty", -1, "presence_penalty; negative leaves it unset")
 		timeout     = fs.Duration("timeout", 15*time.Minute, "per-request timeout")
+		// The dialect, not the backend. `messages` is the Anthropic path llama-server
+		// converts internally and the one a Claude Code session takes, so a number taken
+		// on the chat path says nothing about what the editor flow gets.
+		api = fs.String("api", eval.APIChat, "request dialect: chat or messages")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -80,6 +84,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		if len(paths) == 0 {
 			return fmt.Errorf("no fixtures under %s", *tasksDir)
 		}
+	}
+
+	if *api != eval.APIChat && *api != eval.APIMessages {
+		return fmt.Errorf("-api %q: want %s or %s", *api, eval.APIChat, eval.APIMessages)
 	}
 
 	think, err := parseThinking(*thinking)
@@ -126,6 +134,7 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	ctx := context.Background()
 	client := eval.NewClient(*endpoint, *timeout)
+	client.API = *api
 
 	// A backend that cannot introspect is still scoreable — MLX serves completions
 	// without llama.cpp's /props. What is lost is the guard that checks the served

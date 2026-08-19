@@ -2,7 +2,7 @@
 // external CLI with its own way of being pointed at a local endpoint, and each is hidden
 // behind one type here so nothing else in the repo knows those differences exist.
 //
-// None of them accepts a local endpoint through an environment variable. Pi ignores
+// Only Claude Code accepts a local endpoint through an environment variable. Pi ignores
 // OPENAI_BASE_URL and calls api.openai.com; OpenCode ignores LOCAL_ENDPOINT. Both claims
 // circulate online and neither is true, which is why the configuration lives in the repo
 // rather than in a README instruction.
