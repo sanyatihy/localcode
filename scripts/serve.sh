@@ -24,5 +24,16 @@ args=(
 )
 [ "${JINJA:-0}" = "1" ] && args+=(--jinja)
 
+# Optional serving defaults, absent from every config the scorer drives. The scorer
+# sends sampling and the thinking toggle on each request; an editor agent sends its
+# own request body and neither of those, so for that flow they have to be served as
+# defaults or the config that runs is not the one that was chosen.
+add_opt() { [ -n "${2:-}" ] && args+=("$1" "$2"); return 0; }
+add_opt --temp "${TEMP:-}"
+add_opt --top-p "${TOP_P:-}"
+add_opt --top-k "${TOP_K:-}"
+add_opt --presence-penalty "${PRESENCE_PENALTY:-}"
+add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
+
 echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT" >&2
 exec llama-server "${args[@]}"
