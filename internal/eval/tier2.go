@@ -223,9 +223,17 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 		return res, work, fmt.Errorf("withhold the test: %w", err)
 	}
 
+	// Memory across the run, for the same reason tier 1 records it: a run whose swap grew
+	// measured the pager. It matters more here — a tier-2 run is minutes of a harness and
+	// a model working together, at a context the desktop was already measured to strain.
+	memBefore := sampleMemory()
 	start := time.Now()
 	driveErr := d.Drive(ctx, Run{Workdir: work, StateDir: state, Instruction: t.Instruction})
 	res.WallSeconds = time.Since(start).Seconds()
+	memAfter := sampleMemory()
+	res.FreeGB = memAfter.FreeGB
+	res.SwapDeltaMB = memAfter.SwapUsedMB - memBefore.SwapUsedMB
+	res.MemMeasured = memBefore.OK && memAfter.OK
 
 	if driveErr != nil {
 		// The harness failed, which is not the model answering badly. Kept distinct so a

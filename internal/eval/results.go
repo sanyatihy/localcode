@@ -48,6 +48,11 @@ type Row struct {
 	SwapDeltaMB float64 `json:"swap_delta_mb"`
 	MemMeasured bool    `json:"mem_measured"`
 
+	// Turns is how many requests a harness made to finish a task, counted at the server
+	// rather than taken from the harness. Zero on tier-1 rows, which are one request by
+	// construction, and on any run where the server could not be watched.
+	Turns int `json:"turns,omitempty"`
+
 	PromptTokens     int     `json:"prompt_tokens"`
 	CachedTokens     int     `json:"cached_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`

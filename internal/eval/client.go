@@ -9,7 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -156,6 +160,178 @@ type ServerProps struct {
 	// a backend that cannot introspect is scoreable, it just cannot have its served
 	// config checked against the label a human typed.
 	Available bool `json:"available"`
+}
+
+// ServerMetrics is what the endpoint has counted since it started. A harness builds its
+// own requests and none of the four accounts for them in the same units, so what a run
+// cost is only comparable at the server: sampled either side of a run, the difference is
+// that run's.
+//
+// Prompt tokens are split the way llama.cpp splits them. Processed tokens were ingested;
+// cached ones were reused from a prefix the server still held. A harness that keeps a
+// stable prefix across turns pays the second, and one that rewrites its history pays the
+// first — at this depth that is minutes, and it is the difference the comparison is for.
+type ServerMetrics struct {
+	PromptTokens    int // processed, not served from cache
+	CachedTokens    int
+	PredictedTokens int
+	Available       bool
+}
+
+// Sub returns the metrics accumulated between two samples. An unavailable endpoint on
+// either side leaves the result unavailable rather than confidently zero.
+func (m ServerMetrics) Sub(earlier ServerMetrics) ServerMetrics {
+	if !m.Available || !earlier.Available {
+		return ServerMetrics{}
+	}
+	return ServerMetrics{
+		PromptTokens:    m.PromptTokens - earlier.PromptTokens,
+		CachedTokens:    m.CachedTokens - earlier.CachedTokens,
+		PredictedTokens: m.PredictedTokens - earlier.PredictedTokens,
+		Available:       true,
+	}
+}
+
+// Metrics reads llama.cpp's Prometheus counters. The endpoint answers 501 unless the
+// server was started with --metrics, which is a configuration fact rather than a failure:
+// the caller records the run without token counts and says so.
+func (c *Client) Metrics(ctx context.Context) (ServerMetrics, error) {
+	var out ServerMetrics
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Endpoint+"/metrics", nil)
+	if err != nil {
+		return out, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return out, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return out, fmt.Errorf("%s/metrics: %s", c.Endpoint, resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return out, err
+	}
+	return parseMetrics(string(body))
+}
+
+// parseMetrics reads the Prometheus text format, which is one "name value" per line with
+// comments starting #. Only the three counters this project uses are pulled out, and a
+// missing one is an error: a zero would read as a run that cost nothing.
+func parseMetrics(body string) (ServerMetrics, error) {
+	want := map[string]*int{}
+	var out ServerMetrics
+	want["llamacpp:prompt_tokens_total"] = &out.PromptTokens
+	want["llamacpp:prompt_tokens_cached_total"] = &out.CachedTokens
+	want["llamacpp:tokens_predicted_total"] = &out.PredictedTokens
+
+	seen := 0
+	for _, line := range strings.Split(body, "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, value, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		field, wanted := want[name]
+		if !wanted {
+			continue
+		}
+		// Counters are exported as floats, and a token count is whole either way.
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return ServerMetrics{}, fmt.Errorf("%s: %w", name, err)
+		}
+		*field = int(f)
+		seen++
+	}
+	if seen != len(want) {
+		return ServerMetrics{}, fmt.Errorf("metrics carried %d of the %d counters this needs", seen, len(want))
+	}
+	out.Available = true
+	return out, nil
+}
+
+// TurnCounter counts a harness's turns while it works, by watching which task the
+// server's slot is busy with. Each chat completion occupies the slot under a task id of
+// its own, so the number of distinct ids seen busy is the number of requests the harness
+// made — the same instrument for every harness, where each harness's own accounting is
+// in units of its own.
+//
+// It samples rather than intercepts, so a request that starts and finishes inside one
+// interval is missed. At the depths this project serves, a turn costs seconds of ingest
+// alone; the interval is recorded with the count so the assumption is visible.
+type TurnCounter struct {
+	mu    sync.Mutex
+	seen  map[int]bool
+	stop  chan struct{}
+	ended chan struct{}
+}
+
+// CountTurns starts watching. Stop returns what it saw.
+func (c *Client) CountTurns(ctx context.Context, every time.Duration) *TurnCounter {
+	t := &TurnCounter{seen: map[int]bool{}, stop: make(chan struct{}), ended: make(chan struct{})}
+	go func() {
+		defer close(t.ended)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-t.stop:
+				return
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				busy, err := c.busyTasks(ctx)
+				if err != nil {
+					continue // a sample that failed is one sample, not a broken run
+				}
+				t.mu.Lock()
+				for _, id := range busy {
+					t.seen[id] = true
+				}
+				t.mu.Unlock()
+			}
+		}
+	}()
+	return t
+}
+
+// Stop ends the watch and returns how many distinct tasks the slot was seen working on.
+func (t *TurnCounter) Stop() int {
+	close(t.stop)
+	<-t.ended
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.seen)
+}
+
+func (c *Client) busyTasks(ctx context.Context) ([]int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Endpoint+"/slots", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var slots []struct {
+		IDTask       int  `json:"id_task"`
+		IsProcessing bool `json:"is_processing"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&slots); err != nil {
+		return nil, err
+	}
+	var out []int
+	for _, s := range slots {
+		if s.IsProcessing {
+			out = append(out, s.IDTask)
+		}
+	}
+	return out, nil
 }
 
 func (c *Client) Props(ctx context.Context) (ServerProps, error) {
