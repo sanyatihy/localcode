@@ -103,15 +103,11 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   inventories rather than harnesses, and this one is the extreme case: the same harness is
   both the most and the least expensive row.
 
-- 2026-08-19 — **the fixed cost of a harness is measurable without running the model, and
-  Claude Code's default tool set is what makes it expensive.** Pointing each harness at an
-  endpoint that records the request and answers 400, then tokenising the rendered prompt:
-  Claude Code 18,388 tokens before the user's first word, Hermes 17,465, OpenCode 9,810,
-  Pi 3,922 — and Claude Code at `--tools Bash,Edit,Read,Write` **3,711**, cheaper than Pi.
-  15,304 of the default 18,388 are tool definitions, `Workflow` alone 5,316. The
-  documented `CLAUDE_CODE_DISABLE_*` variables move the total by 7% and remove no tool;
-  `--tools` is the only lever. Rows in
-  `docs/data/2026-08-19-m2max-32gb-0008-harness-overhead.jsonl`.
+- 2026-08-19 — **a harness's fixed cost is measurable without running the model, and
+  Claude Code's default tool set is what makes it expensive** — 18,388 tokens of a 32,768
+  context before the user's first word, against 3,711 at `--tools Bash,Edit,Read,Write`.
+  The documented `CLAUDE_CODE_DISABLE_*` variables move that by 7% and remove no tool.
+  All four harnesses in `harness/README.md`, rows in `docs/data/`.
 
 - 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to
   go.** Claude Code sends a `role: "system"` message *after* the user turn — the
@@ -121,19 +117,16 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   that as a 500, and Claude Code retries ten times and dies. Anthropic documents an
   automatic retry that disables the capability after such a rejection, but it matches
   on the upstream's error wording, which a Jinja exception does not carry.
-  `config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template
-  in one line and the flow works; the request path still has nothing in it.
+  `config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template in
+  one line and the flow works, with nothing in the request path.
 
 - 2026-08-19 — **a box is inserted before the terminal run: half the winning config
   could not reach the model.** Sampling and the thinking toggle are per-request
-  everywhere else here — the scorer sends them on every call — and Claude Code sends
-  its own request body with neither, so through `/v1/messages` this model serves at its
-  `xhigh` default: 0005 measured that as no better than off, at four times the wall
-  clock, with three tier-1 tasks never terminating. `config/agent.env` and five
+  everywhere else here, and Claude Code sends its own body with neither, so through
+  `/v1/messages` this model serves at its `xhigh` default. `config/agent.env` and five
   optional flags in `scripts/serve.sh` make both server defaults.
-- 2026-08-19 — the endpoint moves to port **8081**. 8080 was already held on the
-  machine this is developed on, and the port was written in twenty places rather than
-  read from one.
+- 2026-08-19 — the endpoint moves to port **8081**; 8080 was already held on the machine
+  this is developed on.
 
 - 2026-08-18 — `needs:` moves from 0004 to 0005. 0004 is dropped, so no sweep will name a
   winning quant; the config this feature wires in is Q4_K_M by elimination, and what it still
