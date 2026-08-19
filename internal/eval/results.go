@@ -17,6 +17,14 @@ type Row struct {
 	Config string `json:"config"` // human label for the serving config under test
 	Repeat int    `json:"repeat"`
 
+	// Harness names the agent loop a tier-2 row measured, and Profile the desk profile
+	// it was scored under. Both are empty on tier-1 rows, which drive no harness and
+	// make no claim about the desktop. A tier-2 row needs the profile beside the numbers
+	// because two harnesses scored under different ones are not comparable, and one
+	// harness may be admissible under only one of them.
+	Harness string `json:"harness,omitempty"`
+	Profile string `json:"profile,omitempty"`
+
 	// Toggles under test. Thinking is a string, not a bool, because "unset" is a
 	// third state: it leaves the model's own template default alone.
 	Thinking string `json:"thinking"`

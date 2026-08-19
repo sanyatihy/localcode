@@ -10,6 +10,9 @@
 //	0  every harness passed the task
 //	1  the run completed and at least one harness failed it
 //	2  the run could not be carried out (bad flags, unreadable fixture, broken adapter)
+//
+// A harness the desk profile excludes is none of those: it never ran, so it is reported
+// and recorded as inadmissible and leaves the exit code alone.
 package main
 
 import (
@@ -47,6 +50,7 @@ type config struct {
 	testFile    string
 	answerName  string
 	instruction string
+	desk        eval.DeskProfile
 	piExtension string
 	ocConfig    string
 	ccEnv       string
@@ -66,6 +70,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		test    = fs.String("test", "verify_test.go.txt", "unseen test staged beside the answer")
 		answer  = fs.String("answer-name", "session.go", "name the source takes in the scratch module")
 		instr   = fs.String("instruction", "", "what to tell the harness (required)")
+		profile = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
 		piExt   = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
 		ocCfg   = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
 		ccEnv   = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
@@ -77,9 +82,13 @@ func run(args []string, stdout, stderr *os.File) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	desk, err := eval.LookupDeskProfile(*profile)
+	if err != nil {
+		return err
+	}
 	cfg := config{
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, source: *source,
-		testFile: *test, answerName: *answer, instruction: *instr,
+		testFile: *test, answerName: *answer, instruction: *instr, desk: desk,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, model: *model,
 		results: *results, label: *label, keep: *keep,
 	}
@@ -108,13 +117,18 @@ func run(args []string, stdout, stderr *os.File) error {
 	// Sequential: the server runs one slot, so concurrent harnesses would queue and
 	// every duration would measure the queue rather than the harness.
 	for _, d := range ds {
-		res, work, err := eval.RunTier2(ctx, d, task, cfg.keep)
+		res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, cfg.keep)
 		if err != nil {
 			// A staging or fixture problem is not a result about the harness.
 			return fmt.Errorf("%s: %w", d.Name(), err)
 		}
 		status := "PASS"
-		if !res.Passed() {
+		switch {
+		case res.Outcome == eval.Inadmissible:
+			// Not a failure: the harness was never asked. Counting it as one would
+			// make a profile's exclusions look like a suite the harnesses failed.
+			status = "SKIP"
+		case !res.Passed():
 			status = "FAIL"
 			failures++
 		}
@@ -129,7 +143,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			// builds its own requests, so what it asked for is the harness's business
 			// and not something this process can claim to have set.
 			row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, eval.ServerProps{}, "tier2", res)
-			row.Detail = strings.TrimSpace(d.Name() + " " + row.Detail)
+			row.Harness, row.Profile = d.Name(), cfg.desk.Name
 			if err := eval.AppendRow(cfg.results, row); err != nil {
 				return fmt.Errorf("append result: %w", err)
 			}

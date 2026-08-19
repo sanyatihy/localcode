@@ -71,6 +71,13 @@ const (
 	// when its clock ran out. It is the outcome that keeps a sweep bounded, and a
 	// suite where it appears often is badly budgeted rather than badly answered.
 	FailOverBudget Outcome = "fail_over_budget"
+
+	// Inadmissible is not a result about the harness at all: it never ran, because the
+	// context it requires is one the machine cannot serve under the profile being
+	// scored. It is a row rather than an omission so that a comparison table says why
+	// a harness is absent — a gap where a number should be is read as an oversight,
+	// and the reader cannot tell a constraint from a run somebody forgot.
+	Inadmissible Outcome = "inadmissible"
 )
 
 type Result struct {

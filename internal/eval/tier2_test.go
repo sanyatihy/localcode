@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -34,6 +36,27 @@ func (f *fakeDriver) Drive(_ context.Context, workdir, instruction string) error
 		}
 	}
 	return nil
+}
+
+// flooredDriver is a fake harness that refuses to run below a context window of its own,
+// which is the shape Hermes has. fakeDriver deliberately declares no floor, so the two
+// together cover both sides of the optional interface.
+type flooredDriver struct {
+	fakeDriver
+	floor int
+}
+
+func (f *flooredDriver) ContextFloor() int { return f.floor }
+
+// The fakes here declare no floor of their own, so any profile admits them; naming a real
+// one keeps the tests reading like an invocation somebody would type.
+func unattended(t *testing.T) DeskProfile {
+	t.Helper()
+	p, err := LookupDeskProfile("unattended")
+	if err != nil {
+		t.Fatalf("LookupDeskProfile: %v", err)
+	}
+	return p
 }
 
 // A fixture whose source is broken and whose test catches it — the shape every tier-2
@@ -128,7 +151,7 @@ func TestRunTier2Outcomes(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), false)
+			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), unattended(t), false)
 			if err != nil {
 				t.Fatalf("RunTier2: %v", err)
 			}
@@ -149,7 +172,7 @@ func TestRunTier2RejectsAFixtureThatIsNotBroken(t *testing.T) {
 	write(t, filepath.Join(task.Dir, task.Source), fixedSource)
 
 	d := &fakeDriver{name: "fake"}
-	_, _, err := RunTier2(context.Background(), d, task, false)
+	_, _, err := RunTier2(context.Background(), d, task, unattended(t), false)
 	if !errors.Is(err, ErrFixtureNotBroken) {
 		t.Fatalf("err = %v, want ErrFixtureNotBroken", err)
 	}
@@ -162,7 +185,7 @@ func TestRunTier2StagesTheWorkdirForTheDriver(t *testing.T) {
 	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
 	task := brokenFixture(t)
 
-	_, work, err := RunTier2(context.Background(), d, task, true)
+	_, work, err := RunTier2(context.Background(), d, task, unattended(t), true)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -183,5 +206,75 @@ func TestRunTier2StagesTheWorkdirForTheDriver(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(work, "broken.go.txt")); err == nil {
 		t.Error("fixture .txt file leaked into the scratch module")
+	}
+}
+
+// A harness whose floor is above the profile's ceiling is excluded, and the exclusion is a
+// row rather than a gap: scored anyway it would produce a quality figure for a context the
+// machine cannot serve while somebody is using it, and left out entirely its absence would
+// be indistinguishable from a run nobody got round to.
+func TestRunTier2ExcludesAHarnessTheProfileCannotServe(t *testing.T) {
+	attended, err := LookupDeskProfile("attended")
+	if err != nil {
+		t.Fatalf("LookupDeskProfile: %v", err)
+	}
+	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: attended.Ceiling + 1}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), attended, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != Inadmissible {
+		t.Errorf("outcome = %s, want %s", res.Outcome, Inadmissible)
+	}
+	// The detail carries both numbers, because "not admissible" without them leaves the
+	// reader unable to tell a harness that just misses from one that cannot ever fit.
+	for _, want := range []string{
+		strconv.Itoa(attended.Ceiling + 1), attended.Name, strconv.Itoa(attended.Ceiling),
+	} {
+		if !strings.Contains(res.Detail, want) {
+			t.Errorf("detail %q does not name %q", res.Detail, want)
+		}
+	}
+	if d.calls != 0 {
+		t.Errorf("driver was called %d times; an excluded harness must not be run", d.calls)
+	}
+}
+
+// The same harness under the profile whose ceiling clears its floor is scored normally.
+func TestRunTier2ScoresAFlooredHarnessThatFits(t *testing.T) {
+	p := unattended(t)
+	d := &flooredDriver{
+		fakeDriver: fakeDriver{name: "floored", writes: map[string]string{"head.go": fixedSource}},
+		floor:      p.Ceiling,
+	}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != Pass {
+		t.Errorf("outcome = %s (%s), want %s", res.Outcome, res.Detail, Pass)
+	}
+	if d.calls != 1 {
+		t.Errorf("driver called %d times, want 1", d.calls)
+	}
+}
+
+// An unknown profile is refused rather than defaulted: a row that does not say which
+// profile it was taken under cannot be compared with one that does, and the two ceilings
+// differ by exactly the thing under test.
+func TestLookupDeskProfileRefusesWhatItDoesNotKnow(t *testing.T) {
+	if _, err := LookupDeskProfile("idle"); err == nil {
+		t.Fatal("expected an error naming the profiles that exist")
+	}
+	for _, name := range []string{"attended", "unattended"} {
+		p, err := LookupDeskProfile(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if p.Ceiling <= 0 {
+			t.Errorf("%s: ceiling = %d", name, p.Ceiling)
+		}
 	}
 }

@@ -24,6 +24,17 @@ func NewHermes() *Hermes { return &Hermes{bin: "hermes"} }
 
 func (h *Hermes) Name() string { return "hermes" }
 
+// HermesContextFloor is the smallest context window Hermes accepts. It is a check in its
+// own code and not a setting: `context_length` in ~/.hermes/config.yaml selects what it
+// asks for, and anything below this is refused before a request is made, so lowering it
+// means patching Hermes — which is then a different harness and scored under its own name.
+//
+// 0014 put this machine's attended ceiling at 57,344, so the floor sits above it with no
+// overlap: Hermes is admissible unattended only.
+const HermesContextFloor = 64000
+
+func (h *Hermes) ContextFloor() int { return HermesContextFloor }
+
 func (h *Hermes) Drive(ctx context.Context, workdir, instruction string) error {
 	return run(ctx, h.bin, workdir, os.Environ(),
 		"--yolo", // auto-approve tools; the scratch dir is disposable
