@@ -37,68 +37,37 @@ no tool from the request. See the table in [../README.md](../README.md).
 
 ## Driving it from the editor
 
-The VS Code and Cursor extension checks credentials from `claudeCode.environmentVariables`
-before it launches, so that is where the configuration has to be — values in
-`~/.claude/settings.json` reach the spawned process but not the extension's own login
-check. Open **Preferences: Open User Settings (JSON)** and add:
+The extension reads `claudeCode.environmentVariables` before it launches, so that is where
+the configuration has to be — values in `~/.claude/settings.json` reach the spawned process
+but not the extension's own login check.
+
+**Put it in the folder's settings, not the user's.** These variables point Claude Code at a
+27B model on loopback; in user settings they would do that to *every* session on the
+machine, including whatever else the editor is open on. `.vscode/settings.json` in the
+checkout you are testing applies only while that folder is open. The extension honours
+folder scope for this setting — `initialPermissionMode` is documented as the one that
+ignores workspace values.
+
+The file is [`claude-code.env`](claude-code.env) in the editor's form:
 
 ```json
 {
   "claudeCode.environmentVariables": [
-    {
-      "name": "ANTHROPIC_BASE_URL",
-      "value": "http://127.0.0.1:8081"
-    },
-    {
-      "name": "ANTHROPIC_AUTH_TOKEN",
-      "value": "local"
-    },
-    {
-      "name": "ANTHROPIC_MODEL",
-      "value": "Qwen3.8-27B-Q4_K_M.gguf"
-    },
-    {
-      "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-      "value": "Qwen3.8-27B-Q4_K_M.gguf"
-    },
-    {
-      "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-      "value": "Qwen3.8-27B-Q4_K_M.gguf"
-    },
-    {
-      "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-      "value": "Qwen3.8-27B-Q4_K_M.gguf"
-    },
-    {
-      "name": "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
-      "value": "1"
-    },
-    {
-      "name": "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS",
-      "value": "1"
-    },
-    {
-      "name": "CLAUDE_CODE_DISABLE_CRON",
-      "value": "1"
-    },
-    {
-      "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
-      "value": "1"
-    },
-    {
-      "name": "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
-      "value": "4096"
-    },
-    {
-      "name": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
-      "value": "28672"
-    }
-  ]
+    { "name": "ANTHROPIC_BASE_URL", "value": "http://127.0.0.1:8081" },
+    { "name": "ANTHROPIC_AUTH_TOKEN", "value": "local" }
+  ],
+  "claudeCode.disableLoginPrompt": true
 }
 ```
 
-That is [`claude-code.env`](claude-code.env) in the editor's own form; keep the two in step
-or the terminal and the editor are running different configurations.
+Every variable from the env file goes in that array; keep the two in step or the terminal
+and the editor are running different configurations. It is deliberately not committed: a
+tracked `.vscode/settings.json` would route every session opened on this repository at the
+local model, which is a decision for whoever opens it and not for the repository.
+
+Confirm it took with `/status`, which names the base URL in force. If the server is not
+running the session fails to connect rather than falling back to a hosted model, because
+the base URL is fixed to loopback.
 
 ## It cannot be offline
 
