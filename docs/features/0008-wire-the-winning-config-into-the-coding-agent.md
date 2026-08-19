@@ -82,19 +82,29 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 - [x] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
 - [x] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
 - [x] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
-- [ ] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
+- [x] The residual traffic is measured, not taken from the docs: what hosts the flow contacts during a real session, and which stop when non-essential traffic is disabled
 - [ ] The failure mode when Anthropic hosts are unreachable is recorded — whether the session degrades, blocks, or refuses to start — since that is what an outage or a flight actually looks like
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Open questions
 
-- Does an API-key credential via `ANTHROPIC_AUTH_TOKEN` avoid the OAuth refresh path, and
-  if so does anything besides feature flags still require reachability? Leaning: **it
-  narrows the traffic but does not eliminate it**, which is why the task measures observed
-  hosts rather than reasoning from the documentation.
+- ~~Does an API-key credential via `ANTHROPIC_AUTH_TOKEN` avoid the OAuth refresh path,
+  and if so does anything besides feature flags still require reachability?~~ **Answered
+  by measurement, and the leaning was wrong.** With the token set and non-essential
+  traffic disabled, a session doing a real task contacts *nothing*; with only that one
+  variable unset it makes 9 connections to `api.anthropic.com` and no other host. The
+  OAuth path itself is untested here because this machine stores no claude.ai login —
+  without the token the session refuses to start rather than reaching for one — so the
+  claim is scoped to token auth.
 
 ## Log
+- 2026-08-19 — **the flow contacts no host at all**, which the leaning in the open
+  question said it would not. One variable carries it: with
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` unset the same task makes 9 connections to
+  `api.anthropic.com` and nothing else. Measured through a proxy that records hosts and
+  tunnels TLS untouched, so the instrument could not see a prompt even in principle.
+
 - 2026-08-19 — **the ceiling is visible either way, and declaring it is what makes the
   failure cheap.** Undeclared, the overflowing request is sent and llama-server's 400
   comes back verbatim, unrecovered. Declared, the conversation is counted through
