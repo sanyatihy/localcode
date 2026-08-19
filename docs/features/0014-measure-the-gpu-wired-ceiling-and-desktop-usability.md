@@ -140,6 +140,16 @@ Three conditions on the run, all of which void it if missed:
   a measurable state is worse than one that reports it.
 
 ## Log
+- 2026-08-19 — **the apparatus figure this feature reported was the wrong metric, and the
+  coexistence arithmetic that rested on it is restated in `docs/TECH.md`.** Apparatus was a sum
+  of per-process RSS, which counts every shared page once per resident process — about 1.5x
+  overstated on a state measured both ways — and it was then added to the model's RSS, which
+  counts the model twice, since Metal wires the same pages the process reports as resident.
+  Measured properly, the model is 20.89 GB of wired memory and an editor is 6.61 GB of
+  anonymous, so 27.50 GB of 32 is in use with nothing else running. The conclusion that a
+  browser does not fit alongside survives; the margin was overstated. **The wired ceiling
+  measurements in this doc are unaffected** — they were read from `vm_stat` directly and never
+  went through the apparatus figure.
 - 2026-08-18 — raised from a user report, not the instrument: at 64k the desktop stops
   rendering and the editor freezes, while 0003 scored that cell `ok` because it measured
   whether the model finished. Nothing it recorded could have caught it — the failure does
