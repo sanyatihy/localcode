@@ -77,7 +77,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 
 ## Tasks
 
-- [ ] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
+- [x] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
 - [ ] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
