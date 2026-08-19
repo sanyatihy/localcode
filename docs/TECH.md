@@ -374,6 +374,60 @@ into `docs/data/`.
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
+## Nothing displaces Claude Code, and the two axes disagree
+
+Four harnesses over five patch fixtures, three passes each — 60 runs at one serving config
+(`config/harness.env`, 65,536), each from a cold state and bounded at ten minutes. Tokens
+and turns are the server's own counters read either side of every run, because each harness
+accounts for its work in units of its own.
+
+| harness | passed | turns | ingested/task | context/turn | wall, clean rows |
+|---|---|---|---|---|---|
+| **Claude Code** (baseline) | 14/15 | 3.9 | 3,514 | 3,336 | 127.5 s (5 of 15) |
+| Pi | 12/15 | 3.9 | **735** ×0.21 | 1,857 | 63.6 s (12 of 15) |
+| OpenCode | 13/15 | 6.8 | 1,942 ×0.55 | 6,909 | 96.8 s (8 of 15) |
+| Hermes | 15/15 | 9.2 | 14,119 ×4.02 | 12,429 | 299.4 s (12 of 15) |
+
+**No challenger wins on both axes, and the order inverts between them**: the cheapest is
+the least reliable and the most reliable is the dearest. Hermes' extra task is one run in
+fifteen. The bar for switching was a clear win on tokens per completed task without giving
+up quality, tokens being what this hardware actually rations; Pi's ×0.21 arrives with two
+more failures in fifteen, which is not that. The incumbent stays — the question was whether
+anything beats what is already in use, and nothing here does.
+
+**The six failures are two modes, and each tracks one of the axes.** Three sit on
+`patch-contradiction-rounding`, where the doc comment and the test that must keep passing
+disagree; it caught the two low-turn harnesses (Claude Code 2/3, Pi 1/3) and neither of the
+two that take more turns. Three sit on `patch-sibling-splitpath`, all the same compile
+error — an in-place edit that drops the `strings` import — and it caught the two harnesses
+that edit (Pi 2/3, OpenCode 1/3) and neither that rewrites the whole file. Frugality costs
+verification; editing costs imports. Three runs a cell, so this is a pattern rather than a
+rate.
+
+**Preamble size does not explain the token spread.** Pi's fixed preamble is *larger* than
+Claude Code's at the same three tools — 3,922 against 3,711 — yet Pi ingests a fifth as
+much per task, because Claude Code re-ingests roughly its whole preamble on every run while
+Pi's survives in the server's prefix cache. What changes in Claude Code's prefix between two
+runs is not established here.
+
+**Every harness completes a task offline**, with the network denied in the kernel and only
+the loopback the model is served on left open. Claude Code included: it holds under token
+authentication with nonessential traffic off, which is what
+[`harness/claude-code/claude-code.env`](../harness/claude-code/claude-code.env) sets. So the
+offline axis separates nothing, and the vision's "at least one path is genuinely offline"
+outcome is already met by the incumbent. The OAuth refresh path a claude.ai login would use
+stays untested, as in 0008.
+
+**Hermes is unattended-only on this machine and did not converge once.** Its 64,000-token
+floor sits above 0014's attended ceiling of 57,344 with no overlap, so it is admissible only
+when nobody is using the machine. One run before the budget existed spent 45 minutes and 90
+turns on a fixture the others finished in three; bounded at ten minutes it then passed all
+fifteen. A harness that does not converge is `fail_over_budget`, not a broken adapter.
+
+**Timings are the weakest column here.** At 65,536 with an editor resident the machine pages,
+and a run whose swap grew measured the pager — so wall is averaged over clean rows only and
+the count of them is printed beside it. Tokens and turns are indifferent to paging.
+
 ## llama.cpp against MLX
 
 Same model, matched by footprint — llama.cpp Q4_K_M at 17 GB against MLX 4bit at 16.1 GB —
