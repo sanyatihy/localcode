@@ -124,20 +124,32 @@ The compositor **stalls** rather than saturates — the failing cell's peak sits
 passing cell's minimum, so the populations do not overlap — and it is flat from the first
 sample of the cell, which points at allocation time rather than at ingest.
 
-**That ceiling is conditional on what else is running, and the condition is doing more work
-than the number.** It was measured with browsers closed, at a 5.81 GB apparatus. A normal
-working set on this machine measures **20.32 GB** — a browser alone was 5.84 GB — and the
-model is 18.10 GB at 8k rising only to 20.30 GB at 64k:
+**That ceiling is conditional on what else is running.** The arithmetic here was wrong for a
+session and is restated: the figures below are **anonymous memory plus wired**, which is what
+competes for the 32 GB. The earlier version added a per-process RSS sum to the model's RSS,
+which counts every shared page once per resident process and counts the model twice — once as
+resident, again as wired.
 
-| apparatus | 8k | 32k | 64k | Q3_K_M weights alone |
-|---|---|---|---|---|
-| 5.81 GB, browsers closed | 23.9 GB | 24.9 GB | 26.1 GB | 19.6 GB |
-| 20.32 GB, normal use | 38.4 GB | 39.5 GB | 40.6 GB | 34.1 GB |
+**The model lives in wired memory**, because Metal wires its buffers: with it loaded and
+serving, wired measures **20.89 GB** while the mmap'd GGUF holds only 1.99 GB of file-backed
+pages. Apps live in anonymous memory — 6.61 GB with an editor open and no browser.
 
-**Nothing fits alongside a normal working set — not the smallest context, not the smallest
-quant in 0004's ladder.** And context is the wrong lever for it: an eightfold cut in context
-saves 2.2 GB, where closing a browser saves 5.8. Running this model locally means clearing
-the desk first; that is a property of a 27B on 32 GB, not a tuning problem.
+| what | measured |
+|---|---|
+| model, wired, serving at 32k | 20.89 GB |
+| apps, anonymous, editor only | 6.61 GB |
+| **total against 32 GB** | **27.50 GB** |
+
+So roughly **11 GB is left for everything that is not the model**, and an editor takes 6.6 of
+it. A browser does not fit in the rest: closing one moved the summed-RSS figure by 14.8 GB, and
+even discounted for the overcount it is several GB of anonymous memory. **The conclusion stands
+— the desk has to be cleared — but it is marginal rather than the comfortable 6 GB overshoot
+first reported.** Context is still the wrong lever: an eightfold cut moves the model about
+2.2 GB.
+
+The exact margin with a browser open is **not currently measured**, since every figure taken
+before 2026-08-19 used the summed-RSS metric. `scripts/memprobe.sh` and `scripts/ladder.sh`
+now record `anonymous_gb`, so the next run of either produces the honest number.
 
 **The mechanism is not yet established.** Wired peak moves only 0.54 GB across a doubling of
 context, and the failing cell had 1.71 GB of headroom against an assumed 24 GB limit where

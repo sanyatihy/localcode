@@ -98,7 +98,12 @@ wait_healthy() { # seconds
 # names contain characters that would otherwise terminate the quoting and corrupt the row.
 APPARATUS=$(ps -Ao rss,comm | awk '$1 > 102400 && $2 !~ /llama-server/ && $2 != "COMM" {
     n=split($2,p,"/"); printf "%s%.2fGB %s", (c++?"; ":""), $1/1048576, p[n]}')
+# Two numbers, because one of them lies. The summed RSS is kept for continuity with rows
+# already recorded, but it counts every shared page once per resident process and so
+# overstates the footprint — by about 1.5x on a state measured both ways. Anonymous memory
+# is what actually competes with the model for the 32 GB, and is the one to read.
 APPARATUS_TOTAL=$(ps -Ao rss,comm | awk '$2 !~ /llama-server/ {s+=$1} END {printf "%.2f", s/1048576}')
+APPARATUS_ANON=$(./scripts/memprobe.sh | python3 -c "import sys,json;print(json.load(sys.stdin)['anonymous_gb'])")
 # The compositor's rate before any model is loaded. Recorded per run so a verdict carries
 # the basis it was judged against, rather than inheriting a number measured once by hand
 # and quoted thereafter — the machine's baseline is not a constant.
@@ -109,15 +114,16 @@ a=json.loads('''$DESK_A'''); b=json.loads('''$DESK_B''')
 span=b['t']-a['t']
 print(round((b['windowserver_cpu_seconds']-a['windowserver_cpu_seconds'])/span, 3) if span>0 else 0)")
 
-export APPARATUS APPARATUS_TOTAL CONDITION DESK_BASELINE
+export APPARATUS APPARATUS_TOTAL APPARATUS_ANON CONDITION DESK_BASELINE
 # shellcheck disable=SC2086
 set -- $CELLS
 echo "walking $# cell(s): $*" >&2
-echo "apparatus resident before any cell: ${APPARATUS_TOTAL} GB" >&2
+echo "apparatus before any cell: ${APPARATUS_ANON} GB anonymous (summed RSS says ${APPARATUS_TOTAL}, which overcounts shared pages)" >&2
 echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
 python3 -c '
 import json, os
 print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
+                  "anonymous_gb": float(os.environ["APPARATUS_ANON"]),
                   "resident_gb": float(os.environ["APPARATUS_TOTAL"]),
                   "desktop_baseline_cores": float(os.environ["DESK_BASELINE"]),
                   "processes": os.environ["APPARATUS"]}))' >> "$OUT"
