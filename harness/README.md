@@ -41,6 +41,27 @@ Only Claude Code takes a local endpoint through an environment variable. Pi igno
 its model list is byte-identical with and without it. Both facts appear in write-ups
 online and neither is true.
 
+## Cold, and checked rather than claimed
+
+Every candidate keeps something between runs, so each is pointed at a directory of its own
+and the runner refuses to call a run cold when the harness wrote nothing there.
+
+| harness | what it keeps | pointed elsewhere by |
+|---|---|---|
+| **Pi** | sessions, keyed by working directory | `--session-dir` |
+| **OpenCode** | an SQLite session database; every scratch checkout lands in one project called `global` | `XDG_DATA_HOME` |
+| **Hermes** | sessions, memories and skills learned from earlier runs, all under one home | `HERMES_HOME`, seeded with [`hermes/config.yaml.reference`](hermes/config.yaml.reference) |
+| **Claude Code** | history, project state, user-level instructions | `CLAUDE_CONFIG_DIR` |
+
+Measured over one run of each: all four wrote into the directory they were given, and the
+machine's own `~/.hermes`, `~/.pi/agent/sessions` and `~/.local/share/opencode` took **no
+writes at all**, with no project entry for any scratch checkout appearing under `~/.claude`.
+
+**Hermes is the one this changes.** The machine's Hermes had accumulated 18 skills; a run
+under a seeded home has none, no memories and no sessions — which is what makes its numbers
+comparable with harnesses that learn nothing. It also makes the committed config the one
+that runs, rather than untracked machine state that happens to match it.
+
 ## Verified, not assumed
 
 Each "works" above means the harness completed the `patch-nil-check` fixture in a scratch

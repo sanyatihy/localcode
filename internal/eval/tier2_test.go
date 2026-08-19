@@ -15,21 +15,26 @@ import (
 // was asked to do and performs a scripted edit, which is all the runner needs to be
 // exercised. A real harness cannot be asked to fail in a specific way on demand.
 type fakeDriver struct {
-	name    string
-	err     error
-	writes  map[string]string // filename -> contents, applied to the workdir
-	gotDir  string
-	gotText string
-	saw     []string // what was in the workdir when the harness was handed it
-	calls   int
+	name     string
+	err      error
+	writes   map[string]string // filename -> contents, applied to the workdir
+	gotDir   string
+	gotText  string
+	gotState string
+	saw      []string // what was in the workdir when the harness was handed it
+	calls    int
+
+	// keepsNoState stands in for a harness that ignored the state directory it was
+	// given and kept its sessions on the machine instead.
+	keepsNoState bool
 }
 
 func (f *fakeDriver) Name() string { return f.name }
 
-func (f *fakeDriver) Drive(_ context.Context, workdir, instruction string) error {
+func (f *fakeDriver) Drive(_ context.Context, r Run) error {
 	f.calls++
-	f.gotDir, f.gotText = workdir, instruction
-	if entries, err := os.ReadDir(workdir); err == nil {
+	f.gotDir, f.gotText, f.gotState = r.Workdir, r.Instruction, r.StateDir
+	if entries, err := os.ReadDir(r.Workdir); err == nil {
 		f.saw = nil
 		for _, e := range entries {
 			f.saw = append(f.saw, e.Name())
@@ -38,8 +43,16 @@ func (f *fakeDriver) Drive(_ context.Context, workdir, instruction string) error
 	if f.err != nil {
 		return f.err
 	}
+	// Every real harness writes where it is pointed, and the runner refuses to call a
+	// run cold when nothing did. A fake that wrote nothing would fail every test for
+	// the wrong reason, so it keeps state like the harnesses it stands in for.
+	if !f.keepsNoState {
+		if err := os.WriteFile(filepath.Join(r.StateDir, "session"), []byte("x"), 0o644); err != nil {
+			return err
+		}
+	}
 	for name, body := range f.writes {
-		if err := os.WriteFile(filepath.Join(workdir, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(r.Workdir, name), []byte(body), 0o644); err != nil {
 			return err
 		}
 	}
@@ -456,5 +469,41 @@ func TestEveryCommittedPatchFixtureIsDrivable(t *testing.T) {
 	}
 	if found == 0 {
 		t.Fatal("no patch fixtures found; this test would pass vacuously")
+	}
+}
+
+// A harness is handed a state directory of its own, and one that writes nothing there kept
+// its state where it always does — on the machine, carried over from the last run. That
+// cannot be scored as cold, and it is the harness's doing rather than the model's.
+func TestRunTier2RefusesARunItCannotCallCold(t *testing.T) {
+	d := &fakeDriver{name: "fake", keepsNoState: true, writes: map[string]string{"head.go": fixedSource}}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != FailServer {
+		t.Errorf("outcome = %s, want %s — a fix that cannot be called cold is not a pass",
+			res.Outcome, FailServer)
+	}
+	if !strings.Contains(res.Detail, "cold") {
+		t.Errorf("detail %q does not say why", res.Detail)
+	}
+}
+
+// The state directory is separate from the checkout: a harness that kept its sessions
+// inside the working directory would be handing the next fixture its own notes, and the
+// files would show up as work the harness did.
+func TestRunTier2KeepsStateOutOfTheCheckout(t *testing.T) {
+	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
+
+	if _, _, err := RunTier2(context.Background(), d, brokenFixture(t), unattended(t), ServerProps{}, false); err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if d.gotState == "" {
+		t.Fatal("the harness was given no state directory")
+	}
+	if d.gotState == d.gotDir || strings.HasPrefix(d.gotState, d.gotDir+string(filepath.Separator)) {
+		t.Errorf("state directory %q is inside the checkout %q", d.gotState, d.gotDir)
 	}
 }
