@@ -8,6 +8,9 @@
     "test_file": "verify_test.go.txt",
     "package": "main"
   },
+  "tier2": {
+    "answer_name": "merge.go"
+  },
   "messages": [
     {
       "role": "system",

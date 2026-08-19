@@ -35,6 +35,17 @@ type Task struct {
 	Expect    Expect     `json:"expect"`
 	Patch     *Patch     `json:"patch,omitempty"`
 	Retrieval *Retrieval `json:"retrieval,omitempty"`
+
+	// Tier2 marks a fixture as drivable by a harness as well as answerable in one
+	// request, and carries the one thing tier 2 needs and tier 1 does not: the name the
+	// broken file takes in a scratch checkout. What the bug is stays in Messages, so a
+	// fixture cannot pose one problem to a harness and a different one to the model.
+	Tier2 *Tier2Spec `json:"tier2,omitempty"`
+}
+
+// Tier2Spec is a patch fixture's tier-2 half.
+type Tier2Spec struct {
+	AnswerName string `json:"answer_name"`
 }
 
 type Expect struct {
@@ -71,6 +82,13 @@ const (
 	// when its clock ran out. It is the outcome that keeps a sweep bounded, and a
 	// suite where it appears often is badly budgeted rather than badly answered.
 	FailOverBudget Outcome = "fail_over_budget"
+
+	// Inadmissible is not a result about the harness at all: it never ran, because the
+	// context it requires is one the machine cannot serve under the profile being
+	// scored. It is a row rather than an omission so that a comparison table says why
+	// a harness is absent — a gap where a number should be is read as an oversight,
+	// and the reader cannot tell a constraint from a run somebody forgot.
+	Inadmissible Outcome = "inadmissible"
 )
 
 type Result struct {

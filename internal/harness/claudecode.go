@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/sanyatihy/localcode/internal/eval"
 )
 
 // ClaudeCode drives Anthropic's claude CLI against the local endpoint. It is the only
@@ -35,16 +37,19 @@ func NewClaudeCode(envFile string) *ClaudeCode {
 
 func (c *ClaudeCode) Name() string { return "claude-code" }
 
-func (c *ClaudeCode) Drive(ctx context.Context, workdir, instruction string) error {
+func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
 	env, err := envFromFile(c.envFile)
 	if err != nil {
 		return err
 	}
-	return run(ctx, c.bin, workdir, env,
+	// History, project state and any user-level instructions live under this directory.
+	// Pointed at a fresh one, the session starts with nothing the machine has learned.
+	env = append(env, "CLAUDE_CONFIG_DIR="+r.StateDir)
+	return run(ctx, r, c.bin, env,
 		"-p", // non-interactive: process the prompt and exit
 		"--tools", c.tools,
 		"--permission-mode", "acceptEdits", // the scratch checkout is disposable
-		instruction,
+		r.Instruction,
 	)
 }
 

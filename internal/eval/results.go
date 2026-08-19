@@ -17,6 +17,19 @@ type Row struct {
 	Config string `json:"config"` // human label for the serving config under test
 	Repeat int    `json:"repeat"`
 
+	// Harness names the agent loop a tier-2 row measured, and Profile the desk profile
+	// it was scored under. Both are empty on tier-1 rows, which drive no harness and
+	// make no claim about the desktop. A tier-2 row needs the profile beside the numbers
+	// because two harnesses scored under different ones are not comparable, and one
+	// harness may be admissible under only one of them.
+	Harness string `json:"harness,omitempty"`
+	Profile string `json:"profile,omitempty"`
+
+	// Offline marks a run the harness made with no network but the loopback the model is
+	// served on. It is a condition rather than a metric, and the vision wants at least
+	// one path that holds under it, so it sits on the row rather than in a filename.
+	Offline bool `json:"offline,omitempty"`
+
 	// Toggles under test. Thinking is a string, not a bool, because "unset" is a
 	// third state: it leaves the model's own template default alone.
 	Thinking string `json:"thinking"`
@@ -39,6 +52,11 @@ type Row struct {
 	FreeGB      float64 `json:"free_gb"`
 	SwapDeltaMB float64 `json:"swap_delta_mb"`
 	MemMeasured bool    `json:"mem_measured"`
+
+	// Turns is how many requests a harness made to finish a task, counted at the server
+	// rather than taken from the harness. Zero on tier-1 rows, which are one request by
+	// construction, and on any run where the server could not be watched.
+	Turns int `json:"turns,omitempty"`
 
 	PromptTokens     int     `json:"prompt_tokens"`
 	CachedTokens     int     `json:"cached_tokens"`
