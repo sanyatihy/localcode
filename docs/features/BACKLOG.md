@@ -38,6 +38,12 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   supports calling a base URL from the client, which would remove the entire objection.
 - **docs/TECH.md as-built** — the vision expects durable facts to land there; it does not
   exist yet. Promote when: 0001 ships and there is a first fact to record.
+- **Restricting the editor's tool set through the `agent` setting** — the extension spends
+  36,309 tokens of preamble before anything is typed and has no equivalent of `--tools`,
+  which costs 462 s a turn against 45 s in a terminal (0008). The `agent` setting is
+  documented to run the main thread as a named subagent and apply *its* tool restrictions,
+  which would be `--tools` by another route. Untested. Promote when: the editor flow is
+  something somebody wants to use daily rather than prove works.
 - **Harder tier-1 tasks that this model actually fails** — 0013 added seven traps and
   Qwen3.8-27B took only one of them: eleven of fourteen tasks score 3/3 at every setting
   measured. The traps are proven to trap (fixture self-tests fail the tempting answers), so
