@@ -151,7 +151,7 @@ func TestRunTier2Outcomes(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), unattended(t), false)
+			res, _, err := RunTier2(context.Background(), tc.driver, brokenFixture(t), unattended(t), ServerProps{}, false)
 			if err != nil {
 				t.Fatalf("RunTier2: %v", err)
 			}
@@ -172,7 +172,7 @@ func TestRunTier2RejectsAFixtureThatIsNotBroken(t *testing.T) {
 	write(t, filepath.Join(task.Dir, task.Source), fixedSource)
 
 	d := &fakeDriver{name: "fake"}
-	_, _, err := RunTier2(context.Background(), d, task, unattended(t), false)
+	_, _, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, false)
 	if !errors.Is(err, ErrFixtureNotBroken) {
 		t.Fatalf("err = %v, want ErrFixtureNotBroken", err)
 	}
@@ -185,7 +185,7 @@ func TestRunTier2StagesTheWorkdirForTheDriver(t *testing.T) {
 	d := &fakeDriver{name: "fake", writes: map[string]string{"head.go": fixedSource}}
 	task := brokenFixture(t)
 
-	_, work, err := RunTier2(context.Background(), d, task, unattended(t), true)
+	_, work, err := RunTier2(context.Background(), d, task, unattended(t), ServerProps{}, true)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestRunTier2ExcludesAHarnessTheProfileCannotServe(t *testing.T) {
 	}
 	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: attended.Ceiling + 1}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), attended, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), attended, ServerProps{}, false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestRunTier2ScoresAFlooredHarnessThatFits(t *testing.T) {
 		floor:      p.Ceiling,
 	}
 
-	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, false)
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, false)
 	if err != nil {
 		t.Fatalf("RunTier2: %v", err)
 	}
@@ -276,5 +276,48 @@ func TestLookupDeskProfileRefusesWhatItDoesNotKnow(t *testing.T) {
 		if p.Ceiling <= 0 {
 			t.Errorf("%s: ceiling = %d", name, p.Ceiling)
 		}
+	}
+}
+
+// A server serving less than a harness's floor excludes it too, and for a different
+// reason than the profile does: the fix is a restart, not a verdict about the machine.
+// Driven anyway, the harness refuses and the fixture stays broken — which is scored
+// fail_test_failed and is indistinguishable from the model answering badly.
+func TestRunTier2ExcludesAHarnessTheServerIsNotServingFor(t *testing.T) {
+	p := unattended(t)
+	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: p.Ceiling}
+	served := ServerProps{NCtx: 32768, ModelPath: "/models/m.gguf", Available: true}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, served, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != Inadmissible {
+		t.Fatalf("outcome = %s, want %s", res.Outcome, Inadmissible)
+	}
+	if !strings.Contains(res.Detail, strconv.Itoa(served.NCtx)) {
+		t.Errorf("detail %q does not name what the server serves", res.Detail)
+	}
+	if d.calls != 0 {
+		t.Errorf("driver was called %d times; an excluded harness must not be run", d.calls)
+	}
+}
+
+// A backend that cannot be asked what it serves bounds nothing. It is still scoreable —
+// MLX serves completions without llama.cpp's /props — so the floor is checked against the
+// profile alone rather than against a confident zero that would exclude every harness.
+func TestRunTier2ScoresWhenTheServerCannotBeAsked(t *testing.T) {
+	p := unattended(t)
+	d := &flooredDriver{
+		fakeDriver: fakeDriver{name: "floored", writes: map[string]string{"head.go": fixedSource}},
+		floor:      p.Ceiling,
+	}
+
+	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), p, ServerProps{}, false)
+	if err != nil {
+		t.Fatalf("RunTier2: %v", err)
+	}
+	if res.Outcome != Pass {
+		t.Errorf("outcome = %s (%s), want %s", res.Outcome, res.Detail, Pass)
 	}
 }
