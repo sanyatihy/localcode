@@ -19,3 +19,4 @@ The marker decides how hard `kit audit` pushes, too. An unanswered `BLOCKING`
 question is HIGH after two days, which fails `kit audit --strict` and so stops
 anything shipping. An undrained `FYI` is LOW after a fortnight: visible, never
 a build failure, because it was cleared to wait.
+- [ ] 2026-08-19 · 0011 · FYI · How much repo context may a frontier drafter be shown? Leaning: whole-repo read for planning (docs, code, git history) but no secrets or data files, since planning quality depends on seeing the couplings — and the vision already names planning context as the permitted exception.
