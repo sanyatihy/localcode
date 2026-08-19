@@ -1,9 +1,9 @@
 ---
 id: 0006
 title: A/B llama.cpp against MLX
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-19
 check:
 checked:
 review:
@@ -46,10 +46,10 @@ loses at 16k has lost the case that matters.
 ## Tasks
 
 - [x] MLX and mlx-lm install into an isolated environment, with the setup committed and repeatable
-- [ ] The same model is served under MLX at a documented matched-footprint quantisation, answering the same OpenAI-compatible requests
-- [ ] Both runtimes are scored on the harness at realistic context depths, not just short prompts
-- [ ] Peak memory of each runtime is measured against 0003's envelope, Python overhead included
-- [ ] A decision is recorded in `docs/TECH.md` with the numbers, including what would reverse it
+- [x] The same model is served under MLX at a documented matched-footprint quantisation, answering the same OpenAI-compatible requests
+- [x] Both runtimes are scored on the harness at realistic context depths, not just short prompts
+- [x] Peak memory of each runtime is measured against 0003's envelope, Python overhead included
+- [x] A decision is recorded in `docs/TECH.md` with the numbers, including what would reverse it
 
 ## Open questions
 
@@ -88,3 +88,10 @@ loses at 16k has lost the case that matters.
   build exists, and multi-token prediction is the only mechanism that beats the memory
   bandwidth ceiling — 16.1 GB of weights per token caps dense decode near 25 tok/s here. It is
   therefore measured against llama.cpp's own draft-model path, never against plain llama.cpp.
+- 2026-08-19 — the decision is recorded: llama.cpp stays. MLX wins on wired memory and warm
+  reuse and loses on `/v1/messages`, which 0008 needs, on reporting no served config to check
+  a run against, and on stalling rather than degrading when memory runs out.
+- 2026-08-19 — a caveat is added to the decision rather than left implicit: this suite
+  interleaves 14 prompts before repeating any, which is what makes MLX's per-slot allocation
+  bind. One agent conversation needs one or two slots, so the comparison understates MLX for
+  the workload the project exists for.
