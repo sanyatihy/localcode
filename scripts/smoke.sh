@@ -8,7 +8,7 @@
 # deterministic. Whether thinking helps or hurts is 0005's axis, not a smoke test's.
 set -euo pipefail
 
-ENDPOINT="${ENDPOINT:-http://127.0.0.1:8080}"
+ENDPOINT="${ENDPOINT:-http://127.0.0.1:8081}"
 
 fail() { echo "SMOKE FAIL: $*" >&2; exit 1; }
 

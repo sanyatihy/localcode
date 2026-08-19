@@ -40,7 +40,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("eval", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		endpoint = fs.String("endpoint", "http://127.0.0.1:8080", "OpenAI-compatible endpoint")
+		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "OpenAI-compatible endpoint")
 		taskPath = fs.String("task", "", "path to a single task fixture")
 		tasksDir = fs.String("tasks", "", "directory of task fixtures to run as a suite")
 		repeats  = fs.Int("n", 1, "passes over the suite")
