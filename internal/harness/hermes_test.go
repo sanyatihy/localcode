@@ -27,9 +27,11 @@ func TestHermesIsAdmissibleUnattendedOnly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LookupDeskProfile(%q): %v", tc.profile, err)
 		}
-		if admitted, floor := p.Admits(h); admitted != tc.want {
+		// No served config: the profile's ceiling is the only bound in play, which is
+		// the comparison this test is about.
+		if admitted := p.Excludes(h, eval.ServerProps{}) == ""; admitted != tc.want {
 			t.Errorf("%s (ceiling %d) admits hermes (floor %d) = %v, want %v",
-				tc.profile, p.Ceiling, floor, admitted, tc.want)
+				tc.profile, p.Ceiling, h.ContextFloor(), admitted, tc.want)
 		}
 	}
 }

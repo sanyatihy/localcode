@@ -71,15 +71,26 @@ func LookupDeskProfile(name string) (DeskProfile, error) {
 	return DeskProfile{}, fmt.Errorf("unknown desk profile %q; known: %s", name, strings.Join(known, ", "))
 }
 
-// Admits reports whether a driver's context floor fits under this profile's ceiling, and
-// the floor it asked for. A driver that declares no floor is admitted everywhere.
-func (p DeskProfile) Admits(d Driver) (admitted bool, floor int) {
+// Excludes reports why a driver cannot be scored under this profile against this server,
+// and returns "" when it can be. A driver that declares no floor is admitted everywhere.
+//
+// Two bounds can exclude it and they take different fixes, so the reason names which one
+// bit: a floor above the profile's ceiling is a verdict — the machine cannot serve that
+// harness while somebody is using it — while a floor above what the server is actually
+// serving is a restart. A server that cannot be asked bounds nothing, which is the
+// backend-without-/props case and is why the floor is checked against the profile first.
+func (p DeskProfile) Excludes(d Driver, served ServerProps) string {
 	f, ok := d.(ContextFloorer)
 	if !ok {
-		return true, 0
+		return ""
 	}
-	floor = f.ContextFloor()
-	return floor <= p.Ceiling, floor
+	switch floor := f.ContextFloor(); {
+	case floor > p.Ceiling:
+		return fmt.Sprintf("context floor %d exceeds the %s ceiling %d", floor, p.Name, p.Ceiling)
+	case served.Available && floor > served.NCtx:
+		return fmt.Sprintf("context floor %d exceeds the %d this server is serving", floor, served.NCtx)
+	}
+	return ""
 }
 
 // Tier2Task is a fixture a harness is asked to fix. Unlike tier 1 it does not describe a
@@ -106,16 +117,15 @@ var ErrFixtureNotBroken = errors.New("fixture passes its own tests before the ha
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
 // outcome by running the fixture's own tests. keep leaves the scratch directory in place
 // for inspection and returns its path.
-func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, keep bool) (Result, string, error) {
+func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served ServerProps, keep bool) (Result, string, error) {
 	res := Result{TaskID: t.ID}
 
 	// Checked before anything is staged, and returned as a result rather than an error:
-	// scoring a harness at a context the profile excludes produces a quality figure for
-	// a configuration nobody can use, which is worse than having no figure at all.
-	if admitted, floor := p.Admits(d); !admitted {
-		res.Outcome = Inadmissible
-		res.Detail = fmt.Sprintf("context floor %d exceeds the %s ceiling %d",
-			floor, p.Name, p.Ceiling)
+	// scoring a harness at a context it refuses produces either a quality figure for a
+	// configuration nobody can use or a harness failure that reads as the model
+	// answering badly. Both are worse than having no figure at all.
+	if why := p.Excludes(d, served); why != "" {
+		res.Outcome, res.Detail = Inadmissible, why
 		return res, "", nil
 	}
 

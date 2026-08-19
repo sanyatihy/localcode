@@ -23,12 +23,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/harness"
 )
 
 var errTaskFailed = errors.New("one or more harnesses failed the task")
+
+// propsTimeout bounds the one question this command asks the server directly. Short
+// because it is a local endpoint answering from memory, and a run should not spend a
+// harness timeout discovering the server is not there.
+const propsTimeout = 15 * time.Second
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -51,6 +57,7 @@ type config struct {
 	answerName  string
 	instruction string
 	desk        eval.DeskProfile
+	endpoint    string
 	piExtension string
 	ocConfig    string
 	ccEnv       string
@@ -64,20 +71,21 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("tier2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		drivers = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
-		fixture = fs.String("fixture", "tasks/patch-nil-check", "fixture directory")
-		source  = fs.String("source", "broken.go.txt", "file in the fixture the harness must fix")
-		test    = fs.String("test", "verify_test.go.txt", "unseen test staged beside the answer")
-		answer  = fs.String("answer-name", "session.go", "name the source takes in the scratch module")
-		instr   = fs.String("instruction", "", "what to tell the harness (required)")
-		profile = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
-		piExt   = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
-		ocCfg   = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
-		ccEnv   = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
-		model   = fs.String("model", "bartowski/Qwen3.8-27B-GGUF:Q4_K_M", "served model id")
-		results = fs.String("results", "", "append a JSONL row here; empty writes none")
-		label   = fs.String("label", "unlabelled", "serving config label recorded with each row")
-		keep    = fs.Bool("keep", false, "leave the scratch checkout in place and print its path")
+		drivers  = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
+		fixture  = fs.String("fixture", "tasks/patch-nil-check", "fixture directory")
+		source   = fs.String("source", "broken.go.txt", "file in the fixture the harness must fix")
+		test     = fs.String("test", "verify_test.go.txt", "unseen test staged beside the answer")
+		answer   = fs.String("answer-name", "session.go", "name the source takes in the scratch module")
+		instr    = fs.String("instruction", "", "what to tell the harness (required)")
+		profile  = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
+		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "endpoint the harnesses are pointed at, asked what it serves")
+		piExt    = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
+		ocCfg    = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
+		ccEnv    = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
+		model    = fs.String("model", "bartowski/Qwen3.8-27B-GGUF:Q4_K_M", "served model id")
+		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
+		label    = fs.String("label", "unlabelled", "serving config label recorded with each row")
+		keep     = fs.Bool("keep", false, "leave the scratch checkout in place and print its path")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -88,7 +96,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	cfg := config{
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, source: *source,
-		testFile: *test, answerName: *answer, instruction: *instr, desk: desk,
+		testFile: *test, answerName: *answer, instruction: *instr, desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, model: *model,
 		results: *results, label: *label, keep: *keep,
 	}
@@ -113,11 +121,33 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	ctx := context.Background()
+
+	// The endpoint is asked what it serves rather than told: the profile a run declares
+	// is a human's claim, and a harness driven against a server below its floor fails in
+	// a way that reads as the model answering badly. A backend that cannot be asked is
+	// still scoreable — that is MLX, which serves completions without llama.cpp's /props
+	// — so the guard switches off loudly rather than stopping the run.
+	client := eval.NewClient(cfg.endpoint, propsTimeout)
+	props, err := client.Props(ctx)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "tier2: %s does not say what it serves (%v); rows record it "+
+			"as unavailable and a harness's context floor is checked against the profile alone\n",
+			cfg.endpoint, err)
+		props = eval.ServerProps{}
+	}
+	// Serving above the profile's ceiling makes every row of this run false: the label
+	// would say a machine somebody could use, and 0014 measured that context as one they
+	// could not. A restart is the fix, so this stops the run rather than marking rows.
+	if props.Available && props.NCtx > cfg.desk.Ceiling {
+		return fmt.Errorf("server is serving %d, above the %s ceiling of %d: restart it lower, "+
+			"or score this run as unattended", props.NCtx, cfg.desk.Name, cfg.desk.Ceiling)
+	}
+
 	failures := 0
 	// Sequential: the server runs one slot, so concurrent harnesses would queue and
 	// every duration would measure the queue rather than the harness.
 	for _, d := range ds {
-		res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, cfg.keep)
+		res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
 		if err != nil {
 			// A staging or fixture problem is not a result about the harness.
 			return fmt.Errorf("%s: %w", d.Name(), err)
@@ -142,7 +172,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			// Empty effort, and honestly so: tier-2 drives an external harness that
 			// builds its own requests, so what it asked for is the harness's business
 			// and not something this process can claim to have set.
-			row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, eval.ServerProps{}, "tier2", res)
+			row := eval.NewRow(cfg.label, 0, "", "", eval.Sampling{}, props, "tier2", res)
 			row.Harness, row.Profile = d.Name(), cfg.desk.Name
 			if err := eval.AppendRow(cfg.results, row); err != nil {
 				return fmt.Errorf("append result: %w", err)

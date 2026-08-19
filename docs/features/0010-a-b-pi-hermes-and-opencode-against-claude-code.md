@@ -93,7 +93,7 @@ unattended is still a real and useful question, and the grind profile is where i
 ## Tasks
 
 - [x] Hermes is scored under the unattended profile only, with its 64,000-token floor against 0014's 57,344 attended ceiling stated in the results table rather than left to be inferred from a missing row
-- [ ] A tier-2 row carries the context the server reported serving, and a harness whose floor that server does not meet is recorded as inadmissible rather than driven
+- [x] A tier-2 row carries the context the server reported serving, and a harness whose floor that server does not meet is recorded as inadmissible rather than driven
 - [ ] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
 - [ ] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
 - [ ] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
