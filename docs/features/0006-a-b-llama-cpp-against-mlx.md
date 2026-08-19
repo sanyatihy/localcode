@@ -1,9 +1,9 @@
 ---
 id: 0006
 title: A/B llama.cpp against MLX
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-19
 check:
 checked:
 review:
@@ -45,11 +45,11 @@ loses at 16k has lost the case that matters.
 
 ## Tasks
 
-- [ ] MLX and mlx-lm install into an isolated environment, with the setup committed and repeatable
-- [ ] The same model is served under MLX at a documented matched-footprint quantisation, answering the same OpenAI-compatible requests
-- [ ] Both runtimes are scored on the harness at realistic context depths, not just short prompts
-- [ ] Peak memory of each runtime is measured against 0003's envelope, Python overhead included
-- [ ] A decision is recorded in `docs/TECH.md` with the numbers, including what would reverse it
+- [x] MLX and mlx-lm install into an isolated environment, with the setup committed and repeatable
+- [x] The same model is served under MLX at a documented matched-footprint quantisation, answering the same OpenAI-compatible requests
+- [x] Both runtimes are scored on the harness at realistic context depths, not just short prompts
+- [x] Peak memory of each runtime is measured against 0003's envelope, Python overhead included
+- [x] A decision is recorded in `docs/TECH.md` with the numbers, including what would reverse it
 
 ## Open questions
 
@@ -58,6 +58,44 @@ loses at 16k has lost the case that matters.
   but this is close enough that the numbers should decide it in the open.
 
 ## Log
+- 2026-08-18 — **`reasoning_effort` cannot be sent the same way to both runtimes, so 0006 does
+  not send it.** `llama-server` accepts it top-level; `mlx_lm` has no such field and would
+  silently ignore it, running at the template's `xhigh` default while llama.cpp ran at
+  whatever was asked — two reasoning levels compared as one runtime difference. Both do accept
+  it inside `chat_template_kwargs`, which is the portable route if a later comparison needs it.
+  This one runs at thinking off, 0005's settled config, where no effort text is injected at all.
+- 2026-08-18 — **MLX returns reasoning inline rather than in a field.** `mlx_lm` tracks a
+  thinking state and emits think tags in the content; it has no `reasoning_content`. 0012's
+  profile already extracts either form and strips the inline one from the content, so reasoning
+  is not counted as answer text on one side and excluded on the other.
+- 2026-08-18 — the matched pair is **MLX 4bit at 16.1 GB against llama.cpp Q4_K_M at 17 GB**,
+  which is the closest available. The 8bit build is 29.5 GB and sits past the ~22.2 GB
+  admissible wired budget 0014 measured, so this comparison has one quantisation on each side
+  and not a ladder.
+- 2026-08-18 — **context is not a matched variable across these runtimes.** `llama-server`
+  reserves a KV cache at load and reports what it serves; `mlx_lm` sizes per request and has
+  no equivalent number, so the two cannot be set to "the same context" and depth has to be
+  measured by sending deep prompts instead. That is also why 0012's served-config guard had
+  to become optional before this feature could run at all.
 - 2026-08-17 — now needs 0012. The scorer is welded to Qwen's thinking toggle and to
   llama.cpp's `/props` and `timings`; this feature would otherwise have to build that seam
   itself, under time pressure, in a comparison whose numbers then rest on it.
+- 2026-08-19 — the MLX config gains prompt-cache bounds, in bytes and in slots. `mlx_lm`
+  wires its KV caches and leaves the LRU unbounded, which exhausts the machine without ever
+  touching swap; slots are sized to the count of distinct prompts a suite interleaves, not to
+  the byte budget.
+- 2026-08-19 — box 5 is rewritten: the decision separates runtime from technique. An `MTP-4bit`
+  build exists, and multi-token prediction is the only mechanism that beats the memory
+  bandwidth ceiling — 16.1 GB of weights per token caps dense decode near 25 tok/s here. It is
+  therefore measured against llama.cpp's own draft-model path, never against plain llama.cpp.
+- 2026-08-19 — the decision is recorded: llama.cpp stays. MLX wins on wired memory and warm
+  reuse and loses on `/v1/messages`, which 0008 needs, on reporting no served config to check
+  a run against, and on stalling rather than degrading when memory runs out.
+- 2026-08-19 — a caveat is added to the decision rather than left implicit: this suite
+  interleaves 14 prompts before repeating any, which is what makes MLX's per-slot allocation
+  bind. One agent conversation needs one or two slots, so the comparison understates MLX for
+  the workload the project exists for.
+- 2026-08-19 — the MTP reversal condition is restated. It requires `mlx_lm` to gain
+  `qwen3_5_mtp` support, which the current release rejects outright, and then to beat
+  llama.cpp's draft-model path — MTP is consumed as a draft model, so the comparison is
+  symmetric rather than technique-against-runtime as first recorded.

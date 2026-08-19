@@ -124,20 +124,32 @@ The compositor **stalls** rather than saturates — the failing cell's peak sits
 passing cell's minimum, so the populations do not overlap — and it is flat from the first
 sample of the cell, which points at allocation time rather than at ingest.
 
-**That ceiling is conditional on what else is running, and the condition is doing more work
-than the number.** It was measured with browsers closed, at a 5.81 GB apparatus. A normal
-working set on this machine measures **20.32 GB** — a browser alone was 5.84 GB — and the
-model is 18.10 GB at 8k rising only to 20.30 GB at 64k:
+**That ceiling is conditional on what else is running.** The arithmetic here was wrong for a
+session and is restated: the figures below are **anonymous memory plus wired**, which is what
+competes for the 32 GB. The earlier version added a per-process RSS sum to the model's RSS,
+which counts every shared page once per resident process and counts the model twice — once as
+resident, again as wired.
 
-| apparatus | 8k | 32k | 64k | Q3_K_M weights alone |
-|---|---|---|---|---|
-| 5.81 GB, browsers closed | 23.9 GB | 24.9 GB | 26.1 GB | 19.6 GB |
-| 20.32 GB, normal use | 38.4 GB | 39.5 GB | 40.6 GB | 34.1 GB |
+**The model lives in wired memory**, because Metal wires its buffers: with it loaded and
+serving, wired measures **20.89 GB** while the mmap'd GGUF holds only 1.99 GB of file-backed
+pages. Apps live in anonymous memory — 6.61 GB with an editor open and no browser.
 
-**Nothing fits alongside a normal working set — not the smallest context, not the smallest
-quant in 0004's ladder.** And context is the wrong lever for it: an eightfold cut in context
-saves 2.2 GB, where closing a browser saves 5.8. Running this model locally means clearing
-the desk first; that is a property of a 27B on 32 GB, not a tuning problem.
+| what | measured |
+|---|---|
+| model, wired, serving at 32k | 20.89 GB |
+| apps, anonymous, editor only | 6.61 GB |
+| **total against 32 GB** | **27.50 GB** |
+
+So roughly **11 GB is left for everything that is not the model**, and an editor takes 6.6 of
+it. A browser does not fit in the rest: closing one moved the summed-RSS figure by 14.8 GB, and
+even discounted for the overcount it is several GB of anonymous memory. **The conclusion stands
+— the desk has to be cleared — but it is marginal rather than the comfortable 6 GB overshoot
+first reported.** Context is still the wrong lever: an eightfold cut moves the model about
+2.2 GB.
+
+The exact margin with a browser open is **not currently measured**, since every figure taken
+before 2026-08-19 used the summed-RSS metric. `scripts/memprobe.sh` and `scripts/ladder.sh`
+now record `anonymous_gb`, so the next run of either produces the honest number.
 
 **The mechanism is not yet established.** Wired peak moves only 0.54 GB across a doubling of
 context, and the failing cell had 1.71 GB of headroom against an assumed 24 GB limit where
@@ -289,6 +301,64 @@ into `docs/data/`.
 - **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
+
+## llama.cpp against MLX
+
+Same model, matched by footprint — llama.cpp Q4_K_M at 17 GB against MLX 4bit at 16.1 GB —
+driven through the same scorer at 0005's settled config, 42 rows each.
+
+| | llama.cpp | MLX |
+|---|---|---|
+| pass | 40/42 | 39/42 |
+| tool-call validity | 12/12 | 12/12 |
+| wired, model serving | 20.89 GB | **18.02 GB** |
+| minimum free memory | 0.06 GB | **2.64 GB** |
+| runs that swapped | 7 | **0** |
+| cold depth prompts | **3–9% faster** | |
+| short prompts | | **faster** |
+| decode, client-side | 8.89 tok/s | **10.35 tok/s** |
+| warm reuse, identical request | 20s → 2s (10×) | **19.6s → 0.5s (39×)** |
+
+**They differ in where the KV cache comes from, and that is the whole story.** llama.cpp
+reserves its cache at load against `--ctx-size`, so reuse is free within that reservation and
+the cost is paid once. `mlx_lm` allocates cache capacity **eagerly per slot at startup**:
+`--prompt-cache-size 16` left 0.11 GB free on the first request, where 2 slots left 5.38 GB.
+Cache capacity is bought from the same wired pool the weights sit in, so on 32 GB reuse
+breadth and depth headroom trade directly against each other.
+
+**Unbounded is not an option.** `mlx_lm`'s LRU is unbounded by default, and one 16k prompt
+drove free memory to zero — with swap flat, because wired pages cannot be paged out. Every
+later request stalled rather than slowed. `--prompt-cache-bytes` and `--prompt-cache-size`
+are mandatory on this hardware, not tuning.
+
+**The decision is to stay on llama.cpp**, and it is closer than the table suggests. MLX wins
+on memory, which is the constraint 0014 showed binds here, and on warm reuse. It loses on
+three things that matter more today: it serves no Anthropic `/v1/messages`, which is what 0008
+needs for the editor flow; it reports no served config or timings, so a run cannot be checked
+against the label it was given; and its failure mode under memory pressure is a hard stall
+rather than degradation, which took three misconfigurations to diagnose.
+
+Decode is measured client-side because `mlx_lm` reports no server-side rate; llama.cpp's own
+figure for pure decode is 9.51 tok/s, so MLX's true decode is higher than the 10.35 shown,
+which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB of weights per
+token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
+configuration change reaches the figures quoted for speculative decoding.
+
+**Multi-token prediction is not reachable here.** `mlx-community/Qwen3.8-27B-MTP-4bit` is
+256 MB of heads meant to be passed as a draft model, and `mlx_lm` 0.31.3 — the current release
+— rejects it: `Model type qwen3_5_mtp not supported`. So MTP is not a lever we declined to
+pull; it does not exist in this server yet.
+
+**What would reverse it:** a 128 GB machine, where slot count stops competing with the model
+and MLX's reuse advantage runs unconstrained. `mlx_lm` gaining `qwen3_5_mtp` support *and*
+beating llama.cpp's own draft-model path, which is the symmetric comparison since MTP is
+consumed as a draft model rather than as a runtime feature. Or MLX gaining `/v1/messages`.
+
+**One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
+repeating any, which is what forced the slot-count problem. A real agent session is one
+conversation resending a growing prefix, needing one or two slots — the configuration that is
+memory-safe. So this comparison understates MLX for the workload the project actually cares
+about, and the honest reading is that neither runtime is disqualified.
 
 ## The suite is bounded on purpose
 

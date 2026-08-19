@@ -23,6 +23,8 @@ here should be compared across machines without saying so.
 | `2026-08-18-m2max-32gb-0013-readonly-fixed.jsonl` | 12 runs | `toolcall-constraint-readonly` at all four reasoning levels after its fixture was fixed. Supersedes that task's rows in the two files above, which scored the model for declining to patch a file it had not been shown. |
 | `2026-08-18-m2max-32gb-0005-toggle.jsonl` | 81 runs | Thinking off, on/low and on/medium, **each at its own model-card sampling** — the first clean comparison across the toggle. Supersedes every earlier thinking-vs-off figure. |
 | `2026-08-18-m2max-32gb-0005-sampling.jsonl` | 162 runs | Temperature and top_p swept around each mode's default, plus greedy, one value moved per cell. |
+| `2026-08-19-m2max-32gb-0006-runtime.jsonl` | 84 runs | llama.cpp against MLX, 42 rows each, same model matched by footprint, 0005's settled config, only `-endpoint` differing. MLX at 2 cache slots — the memory-safe configuration. |
+| `2026-08-19-m2max-32gb-0006-mlx-16-slots.jsonl` | 42 runs | The same MLX run at 16 cache slots. Every depth row fails with free memory at 0.00 and swap flat: evidence that `mlx_lm` allocates cache capacity per slot at startup, not as it fills. |
 | `2026-08-17-m2max-32gb-tier1-matrix.jsonl` | 42 runs | Thinking on vs off at model-card sampling, baseline 32k/q8_0, three passes over seven tasks. |
 
 ## Erratum: page size, 2026-08-18
