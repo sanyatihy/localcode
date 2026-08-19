@@ -95,6 +95,16 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **the fixed cost of a harness is measurable without running the model, and
+  Claude Code's default tool set is what makes it expensive.** Pointing each harness at an
+  endpoint that records the request and answers 400, then tokenising the rendered prompt:
+  Claude Code 18,388 tokens before the user's first word, Hermes 17,465, OpenCode 9,810,
+  Pi 3,922 — and Claude Code at `--tools Bash,Edit,Read,Write` **3,711**, cheaper than Pi.
+  15,304 of the default 18,388 are tool definitions, `Workflow` alone 5,316. The
+  documented `CLAUDE_CODE_DISABLE_*` variables move the total by 7% and remove no tool;
+  `--tools` is the only lever. Rows in
+  `docs/data/2026-08-19-m2max-32gb-0008-harness-overhead.jsonl`.
+
 - 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to
   go.** Claude Code sends a `role: "system"` message *after* the user turn — the
   `mid-conversation-system-2026-04-07` capability — on every request, with 21 tools

@@ -25,6 +25,7 @@ here should be compared across machines without saying so.
 | `2026-08-18-m2max-32gb-0005-sampling.jsonl` | 162 runs | Temperature and top_p swept around each mode's default, plus greedy, one value moved per cell. |
 | `2026-08-19-m2max-32gb-0006-runtime.jsonl` | 84 runs | llama.cpp against MLX, 42 rows each, same model matched by footprint, 0005's settled config, only `-endpoint` differing. MLX at 2 cache slots — the memory-safe configuration. |
 | `2026-08-19-m2max-32gb-0006-mlx-16-slots.jsonl` | 42 runs | The same MLX run at 16 cache slots. Every depth row fails with free memory at 0.00 and swap flat: evidence that `mlx_lm` allocates cache capacity per slot at startup, not as it fills. |
+| `2026-08-19-m2max-32gb-0008-harness-overhead.jsonl` | 6 harnesses + apparatus | What each harness spends before the user's first word: system prompt and tool definitions, counted by the served tokeniser. No model ran — every harness was pointed at an endpoint that records the request and answers 400, so `model_calls_before_giving_up` counts attempts, not a turn. |
 | `2026-08-17-m2max-32gb-tier1-matrix.jsonl` | 42 runs | Thinking on vs off at model-card sampling, baseline 32k/q8_0, three passes over seven tasks. |
 
 ## Erratum: page size, 2026-08-18
