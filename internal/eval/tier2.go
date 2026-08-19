@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -106,6 +107,46 @@ type Tier2Task struct {
 	TestFile    string
 	AnswerName  string // filename the source takes in the scratch module
 	Instruction string
+}
+
+// bodyFence is the code block a tier-1 patch fixture shows the model inline. A harness
+// opens the file instead, so the block comes out of the instruction — and only that block:
+// a fixture may carry other fenced code that is part of the problem statement.
+var bodyFence = regexp.MustCompile("(?s)\n*```(?:go|golang)?\\s*\n\\{\\{BODY\\}\\}\n```\n*")
+
+// Tier2From turns a tier-1 patch fixture into a tier-2 one. Both tiers then pose the same
+// problem from one source: the fixture's own user message, with the inlined source removed
+// and the file it lives in named instead.
+//
+// A fixture without a tier2 block is not a defect — a tool-call fixture is a single request
+// by nature — so callers scanning a suite skip what this refuses rather than failing.
+func Tier2From(t *Task) (Tier2Task, error) {
+	if t.Kind != "patch" || t.Patch == nil {
+		return Tier2Task{}, fmt.Errorf("%s: only a patch fixture can be driven as tier 2", t.ID)
+	}
+	if t.Tier2 == nil || t.Tier2.AnswerName == "" {
+		return Tier2Task{}, fmt.Errorf("%s: no tier2.answer_name, so the instruction cannot name a file", t.ID)
+	}
+	var user string
+	for _, m := range t.Messages {
+		if m.Role == "user" {
+			user = m.Content
+			break
+		}
+	}
+	if !strings.Contains(user, "{{BODY}}") {
+		return Tier2Task{}, fmt.Errorf("%s: user message inlines no {{BODY}} to remove", t.ID)
+	}
+	// The system message is deliberately dropped: it tells the model to reply with a whole
+	// file in one block, which is the opposite of what a harness is asked to do.
+	return Tier2Task{
+		ID:          t.ID,
+		Dir:         t.Patch.Dir,
+		Source:      t.Patch.Source,
+		TestFile:    t.Patch.TestFile,
+		AnswerName:  t.Tier2.AnswerName,
+		Instruction: fmt.Sprintf("In %s: %s", t.Tier2.AnswerName, strings.TrimSpace(bodyFence.ReplaceAllString(user, "\n\n"))),
+	}, nil
 }
 
 // ErrFixtureNotBroken means the fixture passed its own tests before the harness touched

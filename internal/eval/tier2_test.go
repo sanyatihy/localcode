@@ -370,3 +370,91 @@ func TestNothing(t *testing.T) {}
 			res.Outcome, res.Detail, FailTest)
 	}
 }
+
+// The instruction a harness gets is derived from the fixture's own user message, so the two
+// tiers cannot drift into posing different problems. What comes out must lose the inlined
+// source, name the file it went into, and keep any other code the statement needs.
+func TestTier2FromDerivesTheInstruction(t *testing.T) {
+	task := &Task{
+		ID: "patch-x", Kind: "patch",
+		Patch: &Patch{Dir: "d", Source: "broken.go.txt", TestFile: "verify_test.go.txt"},
+		Tier2: &Tier2Spec{AnswerName: "round.go"},
+		Messages: []Message{
+			{Role: "system", Content: "Reply with the complete corrected file in a single ```go block."},
+			{Role: "user", Content: "RoundHalf truncates.\n\n```go\n{{BODY}}\n```\n\nThis test keeps passing:\n\n```go\nfunc TestExisting(t *testing.T) {}\n```"},
+		},
+	}
+	got, err := Tier2From(task)
+	if err != nil {
+		t.Fatalf("Tier2From: %v", err)
+	}
+	if strings.Contains(got.Instruction, "{{BODY}}") {
+		t.Errorf("instruction still inlines the source: %q", got.Instruction)
+	}
+	if !strings.HasPrefix(got.Instruction, "In round.go: RoundHalf truncates.") {
+		t.Errorf("instruction does not name the file it is about: %q", got.Instruction)
+	}
+	if !strings.Contains(got.Instruction, "func TestExisting") {
+		t.Errorf("instruction dropped code the statement needs: %q", got.Instruction)
+	}
+	// The tier-1 system message tells the model to answer with a whole file in one
+	// block, which is not what a harness is being asked to do.
+	if strings.Contains(got.Instruction, "single ```go block") {
+		t.Errorf("instruction carries the tier-1 system message: %q", got.Instruction)
+	}
+	if got.AnswerName != "round.go" || got.Source != "broken.go.txt" || got.Dir != "d" {
+		t.Errorf("fixture fields not carried over: %+v", got)
+	}
+}
+
+// What tier 2 cannot drive is refused by name, so a suite scan can pass over it and a
+// single-fixture run says why rather than driving something meaningless.
+func TestTier2FromRefusesWhatItCannotDrive(t *testing.T) {
+	patch := &Patch{Dir: "d", Source: "broken.go.txt", TestFile: "verify_test.go.txt"}
+	body := []Message{{Role: "user", Content: "fix it\n\n```go\n{{BODY}}\n```"}}
+	for _, tc := range []struct {
+		name string
+		task *Task
+	}{
+		{"a tool-call fixture is one request by nature", &Task{ID: "t", Kind: "toolcall", Messages: body}},
+		{"a patch fixture with no tier2 block names no file", &Task{ID: "t", Kind: "patch", Patch: patch, Messages: body}},
+		{"a fixture that inlines nothing was never a patch task", &Task{
+			ID: "t", Kind: "patch", Patch: patch, Tier2: &Tier2Spec{AnswerName: "x.go"},
+			Messages: []Message{{Role: "user", Content: "fix it"}}}},
+	} {
+		if _, err := Tier2From(tc.task); err == nil {
+			t.Errorf("%s: expected an error", tc.name)
+		}
+	}
+}
+
+// Every committed patch fixture must be drivable, because the suite a harness is scored on
+// is exactly these and a fixture that silently drops out shortens the comparison.
+func TestEveryCommittedPatchFixtureIsDrivable(t *testing.T) {
+	paths, err := DiscoverTasks("../../tasks")
+	if err != nil {
+		t.Fatalf("DiscoverTasks: %v", err)
+	}
+	found := 0
+	for _, p := range paths {
+		task, err := LoadTask(p)
+		if err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		if task.Kind != "patch" {
+			continue
+		}
+		found++
+		t2, err := Tier2From(task)
+		if err != nil {
+			t.Errorf("%s: %v", task.ID, err)
+			continue
+		}
+		if !strings.Contains(t2.Instruction, t2.AnswerName) {
+			t.Errorf("%s: instruction never names %s", task.ID, t2.AnswerName)
+		}
+	}
+	if found == 0 {
+		t.Fatal("no patch fixtures found; this test would pass vacuously")
+	}
+}

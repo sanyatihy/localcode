@@ -51,9 +51,12 @@ All four run under `cmd/tier2`, which stages the fixture in a scratch module and
 what the harness left behind. One command, one endpoint, one instruction, one context:
 
     go run ./cmd/tier2 -drivers claude-code,pi,opencode,hermes -profile unattended \
-      -endpoint http://127.0.0.1:8081 -fixture tasks/patch-nil-check \
-      -instruction "session.go has a bug: RefreshToken panics when given a nil token. \
-    Fix it so a nil token returns ErrNilToken and a nil result, leaving all other behaviour unchanged."
+      -endpoint http://127.0.0.1:8081 -fixture tasks/patch-nil-check
+
+The instruction is the fixture's own, with the source it inlines for tier 1 taken out and
+the file it goes into named instead — so both tiers pose one problem and the task id on a
+row is enough to recover what was asked. `-fixtures tasks` runs every fixture that can be
+driven this way.
 
 | harness | patch-nil-check | outcome |
 |---|---|---|
