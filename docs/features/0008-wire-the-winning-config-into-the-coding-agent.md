@@ -79,7 +79,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 
 - [x] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
 - [x] The half of the winning config that is per-request — thinking off and its sampling — is served as a default, since Claude Code sends neither
-- [ ] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
+- [x] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
 - [ ] Context exhaustion and auto-compaction at the measured ceiling are made visible rather than silent
@@ -95,6 +95,17 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to
+  go.** Claude Code sends a `role: "system"` message *after* the user turn — the
+  `mid-conversation-system-2026-04-07` capability — on every request, with 21 tools
+  defined or with none, and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` does not stop
+  it. Qwen3.8's template raises on a non-leading system message, llama.cpp returns
+  that as a 500, and Claude Code retries ten times and dies. Anthropic documents an
+  automatic retry that disables the capability after such a rejection, but it matches
+  on the upstream's error wording, which a Jinja exception does not carry.
+  `config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template
+  in one line and the flow works; the request path still has nothing in it.
+
 - 2026-08-19 — **a box is inserted before the terminal run: half the winning config
   could not reach the model.** Sampling and the thinking toggle are per-request
   everywhere else here — the scorer sends them on every call — and Claude Code sends

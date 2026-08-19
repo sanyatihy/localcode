@@ -35,5 +35,14 @@ add_opt --top-k "${TOP_K:-}"
 add_opt --presence-penalty "${PRESENCE_PENALTY:-}"
 add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
 
+# A template override is a path, and llama-server resolves it against its own working
+# directory. Make it absolute here and fail on a missing file, rather than letting the
+# server fall back to the model's own template and serve something nobody asked for.
+if [ -n "${CHAT_TEMPLATE_FILE:-}" ]; then
+  case "$CHAT_TEMPLATE_FILE" in /*) ;; *) CHAT_TEMPLATE_FILE="$PWD/$CHAT_TEMPLATE_FILE" ;; esac
+  [ -f "$CHAT_TEMPLATE_FILE" ] || { echo "$CONFIG names a chat template that is not there: $CHAT_TEMPLATE_FILE" >&2; exit 2; }
+  args+=(--chat-template-file "$CHAT_TEMPLATE_FILE")
+fi
+
 echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT" >&2
 exec llama-server "${args[@]}"
