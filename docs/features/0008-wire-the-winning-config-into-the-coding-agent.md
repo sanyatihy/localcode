@@ -92,11 +92,10 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
   tool set, the project's instructions and the editor's own context — against a 32,768
   server, and took llama-server's 400 before anything was typed. The terminal avoids this
   with `--tools`, which the extension has no equivalent of. That turn then cost **7.5
-  minutes**: 434 s of ingest and 82 tokens at 5.54 tok/s, against 9.8 tok/s on a short
-  prompt — so depth taxes decode as well as prefill, and raising the context further would
-  buy nothing, since prefill costs what the prompt is rather than what is reserved. It
-  also corrects a claim made below: the declared window catches an overflow **between
-  turns**, not the preamble a session starts with.
+  minutes**: 434 s of ingest and 82 tokens at 5.54 tok/s against 9.8 on a short prompt, so
+  depth taxes decode as well as prefill. Raising the context buys nothing: prefill costs
+  what the prompt is, not what is reserved. It also corrects a claim below — the declared
+  window catches an overflow **between turns**, not the preamble a session starts with.
 
 - 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
   above. It said this flow cannot be made offline and handed the offline claim to 0010; as
