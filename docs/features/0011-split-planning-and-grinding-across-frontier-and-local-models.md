@@ -59,7 +59,7 @@ an afterthought, and `review: human` because widening it is not an agent's call.
 
 ## Tasks
 
-- [ ] The boundary is written down: which feature classes a local builder finishes unattended, drawn from 0002's per-task results rather than from judgement
+- [x] The boundary is written down: which feature classes a local builder finishes unattended, drawn from 0002's per-task results rather than from judgement
 - [ ] A local builder claims a real feature from a frontier-drafted doc and ships a reviewable branch, using `kit` unchanged
 - [ ] What planning context reaches the frontier tier is characterised and bounded, with the rule committed
 - [ ] Frontier tokens per shipped feature are measured against a frontier-only baseline

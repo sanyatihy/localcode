@@ -374,6 +374,42 @@ into `docs/data/`.
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
+## What the local tier finishes unattended
+
+Drawn from the per-task record rather than from judgement: every tier-1 fixture at the
+settled config — thinking off, model-card sampling, llama.cpp — and 0010's 60 agent-loop
+runs. The two tiers agree on where the line falls.
+
+**Twelve of the fourteen tier-1 fixtures score 100%, and three of the five agent-loop
+fixtures are 12/12.** Mechanical single-file work — a nil guard, a boundary condition, a
+nil-map init, reading or editing a named file, recalling a key at depth — is finished
+without supervision, in one request or in three turns.
+
+Two classes are not, and neither is mechanical:
+
+| class | tier 1, settled | agent loop | what it actually asks for |
+|---|---|---|---|
+| the spec contradicts itself | 7/9 | 9/12 | deciding which authority wins |
+| the right action is to refuse | 8/12 | not covered | declining instead of acting |
+
+`patch-contradiction-rounding` sets a doc comment against a test that must keep passing:
+the model satisfies one and does not reliably notice the other. `toolcall-constraint-readonly`
+fails as `fail_wrong_tool` — told it may not write, it writes anyway, four times in twelve.
+**Both are judgement about which instruction governs, which is the frontier tier's half of
+the split.**
+
+A third class belongs to the harness rather than the model: **an in-place edit that must
+preserve what it did not write.** `patch-sibling-splitpath` is 9/9 as a whole-file rewrite
+in tier 1 and 9/12 through the agent loop, and every one of those three failures is an
+edit-based harness dropping the `strings` import. Claude Code and Hermes, which rewrite the
+file, took it 3/3. 0010 settled on Claude Code, so this class sits inside the boundary as
+configured — and outside it for anyone who switches to an edit-based harness.
+
+**The evidence stops at single-file changes.** Every fixture in the suite is one file and
+one function, and the instruction is one sentence. Nothing here says what the local tier
+does with a change spanning modules, or with a specification long enough to hold its own
+contradictions. That is what a feature tests, and it is measured rather than extrapolated.
+
 ## Nothing displaces Claude Code, and the two axes disagree
 
 Four harnesses over five patch fixtures, three passes each — 60 runs at one serving config
