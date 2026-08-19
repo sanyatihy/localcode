@@ -35,6 +35,71 @@ Restricted to four coding tools it is the cheapest harness measured; on its defa
 the most expensive. The `CLAUDE_CODE_DISABLE_*` variables move the total by 7% and remove
 no tool from the request. See the table in [../README.md](../README.md).
 
+## Driving it from the editor
+
+The VS Code and Cursor extension checks credentials from `claudeCode.environmentVariables`
+before it launches, so that is where the configuration has to be — values in
+`~/.claude/settings.json` reach the spawned process but not the extension's own login
+check. Open **Preferences: Open User Settings (JSON)** and add:
+
+```json
+{
+  "claudeCode.environmentVariables": [
+    {
+      "name": "ANTHROPIC_BASE_URL",
+      "value": "http://127.0.0.1:8081"
+    },
+    {
+      "name": "ANTHROPIC_AUTH_TOKEN",
+      "value": "local"
+    },
+    {
+      "name": "ANTHROPIC_MODEL",
+      "value": "Qwen3.8-27B-Q4_K_M.gguf"
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "value": "Qwen3.8-27B-Q4_K_M.gguf"
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "value": "Qwen3.8-27B-Q4_K_M.gguf"
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "value": "Qwen3.8-27B-Q4_K_M.gguf"
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
+      "value": "1"
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS",
+      "value": "1"
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_CRON",
+      "value": "1"
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "value": "1"
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+      "value": "4096"
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+      "value": "28672"
+    }
+  ]
+}
+```
+
+That is [`claude-code.env`](claude-code.env) in the editor's own form; keep the two in step
+or the terminal and the editor are running different configurations.
+
 ## It cannot be offline
 
 `ANTHROPIC_BASE_URL` routes every model call, so no prompt reaches a hosted model. It does
