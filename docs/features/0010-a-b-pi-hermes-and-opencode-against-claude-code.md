@@ -94,7 +94,7 @@ unattended is still a real and useful question, and the grind profile is where i
 
 - [x] Hermes is scored under the unattended profile only, with its 64,000-token floor against 0014's 57,344 attended ceiling stated in the results table rather than left to be inferred from a missing row
 - [x] A tier-2 row carries the context the server reported serving, and a harness whose floor that server does not meet is recorded as inadmissible rather than driven
-- [ ] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
+- [x] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
 - [ ] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
 - [ ] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
 - [ ] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
@@ -128,6 +128,12 @@ unattended is still a real and useful question, and the grind profile is where i
   ceiling of 57,344, so it is admissible only for unattended work on this hardware. Recorded
   here before the comparison runs, so it is a stated constraint on the design rather than a
   bad result discovered at scoring time.
+- 2026-08-19 — the archived `opencode-ai/opencode` is not this project's predecessor, which
+  the 2026-08-17 entry assumed: its own notice continues to Crush under the Charm team, while
+  `anomalyco/opencode` is a separate lineage of the same name. The identifier scored here is
+  unchanged; what falls is the idea that following the archived repository arrives at it.
+  Provenance for all four, with the versions the comparison is frozen at, is in
+  `harness/README.md`.
 - 2026-08-19 — added a box for checking the floor against what the server reports serving,
   and put it above the scoring boxes rather than appending it. The profile a run declares is
   a typed label: Hermes driven under `unattended` against a server that was not running

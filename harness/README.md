@@ -9,6 +9,33 @@ How each candidate harness is pointed at the local endpoint. All four work.
 | **Hermes** | top-level `model:` block with `provider: custom` | global, not repo-local | [works](hermes/README.md), needs 64k |
 | **Claude Code** | environment variables, and the only Anthropic Messages client | [`claude-code/claude-code.env`](claude-code/claude-code.env) | [works](claude-code/README.md), needs a patched chat template |
 
+## Which projects these are
+
+Checked against each project's own page, because two of these names are ambiguous and one
+of the ambiguities is a different project altogether.
+
+| harness | upstream | installed here | via |
+|---|---|---|---|
+| **Pi** | `earendil-works/pi`, published as npm `@earendil-works/pi-coding-agent` | 0.84.1 | homebrew/core `pi-coding-agent` |
+| **OpenCode** | `anomalyco/opencode` | 1.18.18 | tap `anomalyco/tap` |
+| **Hermes** | `NousResearch/hermes-agent` | v0.20.1 (2026.8.13) | homebrew/core `hermes-agent` |
+| **Claude Code** | Anthropic, `claude` on PATH | 2.1.233 | — |
+
+**Two unrelated projects answer to "opencode", and the archived one does not lead here.**
+`opencode-ai/opencode` was archived on 2025-09-18, and its notice sends readers to **Crush**,
+continued by the original author with the Charm team. The project scored here is
+`anomalyco/opencode`, which is a different lineage that carries the same name — so following
+the archived repository's own advice arrives somewhere else again.
+
+**Hermes' 64,000-token floor is documented nowhere upstream.** Its page states no minimum
+context, so the floor is visible only in the refusal and in the source. That is why this repo
+asserts it in a test rather than citing it.
+
+**These versions are frozen for the comparison.** Pi and Hermes both have newer releases
+(0.84.2 and 2026.8.18); they are deliberately not taken, because 0008's per-harness overhead
+figures were measured on the versions above and upgrading mid-comparison would mix two
+measurements under one name. Upgrading is its own decision, and its own re-measurement.
+
 Only Claude Code takes a local endpoint through an environment variable. Pi ignores
 `OPENAI_BASE_URL` and calls `api.openai.com` (401); OpenCode ignores `LOCAL_ENDPOINT` —
 its model list is byte-identical with and without it. Both facts appear in write-ups
