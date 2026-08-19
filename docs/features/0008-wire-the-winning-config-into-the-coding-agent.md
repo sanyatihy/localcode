@@ -78,6 +78,7 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
 ## Tasks
 
 - [x] Claude Code's background/small-model calls are characterised from its own documentation, and pointed at the local endpoint or disabled, with the exact variables committed
+- [x] The half of the winning config that is per-request — thinking off and its sampling — is served as a default, since Claude Code sends neither
 - [ ] `ANTHROPIC_BASE_URL` against the local `/v1/messages` completes a real task in this repo from the terminal, with no proxy
 - [ ] The same works driven from the Cursor/VSCode extension, matching the current flow, and the transcript is recorded
 - [ ] Tool-call validity through the Anthropic→OpenAI conversion is measured and compared against 0005's numbers on the native path
@@ -94,6 +95,17 @@ proof belongs to a harness that needs no vendor reachability, which is 0010's bu
   hosts rather than reasoning from the documentation.
 
 ## Log
+- 2026-08-19 — **a box is inserted before the terminal run: half the winning config
+  could not reach the model.** Sampling and the thinking toggle are per-request
+  everywhere else here — the scorer sends them on every call — and Claude Code sends
+  its own request body with neither, so through `/v1/messages` this model serves at its
+  `xhigh` default: 0005 measured that as no better than off, at four times the wall
+  clock, with three tier-1 tasks never terminating. `config/agent.env` and five
+  optional flags in `scripts/serve.sh` make both server defaults.
+- 2026-08-19 — the endpoint moves to port **8081**. 8080 was already held on the
+  machine this is developed on, and the port was written in twenty places rather than
+  read from one.
+
 - 2026-08-18 — `needs:` moves from 0004 to 0005. 0004 is dropped, so no sweep will name a
   winning quant; the config this feature wires in is Q4_K_M by elimination, and what it still
   waits on is the sampling and reasoning level 0005 settles. **This feature now also owns
