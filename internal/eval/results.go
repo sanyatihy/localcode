@@ -25,6 +25,11 @@ type Row struct {
 	Harness string `json:"harness,omitempty"`
 	Profile string `json:"profile,omitempty"`
 
+	// Offline marks a run the harness made with no network but the loopback the model is
+	// served on. It is a condition rather than a metric, and the vision wants at least
+	// one path that holds under it, so it sits on the row rather than in a filename.
+	Offline bool `json:"offline,omitempty"`
+
 	// Toggles under test. Thinking is a string, not a bool, because "unset" is a
 	// third state: it leaves the model's own template default alone.
 	Thinking string `json:"thinking"`

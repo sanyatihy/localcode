@@ -1,0 +1,14 @@
+;; The offline condition 0010 scores: no network but the loopback the model is served on.
+;;
+;; Enforced by the kernel rather than by environment variables, because a harness that
+;; ignores HTTPS_PROXY would otherwise be recorded as working offline when it was online
+;; the whole time. Everything else a harness does — files, processes, Mach services — is
+;; left alone: the question is whether it can work without a network, not whether it
+;; survives a general sandbox.
+;;
+;; Applied with `cmd/tier2 -offline`, which wraps the harness in `sandbox-exec -f`. The
+;; machine's own network is untouched, so this can be run while somebody is using it.
+(version 1)
+(allow default)
+(deny network*)
+(allow network* (local ip) (remote ip "localhost:*"))

@@ -15,26 +15,30 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/sanyatihy/localcode/internal/eval"
 )
 
 // DefaultTimeout bounds a single harness run. Generous because a 64k cold ingest alone
 // measured 13.1 minutes, and a harness that is merely slow must not be recorded as broken.
 const DefaultTimeout = 45 * time.Minute
 
-// run executes a harness command and returns a useful error. Shared because all three
+// run executes a harness command and returns a useful error. Shared because all four
 // adapters need identical treatment of a non-zero exit: the tail of combined output, not
-// "exit status 1", which tells nobody anything.
-func run(ctx context.Context, name, dir string, env []string, args ...string) error {
+// "exit status 1", which tells nobody anything — and because the offline condition is
+// applied here, so no adapter can be scored offline by forgetting to.
+func run(ctx context.Context, r eval.Run, name string, env []string, args ...string) error {
 	runCtx, cancel := context.WithTimeout(ctx, DefaultTimeout)
 	defer cancel()
 
+	name, args = sandboxed(r, name, args)
 	cmd := exec.CommandContext(runCtx, name, args...)
-	cmd.Dir = dir
+	cmd.Dir = r.Workdir
 	// Setting Dir does not update PWD, and Go replaces the whole environment when Env
 	// is set. Tools that resolve their project from PWD rather than getcwd() then look
 	// in the directory this process was launched from — for OpenCode that surfaces as
 	// "Unexpected server error", which reproduces through an adapter and never by hand.
-	cmd.Env = withPWD(env, dir)
+	cmd.Env = withPWD(env, r.Workdir)
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -47,6 +51,20 @@ func run(ctx context.Context, name, dir string, env []string, args ...string) er
 		return fmt.Errorf("%s: %w: %s", name, err, tail(out.String(), 300))
 	}
 	return nil
+}
+
+// sandboxed wraps a command in the sandbox profile the run names, and returns it
+// unchanged when there is none.
+//
+// sandbox-exec is deprecated and still the only way to deny one process the network
+// without touching the machine's. The denial is the kernel's: a harness that ignores
+// proxy variables cannot be recorded as working offline while it was online the whole
+// time, which is the failure mode an environment-variable block has.
+func sandboxed(r eval.Run, name string, args []string) (string, []string) {
+	if r.SandboxProfile == "" {
+		return name, args
+	}
+	return "sandbox-exec", append([]string{"-f", r.SandboxProfile, name}, args...)
 }
 
 // withPWD replaces any PWD entry so it agrees with the working directory.

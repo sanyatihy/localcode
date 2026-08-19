@@ -72,6 +72,7 @@ type config struct {
 	results     string
 	label       string
 	repeats     int
+	sandbox     string // sandbox profile applied to the harness; empty runs it online
 	keep        bool
 }
 
@@ -92,6 +93,8 @@ func run(args []string, stdout, stderr *os.File) error {
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		label    = fs.String("label", "unlabelled", "serving config label recorded with each row")
 		repeats  = fs.Int("n", 1, "passes over the whole set; a pass is every harness over every fixture")
+		offline  = fs.Bool("offline", false, "run each harness with no network but the loopback the model is on")
+		sandbox  = fs.String("sandbox-profile", "harness/offline.sb", "sandbox profile -offline applies")
 		keep     = fs.Bool("keep", false, "leave the scratch checkout in place and print its path")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -106,6 +109,9 @@ func run(args []string, stdout, stderr *os.File) error {
 		desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
 		results: *results, label: *label, repeats: *repeats, keep: *keep,
+	}
+	if *offline {
+		cfg.sandbox = *sandbox
 	}
 	if err := (&cfg).validate(); err != nil {
 		return err
@@ -191,7 +197,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	// same reason the timings are.
 	before, _ := client.Metrics(ctx)
 	turns := client.CountTurns(ctx, turnPollInterval)
-	res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.keep)
+	res, work, err := eval.RunTier2(ctx, d, task, cfg.desk, props, cfg.sandbox, cfg.keep)
 	turnCount := turns.Stop()
 	if err != nil {
 		// A staging or fixture problem is not a result about the harness.
@@ -229,6 +235,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	// process can claim to have set.
 	row := eval.NewRow(cfg.label, rep, "", "", eval.Sampling{}, props, "tier2", res)
 	row.Harness, row.Profile = d.Name(), cfg.desk.Name
+	row.Offline = cfg.sandbox != ""
 	// What the run cost the server: ingested, reused from a held prefix, generated. Tier 1
 	// reads the same three off a response body; a harness never shows this process one, so
 	// they come off the counters instead.
@@ -297,7 +304,7 @@ func (c *config) validate() error {
 	if len(c.drivers) == 0 {
 		return errors.New("-drivers named none")
 	}
-	for _, p := range []*string{&c.fixture, &c.fixtures, &c.piExtension, &c.ocConfig, &c.ccEnv, &c.hermesCfg} {
+	for _, p := range []*string{&c.fixture, &c.fixtures, &c.piExtension, &c.ocConfig, &c.ccEnv, &c.hermesCfg, &c.sandbox} {
 		if *p == "" {
 			continue
 		}

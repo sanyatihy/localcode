@@ -40,6 +40,12 @@ type Run struct {
 	Workdir     string
 	StateDir    string
 	Instruction string
+
+	// SandboxProfile, when set, is a sandbox profile the harness is run under. It holds
+	// the offline condition: the vision wants at least one path that works with no
+	// network, and whether a harness has one is a scored outcome rather than a footnote.
+	// Empty means the harness runs with the machine's own network.
+	SandboxProfile string
 }
 
 // ContextFloorer is the optional half of Driver: a harness that refuses to run below a
@@ -171,7 +177,7 @@ var ErrFixtureNotBroken = errors.New("fixture passes its own tests before the ha
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
 // outcome by running the fixture's own tests. keep leaves the scratch directory in place
 // for inspection and returns its path.
-func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served ServerProps, keep bool) (Result, string, error) {
+func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served ServerProps, sandbox string, keep bool) (Result, string, error) {
 	res := Result{TaskID: t.ID}
 
 	// Checked before anything is staged, and returned as a result rather than an error:
@@ -228,7 +234,9 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	// a model working together, at a context the desktop was already measured to strain.
 	memBefore := sampleMemory()
 	start := time.Now()
-	driveErr := d.Drive(ctx, Run{Workdir: work, StateDir: state, Instruction: t.Instruction})
+	driveErr := d.Drive(ctx, Run{
+		Workdir: work, StateDir: state, Instruction: t.Instruction, SandboxProfile: sandbox,
+	})
 	res.WallSeconds = time.Since(start).Seconds()
 	memAfter := sampleMemory()
 	res.FreeGB = memAfter.FreeGB
