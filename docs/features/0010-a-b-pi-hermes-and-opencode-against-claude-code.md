@@ -102,7 +102,7 @@ unattended is still a real and useful question, and the grind profile is where i
 - [x] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
 - [x] A tier-2 run is bounded by a budget, and a harness still working when it expires is recorded as over budget rather than as a broken adapter
 - [x] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
-- [ ] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
+- [x] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
 - [ ] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
 
 ## Open questions
