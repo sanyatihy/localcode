@@ -24,6 +24,8 @@ type agg struct {
 	tcValid, tcSeen int
 	gen, wall       []float64
 	completion      []int
+	prompt, cached  []int
+	turns           []int
 	outcomes        map[eval.Outcome]int
 
 	// A swapped run is void rather than slow, and a run that measured no memory cannot
@@ -31,6 +33,13 @@ type agg struct {
 	// them into an average that looks fine.
 	swapped, unmeasured int
 	maxSwap             float64
+
+	// A harness the desk profile excluded never ran, so it is held apart from the pass
+	// rate and printed with the reason. Folded in, it would read as a harness that
+	// failed everything; left out, its absence from the table would read as an
+	// oversight rather than as the constraint it is.
+	inadmissible int
+	whyExcluded  string
 }
 
 func main() {
@@ -45,6 +54,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs.SetOutput(stderr)
 	path := fs.String("results", "results/tier1.jsonl", "results file to summarise")
 	only := fs.String("config", "", "summarise only this config label")
+	baseline := fs.String("baseline", "", "harness to report the others against, e.g. claude-code")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -57,6 +67,9 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
+	// Which groups compare harnesses rather than thinking modes, so the first column
+	// can be named after what is in it.
+	byHarness := map[string]bool{}
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<20)
@@ -72,17 +85,47 @@ func run(args []string, stdout, stderr *os.File) error {
 		if *only != "" && r.Config != *only {
 			continue
 		}
-		if byConfig[r.Config] == nil {
-			byConfig[r.Config] = map[string]*agg{}
+		// The desk profile is part of the group, not a label on it: two profiles cap
+		// the context differently, so their rows are not comparable and a harness may
+		// be admissible under only one of them. Filtering stays on the config label,
+		// which is what a human types.
+		group := r.Config
+		if r.Profile != "" {
+			group += " · " + r.Profile
 		}
+		if byConfig[group] == nil {
+			byConfig[group] = map[string]*agg{}
+		}
+		// Tier-2 rows are one harness each at one serving config, and the thinking
+		// toggle on that path is the harness's own business and never set — so the
+		// harness is what separates them, exactly as thinking separates tier-1 rows.
 		key := r.Thinking
+		if r.Harness != "" {
+			key = r.Harness
+			byHarness[group] = true
+		}
 		if key == "" {
 			key = "(default)"
 		}
-		a := byConfig[r.Config][key]
+		a := byConfig[group][key]
 		if a == nil {
 			a = &agg{outcomes: map[eval.Outcome]int{}}
-			byConfig[r.Config][key] = a
+			byConfig[group][key] = a
+		}
+
+		// A tier-2 row records no served config — it drives a harness that builds its
+		// own requests — and printing ctx=0 there would read as a server serving no
+		// context rather than as a figure nobody took.
+		props := "served config unrecorded"
+		if r.ServedNCtx > 0 {
+			props = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
+		}
+		served[group] = props
+
+		if r.Outcome == eval.Inadmissible {
+			a.inadmissible++
+			a.whyExcluded = r.Detail
+			continue
 		}
 		a.total++
 		a.outcomes[r.Outcome]++
@@ -109,7 +152,9 @@ func run(args []string, stdout, stderr *os.File) error {
 		a.gen = append(a.gen, r.GenPerSecond)
 		a.wall = append(a.wall, r.WallSeconds)
 		a.completion = append(a.completion, r.CompletionTokens)
-		served[r.Config] = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
+		a.prompt = append(a.prompt, r.PromptTokens)
+		a.cached = append(a.cached, r.CachedTokens)
+		a.turns = append(a.turns, r.Turns)
 	}
 	if err := sc.Err(); err != nil {
 		return err
@@ -120,18 +165,51 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	for _, cfg := range sortedKeys(byConfig) {
+		harnesses := byHarness[cfg]
 		_, _ = fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])
-		_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-			"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
+		// A tier-2 group answers different questions from a tier-1 one: what a whole
+		// task cost, and in how many turns. Its columns say so rather than leaving
+		// "toolcall valid" reading n/a beside a column of zeroes.
+		if harnesses {
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-14s %-22s %-22s %-20s %s\n",
+				"harness", "pass", "turns", "prompt tok", "cached tok", "predicted tok", "wall s")
+		} else {
+			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+				"thinking", "pass", "toolcall valid", "gen tok/s", "completion tok", "wall s")
+		}
 		for _, th := range sortedKeys(byConfig[cfg]) {
 			a := byConfig[cfg][th]
 			tc := "n/a"
 			if a.tcSeen > 0 {
 				tc = fmt.Sprintf("%d/%d", a.tcValid, a.tcSeen)
 			}
-			_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
-				th, fmt.Sprintf("%d/%d", a.pass, a.total), tc,
-				rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
+			// A group with nothing but excluded rows has no pass rate, and "0/0"
+			// there would read as a harness that failed every task it was given.
+			pass := "-"
+			if a.total > 0 {
+				pass = fmt.Sprintf("%d/%d", a.pass, a.total)
+			}
+			if harnesses {
+				name := th
+				if th == *baseline {
+					name += "*"
+				}
+				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-14s %-22s %-22s %-20s %s\n",
+					name, pass, rangeI(a.turns), rangeI(a.prompt), rangeI(a.cached),
+					rangeI(a.completion), rangeF(a.wall))
+				// A challenger that ties has lost — switching costs something — so the
+				// numbers that decide are the ratios, not the absolutes beside them.
+				if base := byConfig[cfg][*baseline]; base != nil && th != *baseline {
+					_, _ = fmt.Fprintf(stdout, "  %-12s vs %s: %s\n", "", *baseline, versus(a, base))
+				}
+			} else {
+				_, _ = fmt.Fprintf(stdout, "  %-12s %-8s %-16s %-18s %-18s %s\n",
+					th, pass, tc,
+					rangeF(a.gen), rangeI(a.completion), rangeF(a.wall))
+			}
+			if a.inadmissible > 0 {
+				_, _ = fmt.Fprintf(stdout, "  %-12s NOT ADMISSIBLE: %s\n", "", a.whyExcluded)
+			}
 			if s := failSummary(a.outcomes); s != "" {
 				_, _ = fmt.Fprintf(stdout, "  %-12s %s\n", "", s)
 			}
@@ -150,6 +228,78 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	_, _ = fmt.Fprintln(stdout)
 	return nil
+}
+
+// versus reads a challenger against the baseline. Pass rate is stated as a difference —
+// two more tasks passed is two more tasks — and everything else as a ratio, because what
+// the comparison turns on is proportion: half the tokens is the finding, not 1,600 fewer.
+func versus(a, base *agg) string {
+	// Tasks, when both were asked the same number of them; otherwise the rate, since a
+	// harness the profile excluded from some of them has a different denominator and a
+	// count would be comparing two different questions.
+	quality := fmt.Sprintf("pass %+d", a.pass-base.pass)
+	if a.total != base.total {
+		quality = fmt.Sprintf("pass %+.0f pp", 100*(rate(a.pass, a.total)-rate(base.pass, base.total)))
+	}
+	parts := []string{quality}
+	for _, m := range []struct {
+		name string
+		xs   []int
+	}{
+		{"turns", a.turns}, {"prompt", a.prompt}, {"cached", a.cached}, {"out", a.completion},
+	} {
+		parts = append(parts, ratio(m.name, meanI(m.xs), meanI(baseOf(base, m.name))))
+	}
+	parts = append(parts, ratio("wall", meanF(a.wall), meanF(base.wall)))
+	return strings.Join(parts, "  ")
+}
+
+func rate(pass, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(pass) / float64(total)
+}
+
+func baseOf(base *agg, name string) []int {
+	switch name {
+	case "turns":
+		return base.turns
+	case "prompt":
+		return base.prompt
+	case "cached":
+		return base.cached
+	default:
+		return base.completion
+	}
+}
+
+// ratio says "half" as ×0.50 rather than −50%, which reads the same for a doubling and a
+// halving. A baseline of zero has no ratio and says so instead of dividing.
+func ratio(name string, got, want float64) string {
+	if want == 0 {
+		return name + " n/a"
+	}
+	return fmt.Sprintf("%s ×%.2f", name, got/want)
+}
+
+func meanI(xs []int) float64 {
+	f := make([]float64, len(xs))
+	for i, x := range xs {
+		f[i] = float64(x)
+	}
+	return meanF(f)
+}
+
+func meanF(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, x := range xs {
+		sum += x
+	}
+	return sum / float64(len(xs))
 }
 
 func failSummary(m map[eval.Outcome]int) string {

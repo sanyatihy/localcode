@@ -1,9 +1,9 @@
 ---
 id: 0010
 title: A/B Pi, Hermes and OpenCode against Claude Code
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-19
 check:
 checked:
 review:
@@ -92,31 +92,24 @@ unattended is still a real and useful question, and the grind profile is where i
 
 ## Tasks
 
-- [ ] Hermes is scored under the unattended profile only, with its 64,000-token floor against 0014's 57,344 attended ceiling stated in the results table rather than left to be inferred from a missing row
-- [ ] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
-- [ ] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
-- [ ] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
-- [ ] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
-- [ ] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
-- [ ] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
-- [ ] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
-- [ ] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
-
-## Open questions
-
-- If Pi wins cold but Hermes' memory would plausibly win warm, what is the default?
-  Leaning **Pi**, on the grounds that a cold-state result is the one this project can
-  actually reproduce — with the warm question raised as a BACKLOG line rather than settled
-  by argument here.
-- How large a margin justifies leaving Claude Code? Leaning: **a clear win on tokens per
-  completed task**, since that is the constraint this hardware actually imposes — a small
-  success-rate edge is not worth relearning a tool.
-- If the best challenger is the only offline-capable option but loses on quality, is the
-  answer one harness or two? Leaning **two, kept deliberately**: the incumbent for ordinary
-  work and an offline harness for when there is no network. Naming that as a supported
-  outcome now stops the comparison being forced into a single winner it does not have.
+- [x] Hermes is scored under the unattended profile only, with its 64,000-token floor against 0014's 57,344 attended ceiling stated in the results table rather than left to be inferred from a missing row
+- [x] A tier-2 row carries the context the server reported serving, and a harness whose floor that server does not meet is recorded as inadmissible rather than driven
+- [x] The identifier and current home of each challenger is confirmed before install — OpenCode in particular has an archived predecessor under a different owner
+- [x] All three challengers are installed and each completes one task against 0001's endpoint, with exact invocations recorded
+- [x] The unseen test is staged only once the harness has stopped, so a harness that reads or runs the workdir cannot score against it
+- [x] Claude Code is scored first as the baseline, reusing 0008's configuration rather than a second setup
+- [x] Each is driven through 0002's adapters from a verified cold state, with any persistent memory reset between runs
+- [x] Tokens per completed task and turns-to-completion are recorded alongside the standard metrics
+- [x] A tier-2 run is bounded by a budget, and a harness still working when it expires is recorded as over budget rather than as a broken adapter
+- [x] Each is scored 3× on the full suite at the identical serving config, reported as a delta against the baseline
+- [x] Each challenger is run with the network disabled, and whether it completes a task offline is recorded as a first-class result
+- [x] The winner and margin are recorded in `docs/TECH.md`, with the context-per-turn figures that explain the result, and with the offline result stated separately from the quality result
 
 ## Log
+- 2026-08-19 — the three open questions are answered and the section goes with them: Pi did
+  not win cold, so the Hermes-warm tiebreak never arose; the switching bar was a token win
+  that cost no quality, and Pi's costs two tasks in fifteen; and the offline axis separates
+  nothing, since the incumbent holds it too. The answers are in `docs/TECH.md`.
 - 2026-08-17 — added OpenCode, and made Claude Code the baseline rather than an
   omission: it is the incumbent, so the comparison is challengers-versus-it.
 - 2026-08-17 — corrected the OpenCode identifier to `anomalyco/opencode`; the previously
@@ -127,3 +120,31 @@ unattended is still a real and useful question, and the grind profile is where i
   ceiling of 57,344, so it is admissible only for unattended work on this hardware. Recorded
   here before the comparison runs, so it is a stated constraint on the design rather than a
   bad result discovered at scoring time.
+- 2026-08-19 — added a box above the sweep for bounding a run. Hermes spent 45 minutes and
+  90 turns on `patch-sibling-merge` before the adapter's timeout stopped it, and that was
+  recorded as a broken adapter — which it was not. A looping harness is a result about the
+  harness, and an unbounded one makes a 3× sweep unschedulable: 15 fixtures at 45 minutes
+  is a day. What this changes: the sweep restarts once runs are bounded, and the partial
+  rows already taken keep their own conditions.
+- 2026-08-19 — the sweep's wall-clock is not usable as a headline number on this machine.
+  At 65,536 the model wires ~21 GB and an editor holds ~6.6 of the ~11 GB left, so runs
+  swap and the vision calls a swapped run void rather than slow. Every row carries its swap
+  delta, so timings are separated at analysis time rather than averaged; the deciding metric
+  is unaffected, being the server's own token counters. What this changes: the margin is
+  read on tokens, and wall-clock is reported only from rows that did not swap.
+- 2026-08-19 — added a box for staging the unseen test after the run. `RunTier2` writes it
+  into the scratch module before the harness starts, so "tests the harness never saw" is not
+  what is being measured — and the candidates differ in exactly how much of the workdir they
+  read, which turns the leak into a per-harness advantage. Placed above the scoring boxes,
+  which are the ones whose numbers it would bend.
+- 2026-08-19 — the archived `opencode-ai/opencode` is not this project's predecessor, which
+  the 2026-08-17 entry assumed: its own notice continues to Crush under the Charm team, while
+  `anomalyco/opencode` is a separate lineage of the same name. The identifier scored here is
+  unchanged; what falls is the idea that following the archived repository arrives at it.
+  Provenance for all four, with the versions the comparison is frozen at, is in
+  `harness/README.md`.
+- 2026-08-19 — added a box for checking the floor against what the server reports serving,
+  and put it above the scoring boxes rather than appending it. The profile a run declares is
+  a typed label: Hermes driven under `unattended` against a server that was not running
+  scored `fail_test_failed`, which is the outcome a model that answered badly gets. Every
+  box below it writes rows, so the ones it protects come after it.

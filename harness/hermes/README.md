@@ -5,8 +5,10 @@ It took the longest route to get there, and the reasons are worth keeping.
 
 ## The configuration
 
-Hermes has **no project-local config**. This is global machine state at
-`~/.hermes/config.yaml`; the reference copy here is a record, not something loaded.
+Hermes has **no project-local config**: it reads `$HERMES_HOME/config.yaml`, and
+`HERMES_HOME` defaults to `~/.hermes`. Pointing it at a directory of its own per run makes
+the copy committed here the configuration that actually runs, and gives a Hermes with no
+sessions, memories or learned skills — see [the harness README](../README.md).
 
 ```yaml
 model:
