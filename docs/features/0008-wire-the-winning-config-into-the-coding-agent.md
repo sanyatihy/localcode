@@ -87,6 +87,16 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
 - [x] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Log
+- 2026-08-19 — **the editor flow does not fit the scorer's context, so `config/agent.env`
+  serves 57,344.** An extension session's first request measured 36,297 tokens — the full
+  tool set, the project's instructions and the editor's own context — against a 32,768
+  server, and took llama-server's 400 before anything was typed. The terminal avoided this
+  with `--tools`, which the extension has no equivalent of. 57,344 is 0014's attended
+  ceiling and costs roughly a tenth of the ingest rate. It also corrects a claim made two
+  entries below: the declared window catches an overflow **between turns**, not the
+  preamble a session starts with — that request went out with the window declared at
+  28,672.
+
 - 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
   above. It said this flow cannot be made offline and handed the offline claim to 0010; as
   committed the session contacts no host, and with every remote CONNECT refused it still

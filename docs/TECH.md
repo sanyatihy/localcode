@@ -259,8 +259,14 @@ reasoning is not a free upgrade here, which is the opposite of what 0005 was bui
 
 ## Claude Code against the local endpoint
 
-`config/agent.env` is the serving config for an editor agent, and differs from
-`config/tuned.env` in what it serves rather than in what it loads. Sampling and the
+`config/agent.env` is the serving config for an editor agent. It serves **57,344**
+rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
+what it loads. The context is capacity, not tuning: an extension session's first request
+measures **36,297 tokens** — the full tool set, the project's instructions and the
+editor's context — which does not fit 32,768 before anybody types. A terminal session
+avoids that with `--tools`; the extension has no equivalent. 57,344 is the attended
+ceiling 0014 measured, and prompt throughput decays with depth, so it costs roughly a
+tenth of the ingest rate. Sampling and the
 thinking toggle are per-request for the scorer, and a client that builds its own request
 body sends neither — so 0005's settled pair and `enable_thinking: false` are served as
 defaults. Without that, this model answers at its `xhigh` default.
@@ -272,6 +278,11 @@ it. Qwen3.8's template raises `System message must be at the beginning`, llama.c
 returns that as a 500, and the client retries ten times and dies.
 `config/templates/qwen3.8-system-anywhere.jinja` differs from the shipped template in one
 line: a non-leading system message renders as its own ChatML block.
+
+**A declared window catches an overflow between turns, not the preamble a session starts
+with.** `CLAUDE_CODE_MAX_CONTEXT_TOKENS` makes Claude Code count the conversation through
+`count_tokens` and refuse before sending — but a first request larger than the window is
+sent anyway, and comes back as the server's 400.
 
 **An error whose wording is not Anthropic's costs two documented recoveries.** Claude Code
 retries and disables the capability after a mid-conversation-system rejection, and
