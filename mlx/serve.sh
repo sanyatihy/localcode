@@ -12,10 +12,12 @@ cd "$(dirname "$0")/.."
 
 # shellcheck source=/dev/null
 set -a; . "$CONFIG"; set +a
-for var in MODEL_HF HOST PORT MAX_TOKENS; do
+for var in MODEL_HF HOST PORT MAX_TOKENS PROMPT_CACHE_BYTES PROMPT_CACHE_SIZE PREFILL_STEP_SIZE; do
   [ -n "${!var:-}" ] || { echo "$CONFIG is missing $var" >&2; exit 2; }
 done
 
 echo "serving $CONFIG: $MODEL_HF on $HOST:$PORT" >&2
 exec ./mlx/.venv/bin/python -m mlx_lm server \
-  --model "$MODEL_HF" --host "$HOST" --port "$PORT" --max-tokens "$MAX_TOKENS"
+  --model "$MODEL_HF" --host "$HOST" --port "$PORT" --max-tokens "$MAX_TOKENS" \
+  --prompt-cache-bytes "$PROMPT_CACHE_BYTES" --prompt-cache-size "$PROMPT_CACHE_SIZE" \
+  --prefill-step-size "$PREFILL_STEP_SIZE"
