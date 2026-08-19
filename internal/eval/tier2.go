@@ -23,10 +23,23 @@ import (
 type Driver interface {
 	// Name identifies the driver in results. Stable, because it is a grouping key.
 	Name() string
-	// Drive runs the harness to completion against workdir. A non-nil error means the
-	// harness itself failed — not that the task was done badly, which is what the
-	// fixture's own tests are for.
-	Drive(ctx context.Context, workdir, instruction string) error
+	// Drive runs the harness to completion. A non-nil error means the harness itself
+	// failed — not that the task was done badly, which is what the fixture's own tests
+	// are for.
+	Drive(ctx context.Context, run Run) error
+}
+
+// Run is what a harness is handed: a checkout to work in, a directory of its own to keep
+// state in, and what to do.
+//
+// StateDir is the second half of a cold run. Every candidate keeps something between
+// runs — sessions, memories, skills learned from earlier work — and each has its own way
+// of being pointed elsewhere for it. Left alone they accumulate across a sweep, and a
+// suite then scores the order its fixtures came in as much as the harness.
+type Run struct {
+	Workdir     string
+	StateDir    string
+	Instruction string
 }
 
 // ContextFloorer is the optional half of Driver: a harness that refuses to run below a
@@ -192,6 +205,15 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 		return res, work, fmt.Errorf("fixture does not compile before the run: %s", firstUseful(string(out)))
 	}
 
+	// Each run gets a state directory of its own, thrown away with the checkout.
+	state, err := os.MkdirTemp("", "localcode-tier2-state-")
+	if err != nil {
+		return res, work, fmt.Errorf("state dir: %w", err)
+	}
+	if !keep {
+		defer func() { _ = os.RemoveAll(state) }()
+	}
+
 	// The test is taken away for the duration of the run and put back to score with. It
 	// has to be present for the check above and absent for the harness, and "a test the
 	// harness never saw" is otherwise just a description of a file sitting in its working
@@ -202,13 +224,23 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, p DeskProfile, served 
 	}
 
 	start := time.Now()
-	driveErr := d.Drive(ctx, work, t.Instruction)
+	driveErr := d.Drive(ctx, Run{Workdir: work, StateDir: state, Instruction: t.Instruction})
 	res.WallSeconds = time.Since(start).Seconds()
 
 	if driveErr != nil {
 		// The harness failed, which is not the model answering badly. Kept distinct so a
 		// broken adapter is never recorded as a quality result.
 		res.Outcome, res.Detail = FailServer, truncate(driveErr.Error(), 200)
+		return res, work, nil
+	}
+
+	// A harness that wrote nothing where it was pointed kept its state where it always
+	// does, which is the machine's own — so this run inherited whatever the last one
+	// left. That cannot be scored as a cold result, and it is the harness's doing rather
+	// than the model's.
+	if entries, err := os.ReadDir(state); err != nil || len(entries) == 0 {
+		res.Outcome = FailServer
+		res.Detail = "harness wrote nothing to the state directory it was given, so the run cannot be called cold"
 		return res, work, nil
 	}
 

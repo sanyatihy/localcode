@@ -62,6 +62,7 @@ type config struct {
 	piExtension string
 	ocConfig    string
 	ccEnv       string
+	hermesCfg   string
 	model       string
 	results     string
 	label       string
@@ -80,6 +81,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		piExt    = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
 		ocCfg    = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
 		ccEnv    = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
+		hermes   = fs.String("hermes-config", "harness/hermes/config.yaml.reference", "hermes config, seeded into each run's own home")
 		model    = fs.String("model", "bartowski/Qwen3.8-27B-GGUF:Q4_K_M", "served model id")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
 		label    = fs.String("label", "unlabelled", "serving config label recorded with each row")
@@ -95,7 +97,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	cfg := config{
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
 		desk: desk, endpoint: *endpoint,
-		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, model: *model,
+		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
 		results: *results, label: *label, keep: *keep,
 	}
 	if err := (&cfg).validate(); err != nil {
@@ -235,7 +237,7 @@ func (c *config) validate() error {
 	if len(c.drivers) == 0 {
 		return errors.New("-drivers named none")
 	}
-	for _, p := range []*string{&c.fixture, &c.fixtures, &c.piExtension, &c.ocConfig, &c.ccEnv} {
+	for _, p := range []*string{&c.fixture, &c.fixtures, &c.piExtension, &c.ocConfig, &c.ccEnv, &c.hermesCfg} {
 		if *p == "" {
 			continue
 		}
@@ -260,9 +262,9 @@ func buildDrivers(c config) ([]eval.Driver, error) {
 		case "claude-code":
 			ds = append(ds, harness.NewClaudeCode(c.ccEnv))
 		case "hermes":
-			// Hermes reads a global config and refuses anything under 64k context, so
-			// it takes no per-run parameters here — see internal/harness/hermes.go.
-			ds = append(ds, harness.NewHermes())
+			// Each run gets a home of its own, seeded from this file: Hermes learns
+			// across runs otherwise — see internal/harness/hermes.go.
+			ds = append(ds, harness.NewHermes(c.hermesCfg))
 		default:
 			return nil, fmt.Errorf("unknown driver %q", name)
 		}

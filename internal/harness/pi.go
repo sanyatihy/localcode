@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/sanyatihy/localcode/internal/eval"
 )
 
 // Pi drives earendil-works/pi. Its provider is registered by an extension file loaded
@@ -35,17 +37,21 @@ func NewPi(extension, provider, model string) *Pi {
 
 func (p *Pi) Name() string { return "pi" }
 
-func (p *Pi) Drive(ctx context.Context, workdir, instruction string) error {
+func (p *Pi) Drive(ctx context.Context, r eval.Run) error {
 	if _, err := os.Stat(p.extension); err != nil {
 		return fmt.Errorf("pi extension not readable: %w", err)
 	}
 	env := append(os.Environ(), "LOCAL_OPENAI_API_KEY="+p.apiKey)
-	return run(ctx, p.bin, workdir, env,
+	return run(ctx, p.bin, r.Workdir, env,
 		"-p", // non-interactive: process the prompt and exit
 		"-e", p.extension,
 		"--provider", p.provider,
 		"--model", p.model,
 		"--tools", p.tools,
-		instruction,
+		// Sessions are keyed by working directory under ~/.pi by default. A scratch
+		// checkout is new every run, so nothing could carry over — but that is a
+		// property of the fixture runner rather than of pi, and this makes it pi's.
+		"--session-dir", r.StateDir,
+		r.Instruction,
 	)
 }
