@@ -62,3 +62,15 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   instruction joins the tools, the run dies asking for input, and nothing says why. Promote
   when: the adapter is edited for any other reason — a `--` separator or the instruction on
   stdin costs one line. Found driving the same CLI by hand for 0011.
+- **The handoff, reconciled with `kit`** — 0016 puts `HANDOFF.md`, three hooks and a box
+  parser in localcode, but `kit` owns the work protocol: it writes AGENTS.md, and
+  `kit next --json` already publishes the topmost box the driver re-derives. Handing off
+  inside a box is the same category of rule as doing the topmost one. Promote when: a second
+  project wants it, or the box parser drifts from kit's format. The unresolved part is
+  whether kit should ship one vendor's shell hooks at all, or only the rule.
+- **The handoff, on a harness that is not Claude Code** — the mechanism is a bounded session
+  plus a file, which needs no hooks; only the wiring is Claude Code's, and 0010 kept it as
+  the incumbent. Promote when: a harness is scored that compacts or truncates rather than
+  stopping, or 0011 finds the window binds on something else. Note Pi ingests a fifth as much
+  per task, so the pressure this relieves may be the incumbent's own.
+
