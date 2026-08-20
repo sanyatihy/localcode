@@ -13,10 +13,13 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   a grammar nothing to fix. Promote when: a model or harness appears whose failures are format
   rather than choice. Note the template asks for an XML call form, so a JSON-schema constraint
   is the wrong tool even then.
-- **Speculative decoding with a draft model** — pair the 27B with a 0.6B/1.7B Qwen3
-  draft to cut generation latency. Promote when: 0004 has settled the main config and
-  generation speed is the thing still failing the interactive threshold. Deliberately
-  not a feature yet — it spends memory that 0003 may show is not there.
+- ~~**Speculative decoding with a draft model**~~ — **settled by 0017**, and against it: an
+  external drafter is 1.1 GB this machine does not have, and the target's own MTP head costs
+  nothing and gives 1.26-1.57x. A separate draft model is the wrong shape here.
+- **The attended desktop verdict for the MTP config** — 0017 measured it `unattended` only,
+  and it peaks at 22.10 GB where 0014's desktop died at 22.29. One 90-second screen with
+  somebody driving the machine settles whether it is usable at 32k while you work. Promote
+  when: anyone wants to run the fast config and use the Mac at the same time.
 - **Qwen3-Coder-Next (80B-A3B)** — MoE built for agentic coding, 3B active. Promote when:
   someone confirms a quant fits 32 GB with usable context; at ~45 GB for Q4 it currently
   does not, and the vision rules out a model zoo.
