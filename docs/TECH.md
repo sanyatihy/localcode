@@ -399,6 +399,126 @@ into `docs/data/`.
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
+## The split works, and it is not free
+
+A local builder took a real feature from a frontier-drafted doc and shipped a reviewable
+branch, using `kit` unchanged: it ran `kit next`, claimed, made the worktree, did the
+topmost box only, ticked it in the commit that implements it, ran `make check`, pushed, and
+stopped without merging. Nothing in the protocol needed changing for a 27B model to follow
+it — the branch and the doc's boxes were already the whole interface.
+
+**Three runs at the same box, and what separated them:**
+
+| | tools | starting context | orientation | compaction | outcome |
+|---|---|---|---|---|---|
+| 1 | 4 | 11.7k | 19 calls, 17.4k | **taken** — 8 min, recovered 23%, spent again in 6 turns | box done, after compacting |
+| 2 | 21 | 23.5k | 2 calls, 3.5k | 11 refused | **nothing** — no room left |
+| 3 | 4 | **5.5k** | 12 calls, 7.3k | 14 refused | **box done in one session**, gate green |
+
+**Two things were needed and neither was sufficient.** 0016's hooks removed the compaction
+tax, and restricting the tool set returned **18,045 tokens** — 40% of the window — because
+Claude Code defines 21 tools unless told otherwise. Run 2 had the mechanism and no room; run
+1 had room and no mechanism. Only run 3 had both.
+
+**A leaner prompt beat a prescriptive one.** Run 1 was told how to work — read ranges not
+whole files, keep the handoff current, what comments to write. Run 3 was told the job and
+the size of its window, and it wrote its own handoff unprompted, kept comments at 16%
+against the repo's 23%, and left a plan a later session could act on. The instruction that
+worked was the one the `SessionStart` hook already prints.
+
+**Where the split is not worth it.** The first run produced a check that could never pass —
+a floor on free memory, which reads 0.16–0.65 GB on this machine whether a run swaps or
+not. The local tier built exactly what the doc specified, and the doc was wrong. Reviewing
+it, finding that, and correcting the premise cost a frontier session: **more than drafting
+the doc had.** So the split pays where the specification is sound and the work is
+mechanical, and it inverts where the specification is the hard part — which is the same
+boundary the per-task record draws, arrived at from the other side.
+
+## What the frontier tier is shown
+
+**The whole repository: docs, code, git history.** Decided by the human this project is
+for, which is what `review: human` on 0011 was reserving.
+
+It costs little to permit because of what the repository already is. Secrets never enter a
+doc — a pushed commit cannot be unpublished, so the rule is to name the variable and where
+the value lives — and the measurement data is machine readings from one laptop. What is
+sensitive is not in here.
+
+**The boundary is the repository, and it is a boundary rather than a default.** Nothing
+outside the checkout is planning context: not the shell history, not other repositories on
+the machine, not credentials the environment happens to carry. A drafter that needs
+something from outside asks for it to be brought in and committed, which leaves a record of
+what was shown.
+
+That is the vision's named exception, used in full: planning leaves the machine, grinding
+does not. The local tier reads the same repository and sends nothing anywhere.
+
+## What the split costs, and what it saves
+
+0010 was built end to end by the frontier tier; 0015's first box was drafted by it and built
+by the local one. Both figures come from the harness's own transcripts, and the windows are
+stated because they are the weak part of the measurement — a window holds everything done in
+it, not only the feature.
+
+| | turns | tokens in | tokens generated |
+|---|---|---|---|
+| **0010, frontier throughout** — 12 boxes, 5 h | 468 | 138,772,396 | 539,327 |
+| **0015 box 1, frontier drafting only** — 15 min | 50 | 22,902,916 | 66,152 |
+| 0015 box 1, local builder finishing it | 68 | 1,532,612 | 12,147 |
+
+**Per box, the frontier tier spent about 45,000 generated tokens on 0010 and about 16,500
+drafting all four of 0015's** — and the box itself was then built for 12,147 generated
+tokens that cost nothing. The doc is the frontier tier's whole contribution, and it is
+written once for every box in it.
+
+**Two things stop this being a clean multiple.** The features are not the same size: 0010
+carried a 60-run sweep and 0015's box is one function. And the frontier figure excludes
+review, which is real and recurring — reviewing the first local build, finding its check
+could never pass, and correcting the doc took the frontier tier a further session. A split
+that ships nothing without review does not remove frontier cost so much as move it from
+writing to reading.
+
+**Input tokens are not the cost they appear to be.** The frontier column is dominated by
+cache reads, which is why 138 million of them accompany 539,000 generated. The local column
+is the same shape for a different reason: at 49,152 the conversation is re-ingested most
+turns, which is time rather than money.
+
+## What the local tier finishes unattended
+
+Drawn from the per-task record rather than from judgement: every tier-1 fixture at the
+settled config — thinking off, model-card sampling, llama.cpp — and 0010's 60 agent-loop
+runs. The two tiers agree on where the line falls.
+
+**Twelve of the fourteen tier-1 fixtures score 100%, and three of the five agent-loop
+fixtures are 12/12.** Mechanical single-file work — a nil guard, a boundary condition, a
+nil-map init, reading or editing a named file, recalling a key at depth — is finished
+without supervision, in one request or in three turns.
+
+Two classes are not, and neither is mechanical:
+
+| class | tier 1, settled | agent loop | what it actually asks for |
+|---|---|---|---|
+| the spec contradicts itself | 7/9 | 9/12 | deciding which authority wins |
+| the right action is to refuse | 8/12 | not covered | declining instead of acting |
+
+`patch-contradiction-rounding` sets a doc comment against a test that must keep passing:
+the model satisfies one and does not reliably notice the other. `toolcall-constraint-readonly`
+fails as `fail_wrong_tool` — told it may not write, it writes anyway, four times in twelve.
+**Both are judgement about which instruction governs, which is the frontier tier's half of
+the split.**
+
+A third class belongs to the harness rather than the model: **an in-place edit that must
+preserve what it did not write.** `patch-sibling-splitpath` is 9/9 as a whole-file rewrite
+in tier 1 and 9/12 through the agent loop, and every one of those three failures is an
+edit-based harness dropping the `strings` import. Claude Code and Hermes, which rewrite the
+file, took it 3/3. 0010 settled on Claude Code, so this class sits inside the boundary as
+configured — and outside it for anyone who switches to an edit-based harness.
+
+**The evidence stops at single-file changes.** Every fixture in the suite is one file and
+one function, and the instruction is one sentence. Nothing here says what the local tier
+does with a change spanning modules, or with a specification long enough to hold its own
+contradictions. That is what a feature tests, and it is measured rather than extrapolated.
+
 ## Nothing displaces Claude Code, and the two axes disagree
 
 Four harnesses over five patch fixtures, three passes each — 60 runs at one serving config
