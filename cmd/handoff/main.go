@@ -1,20 +1,11 @@
-// Command handoff runs one feature's topmost unticked box across fresh sessions, until the
-// box is ticked or a bound is reached.
+// Command handoff runs a feature's topmost unticked box across fresh sessions, until the
+// box is ticked or a bound is reached. See harness/claude-code/README.md.
 //
-// A local model's usable window is smaller than a feature, so the thing that has to fit in
-// it is a session rather than the work. Each session starts near the harness's preamble
-// floor and is handed the previous one's working state by the SessionStart hook, instead of
-// inheriting a conversation it would have to summarise to carry.
-//
-// This bounds how long a session lives and nothing else. What a session may do is the
-// permission mode and the tool set it is given, which are flags with the same defaults a
-// session started by hand has.
-//
-// Exit codes are the contract, so a measurement script can branch without parsing output:
+// Exit codes are the contract:
 //
 //	0  the box was ticked
 //	1  the run completed and the box is still unticked
-//	2  the run could not be carried out (bad flags, unreadable doc, no transcript)
+//	2  the run could not be carried out
 package main
 
 import (
@@ -63,8 +54,7 @@ type config struct {
 	keep       bool
 }
 
-// row is one session, and the file of them is the measurement: whether bounded sessions
-// finish a box at all, and what each one cost getting there.
+// row is one session. The file of them is the measurement.
 type row struct {
 	At          string  `json:"at"`
 	Doc         string  `json:"doc"`
@@ -88,7 +78,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		checkout = fs.String("checkout", ".", "checkout the sessions run in")
 		prompt   = fs.String("prompt", "", "what every session is told; empty builds it from -doc")
 		bin      = fs.String("bin", "claude", "harness binary")
-		tools    = fs.String("tools", "Bash,Edit,Read,Write", "tool set; the four 0008 measured at 3,711 tokens")
+		tools    = fs.String("tools", "Bash,Edit,Read,Write", "tool set")
 		perm     = fs.String("permission-mode", "acceptEdits", "permission mode each session runs under")
 		env      = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "environment file pointing the harness at the endpoint")
 		settings = fs.String("settings", "harness/claude-code/hooks.json", "settings file carrying the handoff hooks")
@@ -129,8 +119,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			return err
 		}
 
-		// Asked of the doc rather than of the session: a session that says it finished
-		// and did not tick the box has not finished, and the box is the record.
+		// The doc is the record, not what the session says about itself.
 		after, err := readBoxes(cfg.doc)
 		if err != nil {
 			return err
@@ -143,9 +132,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			return err
 		}
 		if r.Ticked {
-			// The handoff is working state inside the box that has just been ticked, so
-			// it is now a stale instruction: left in place, the first session on the next
-			// box would be handed the last one's.
+			// Working state inside a finished box is a stale instruction to the next one.
 			if err := os.Remove(filepath.Join(cfg.checkout, "HANDOFF.md")); err != nil && !os.IsNotExist(err) {
 				return err
 			}
@@ -178,9 +165,7 @@ func (c *config) validate() error {
 		return err
 	}
 	c.checkout = abs
-	// Every path a session is configured from is read relative to the checkout it runs
-	// in, because a feature is worked in a worktree of its own and the flags name what
-	// that worktree committed.
+	// Configuration paths are relative to the checkout, which is a worktree of its own.
 	for _, p := range []*string{&c.env, &c.settings, &c.refusals} {
 		if !filepath.IsAbs(*p) {
 			*p = filepath.Join(c.checkout, *p)
@@ -212,16 +197,15 @@ func readBoxes(doc string) ([]handoff.Box, error) {
 	return boxes, nil
 }
 
-// runSession runs one session to completion and reads back what it cost. A session that
-// failed is a row rather than an error: the bound is the driver's, and a harness that died
-// on its own has still spent the window this is measuring.
+// runSession runs one session and reads back what it cost. A failed session is a row, not
+// an error: it spent the window this measures either way.
 func runSession(cfg config, session int, box string) (row, error) {
 	env, err := harness.EnvFromFile(cfg.env)
 	if err != nil {
 		return row{}, err
 	}
-	// A directory of its own per session, so nothing a session learned reaches the next
-	// one except through HANDOFF.md — and so the transcript it wrote is the only one here.
+	// Its own directory, so nothing reaches the next session but the handoff, and the
+	// transcript in it is this session's.
 	state, err := os.MkdirTemp("", fmt.Sprintf("handoff-session-%d-", session))
 	if err != nil {
 		return row{}, err
@@ -234,9 +218,8 @@ func runSession(cfg config, session int, box string) (row, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.budget)
 	defer cancel()
 
-	// The session is configured by the flags and by nothing else. A checkout that has
-	// been set up for the editor carries the same variables in its own settings file, and
-	// leaving that source on means a row cannot say which of the two produced it.
+	// Flags are the whole configuration: a checkout set up for the editor carries the
+	// same variables, and a row could not say which produced it.
 	cmd := exec.CommandContext(ctx, cfg.bin, "-p",
 		"--settings", cfg.settings,
 		"--setting-sources", "",
@@ -262,17 +245,15 @@ func runSession(cfg config, session int, box string) (row, error) {
 		r.Err = strings.TrimSpace(r.Err + " state=" + state)
 	}
 
-	// The transcript is read whether the session succeeded or not: a session stopped by
-	// its budget is exactly the case whose peak context is worth having.
+	// Read whether the session succeeded or not: one stopped by its budget is the case
+	// whose peak is worth having.
 	if info, err := os.Stat(filepath.Join(cfg.checkout, "HANDOFF.md")); err == nil {
 		r.HandoffSize = int(info.Size())
 	}
 
 	transcript, err := newestTranscript(state)
 	if err != nil {
-		// Recorded on the row rather than raised: the driver's job is to keep starting
-		// sessions until the box is ticked or the bound is reached, and a session that
-		// left nothing to read is one row of that and not the end of the run.
+		// A row, not a raise: the loop runs to the bound.
 		r.Err = strings.TrimSpace(r.Err + " " + err.Error())
 		return r, nil
 	}
@@ -285,9 +266,8 @@ func runSession(cfg config, session int, box string) (row, error) {
 	return r, nil
 }
 
-// newestTranscript finds the session's transcript under its own state directory. The
-// directory is fresh, so there is normally one; the newest is taken rather than the only
-// one because a harness is free to write more than the session that was asked for.
+// newestTranscript finds the session's transcript. The state directory is fresh, so there
+// is normally one; the newest is taken in case the harness wrote more.
 func newestTranscript(state string) (string, error) {
 	paths, err := filepath.Glob(filepath.Join(state, "projects", "*", "*.jsonl"))
 	if err != nil || len(paths) == 0 {

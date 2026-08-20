@@ -41,8 +41,7 @@ func TestBoxesAreReadFromTheTasksSectionAlone(t *testing.T) {
 	}
 }
 
-// List order is the order of work, so the topmost unticked box is the whole instruction a
-// session gets — and a doc with every box ticked is the only way a driver finishes.
+// A doc with every box ticked is the only way a driver finishes.
 func TestTopmostIsTheFirstUntickedBox(t *testing.T) {
 	box, ok := Topmost(Boxes([]byte(doc)))
 	if !ok || box.Text != "The second box, which is the work" {
@@ -53,8 +52,7 @@ func TestTopmostIsTheFirstUntickedBox(t *testing.T) {
 	}
 }
 
-// The driver asks about the box it sent the session to do, not about the topmost one: a
-// session that ticked something else has not done what it was asked.
+// A session that ticked some other box has not done what it was asked.
 func TestTickedAsksAboutOneNamedBox(t *testing.T) {
 	boxes := Boxes([]byte(doc))
 	if !Ticked(boxes, "The first box, done") {
@@ -88,9 +86,7 @@ func assistant(in, write, read, out int) string {
 	return string(b)
 }
 
-// Peak rather than final, and the whole request rather than its uncached part: what says
-// whether the window was the binding constraint is the biggest turn, counted as everything
-// that turn put through it.
+// Peak rather than final, and the whole request rather than its uncached part.
 func TestReadSessionTakesTheBiggestTurnNotTheLastOne(t *testing.T) {
 	p := writeTranscript(t,
 		assistant(2, 22820, 0, 4),
@@ -113,9 +109,8 @@ func TestReadSessionTakesTheBiggestTurnNotTheLastOne(t *testing.T) {
 	}
 }
 
-// A transcript line carries whole tool results. Read with a default scanner the first one
-// over 64 KB ends the scan without an error, and every turn after it is lost — which reads
-// as a small session rather than as a truncated file.
+// A default scanner ends without an error at the first line over 64 KB, which reads as a
+// short session rather than a truncated file.
 func TestReadSessionSurvivesATranscriptLineLargerThanAScannerBuffer(t *testing.T) {
 	huge, _ := json.Marshal(map[string]any{
 		"type":    "user",
@@ -130,9 +125,7 @@ func TestReadSessionSurvivesATranscriptLineLargerThanAScannerBuffer(t *testing.T
 	}
 }
 
-// A refused session keeps running and is asked again on the next turn, so this counts
-// rather than reporting a flag — and it counts only this session's refusals, because the
-// log is one file every session in the checkout appends to.
+// One log file, every session in the checkout appending to it.
 func TestRefusalsCountThisSessionsOnly(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "precompact.jsonl")
 	body := ""

@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
-# SessionEnd: write a handoff when the session did not.
-#
-# The model is told to keep HANDOFF.md current, and this is the net under that instruction
-# rather than the mechanism — a handoff the session wrote knows what it meant to do, and
-# this one can only know what it did.
-#
-# No model is called: a transcript is read for what it records mechanically. Spending
-# generation on a summary is the cost the whole arrangement exists to avoid, and spending
-# it after the session has ended would buy even less than compaction does.
+# SessionEnd hook. Writes a handoff when the session wrote none, from the transcript
+# alone — no model is called.
 set -euo pipefail
 
 payload=$(cat)
@@ -28,11 +21,7 @@ FILES, CALLS, SAID, WIDTH = 8, 6, 400, 100
 
 
 def named(args):
-    """The one argument worth showing for a call, whatever the tool calls it.
-
-    Cut to one short line: a shell command can be a whole heredoc, and this file is read
-    again at every session start.
-    """
+    """The one argument worth showing for a call, cut to one short line."""
     for key in ("file_path", "path", "notebook_path", "command", "pattern", "url"):
         if args.get(key):
             value = str(args[key]).strip().splitlines()[0]
@@ -43,7 +32,7 @@ def named(args):
 
 
 def short(path):
-    """Paths relative to the checkout, which is the only place the next session stands."""
+    """Relative to the checkout, which is where the next session stands."""
     if not os.path.isabs(path):
         return path
     rel = os.path.relpath(path, root)
@@ -73,8 +62,7 @@ for line in lines:
             if args.get("file_path"):
                 into.append(short(args["file_path"]))
 
-# Most recent first, and each path once: what a session touched last is what the next one
-# most likely needs, and the same file read eleven times is one fact.
+# Most recent first, each path once.
 uniq = lambda paths: list(dict.fromkeys(reversed(paths)))[:FILES]
 edited, read = uniq(edited), [p for p in uniq(read) if p not in set(uniq(edited))]
 

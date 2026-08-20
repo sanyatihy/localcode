@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# SessionStart: put the previous session's working state in front of this one.
-#
-# Claude Code adds a SessionStart hook's plain-text stdout to the session's context, so
-# printing the file is what injects it — there is no other channel, and stderr goes to the
-# debug log where nothing reads it.
-#
-# The hook runs with the checkout as its working directory and CLAUDE_PROJECT_DIR set to
-# the same path, but a worktree is the normal case here and only the variable is documented
-# to follow one, so that is what is read.
+# SessionStart hook. Stdout is added to the session's context; stderr is not.
 set -euo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"

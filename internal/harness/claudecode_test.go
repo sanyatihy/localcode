@@ -92,9 +92,8 @@ func TestTheCommittedEnvironmentParses(t *testing.T) {
 	}
 }
 
-// The hooks are what make the handoff automatic rather than something the model has to
-// remember, and no Go code reads them: the committed document is asserted here so a rename
-// or a malformed edit fails the offline gate rather than a session.
+// No Go code reads the hooks, so a rename or a bad edit would fail a session rather than
+// the gate.
 func TestTheCommittedHooksRunScriptsThatAreThere(t *testing.T) {
 	b, err := os.ReadFile("../../harness/claude-code/hooks.json")
 	if err != nil {
@@ -120,9 +119,7 @@ func TestTheCommittedHooksRunScriptsThatAreThere(t *testing.T) {
 		if hook.Type != "command" {
 			t.Errorf("%s hook type is %q, not a command", event, hook.Type)
 		}
-		// $CLAUDE_PROJECT_DIR is what lets one committed path run in every worktree, and
-		// a feature is always worked in one — an absolute path would run in a single
-		// checkout, and a bare relative path only from wherever the session was launched.
+		// One committed path has to run in every worktree.
 		rest, ok := strings.CutPrefix(hook.Command, "$CLAUDE_PROJECT_DIR/")
 		if !ok {
 			t.Fatalf("%s command %q is not resolved against $CLAUDE_PROJECT_DIR", event, hook.Command)
@@ -137,10 +134,7 @@ func TestTheCommittedHooksRunScriptsThatAreThere(t *testing.T) {
 	}
 }
 
-// Stdout is the hook's whole channel: Claude Code adds it to the session's context, and
-// sends stderr to a debug log nothing reads. Both branches are asserted on what they
-// print, because a hook that printed nothing would hand the next session nothing and say
-// so nowhere.
+// Stdout is the hook's whole channel, so both branches are asserted on what they print.
 func TestTheSessionStartHookPrintsTheHandoffOrTheShapeOfOne(t *testing.T) {
 	script, err := filepath.Abs("../../harness/claude-code/hooks/session-start.sh")
 	if err != nil {
@@ -169,16 +163,14 @@ func TestTheSessionStartHookPrintsTheHandoffOrTheShapeOfOne(t *testing.T) {
 	if !strings.Contains(got, "**Next:** finish the box") {
 		t.Errorf("the handoff was not printed:\n%s", got)
 	}
-	// The instruction is what keeps the file current, so it is printed whether or not
-	// there is a handoff to print with it.
+	// Printed whether or not there is a handoff to print with it.
 	if !strings.Contains(got, "Keep HANDOFF.md current") {
 		t.Errorf("the instruction to keep it current was dropped:\n%s", got)
 	}
 }
 
-// Exit 2 is the only code that blocks a compaction; every other one lets it proceed. The
-// record is the other half — nothing the hook prints reaches the model or the user, so a
-// session that stopped because it could not be compacted would otherwise say so nowhere.
+// Exit 2 is the only code that blocks a compaction, and nothing the hook prints is seen —
+// so the record is the only trace.
 func TestThePreCompactHookRefusesAndRecordsThatItFired(t *testing.T) {
 	script, err := filepath.Abs("../../harness/claude-code/hooks/pre-compact.sh")
 	if err != nil {
@@ -197,9 +189,7 @@ func TestThePreCompactHookRefusesAndRecordsThatItFired(t *testing.T) {
 		}
 	}
 
-	// A refused compaction leaves the session running, so the hook fires again on the next
-	// turn: the record appends rather than replacing, or a session's later refusals are
-	// invisible.
+	// A refused session keeps running, so the hook fires again and the record appends.
 	fire("auto")
 	fire("auto")
 
@@ -223,9 +213,8 @@ func TestThePreCompactHookRefusesAndRecordsThatItFired(t *testing.T) {
 	}
 }
 
-// The fallback is the net under an instruction, so what it must never do is overwrite the
-// handoff the instruction produced: a session that wrote one knows what it meant to do,
-// and an extraction can only know what the session did.
+// A handoff the session wrote knows what it meant to do; an extraction only knows what it
+// did. So the extraction must never win.
 func TestTheSessionEndHookWritesAHandoffOnlyWhenTheSessionWroteNone(t *testing.T) {
 	script, err := filepath.Abs("../../harness/claude-code/hooks/session-end.sh")
 	if err != nil {
@@ -260,15 +249,13 @@ func TestTheSessionEndHookWritesAHandoffOnlyWhenTheSessionWroteNone(t *testing.T
 		t.Fatalf("no fallback was written: %v", err)
 	}
 	got := string(b)
-	// Paths are shown relative to the checkout, which is the only place the next session
-	// stands, and an edited file is what it most likely needs first.
+	// Relative to the checkout, edited files first.
 	for _, want := range []string{"`edited.go` (edited)", "`read.go`", "Next: run the tests."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the fallback does not carry %q:\n%s", want, got)
 		}
 	}
-	// The bound is the point: this is read again at every session start, and a transcript
-	// holds shell commands that are whole heredocs.
+	// Read again at every session start, from a transcript full of heredocs.
 	if n := strings.Count(got, "\n"); n > 40 {
 		t.Errorf("the fallback is %d lines, over the 40 it is specified at:\n%s", n, got)
 	}
