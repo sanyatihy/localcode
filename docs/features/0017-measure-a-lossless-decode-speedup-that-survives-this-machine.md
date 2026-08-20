@@ -4,7 +4,7 @@ title: Measure a lossless decode speedup that survives this machine
 status: Draft
 created: 2026-08-20
 shipped:
-check:
+check: 2026-09-03
 checked:
 review:
 needs:
@@ -96,28 +96,46 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 
 ## Tasks
 
-- [ ] Both candidates are screened against 0014's desktop verdict at 32k and 49k — a load plus 90 s of sampling — and the admissible profile for each is recorded before any suite runs
+- [x] Both candidates are screened against 0014's desktop verdict at 32k and 49k — a load plus 90 s of sampling — and the admissible profile for each is recorded before any suite runs
 - [ ] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
 - [ ] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
 - [ ] Candidate A (MTPLX) is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
-- [ ] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
+- [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
 - [ ] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
 - [ ] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
 - [ ] `docs/TECH.md`'s "multi-token prediction is not reachable here" is corrected: it is reachable, it is a net loss in llama.cpp on Metal, and it is the better of the two mechanisms on MLX
 
 ## Open questions
 
-- ~~**Which MTPLX checkpoint?**~~ **Answered: `Optimized-Speed-FP16`, and one screen rather
-  than three.** The FP16 build is not a fourth option but this machine's build of the same
-  weights — MTPLX routes M1 and M2 to the FP16 siblings and its own doctor resolves this id as
-  the default here. `Optimized-Quality` is 29.95 GB of weights, which no screen is needed to
-  reject; `Bare-Speed` at 16.29 GB is the footprint-matched build if the recommended one fails.
-- ~~**Draft depth?**~~ **Answered by B's rejection: A auto-tunes and the row records what it
-  chose.** The pair of depths B was to be measured at is moot — it cannot serve one token.
-- ~~**Is running an unmerged PR as a serving path a human call?**~~ **Answered: there is
-  nothing to ask.** It was to go to the inbox only if B won, and B is inadmissible here.
+- ~~**Which MTPLX checkpoint?**~~ **Answered: `Optimized-Speed-FP16`** — not a fourth option
+  but this machine's build of the recommended weights, which MTPLX's own doctor resolves as
+  the default for an M2. `Optimized-Quality` is 29.95 GB and needs no screen to reject;
+  `Bare-Speed` at 16.29 GB is the footprint-matched build, and it is now the open lead.
+- ~~**Draft depth?**~~ **Moot:** neither candidate reached a depth comparison.
+- ~~**Is running an unmerged PR as a serving path a human call?**~~ **Moot:** it was to be
+  asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **the feature waits for a release rather than a run, and `check:` says when to
+  look.** Both candidates are out on memory, so boxes 2, 4 and 6 have nothing admissible to
+  measure. Two things would change that: `Bare-Speed-FP16`, the same mechanism at 16.29 GB
+  against the recommended build's 20.68, which is not screened; or a release that cuts the
+  resident footprint. The boxes stay as written rather than being rewritten around a
+  constraint a smaller build would remove.
+- 2026-08-20 — **candidate A is inadmissible too, and this box's own method is what nearly
+  missed it.** "A load plus 90 s" inherits 0014's finding, and 0014 measured a runtime that
+  reserves its KV against `--ctx-size`. MTPLX allocates per request: its 32k and 49k loads
+  both peak at 22.21 GB, so a load-only screen scored each admissible. Under a prompt sized to
+  the profile it reaches **23.31 GB** and fails with the same allocator error as B — with the
+  KV quantised to q4 as well, which saves 0.17 GB of a 1.1 GB overshoot. So the screen sends a
+  prompt sized to the context, and the baseline survives that identical fill at 21.67 GB:
+  what fails is the configuration, not the instrument.
+- 2026-08-20 — box 5 is ticked out of order because its work was box 1's prerequisite: the
+  build exists, the Homebrew one is untouched, and the commit is named in
+  `config/dflash2-32k.env` beside the flags it serves. Kept over the 150-line alarm for the
+  same reason 0014 was — a rule fixed before the runs, and two rejections that have to stay
+  falsifiable.
 
 - 2026-08-20 — the editor-path question moves into the non-goal that already owned it: what
   MTPLX serves is a property of the candidate, not something this feature has to decide, and a

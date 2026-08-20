@@ -26,6 +26,10 @@ args=(
 # Depth is the draft length. Left unset the server auto-tunes it, which is what candidate A
 # is asked to do here; set, it is a measurement of one depth and the row must say which.
 [ -n "${DEPTH:-}" ] && args+=(--depth "$DEPTH")
+# The KV cache is where this runtime spends its context, and quantising it is the same lever
+# config/tuned.env already pulls for llama.cpp. Off is the server's default; a config that
+# sets it is measuring a different configuration and says so.
+[ -n "${PAGED_KV_QUANTIZATION:-}" ] && args+=(--paged-kv-quantization "$PAGED_KV_QUANTIZATION")
 
 echo "serving $CONFIG: $MODEL_HF ctx=$CONTEXT_WINDOW profile=$PROFILE mode=$GENERATION_MODE on $HOST:$PORT" >&2
 exec ./mtplx/.venv/bin/mtplx serve "${args[@]}"
