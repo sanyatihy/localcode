@@ -318,6 +318,31 @@ not. The extension hosting Claude Code has none of that, because the agent runs 
 Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
 other harnesses, not here.
 
+## Sessions hand off instead of compacting
+
+A session in this checkout writes `HANDOFF.md` — untracked working state inside one task
+box — and three Claude Code hooks carry it: `SessionStart` prints it into the next session's
+context, `PreCompact` refuses every compaction, `SessionEnd` extracts one from the transcript
+when the session wrote none. `cmd/handoff` runs a doc's topmost box across fresh sessions
+until it is ticked or a bound is reached, recording each session's peak context. The wiring
+is in [`harness/claude-code/`](../harness/claude-code/README.md) with the rest of the client
+configuration.
+
+**A refused compaction does not end the session.** The turn completes and `PreCompact` fires
+again on the next one, once per turn while the conversation stays over the threshold. What
+ends a session is `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refusing a send it cannot fit, so the
+refusal buys the generation a summary would have cost and nothing else — bounding a session
+is the driver's job. Measured at 2.1.233, on both triggers.
+
+**`SessionStart` sends `source`, not `session_start_reason`.** All three events fire in a
+print session, which is the form the driver runs.
+
+**Whether any of this is worth its cost is unmeasured.** The before/after is one box driven
+with the mechanism and without it, and
+[0011](features/0011-split-planning-and-grinding-across-frontier-and-local-models.md) is
+where boxes are driven locally, so it is where those runs happen. Until then this is
+apparatus, not a result.
+
 ## The harness
 
 `cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
