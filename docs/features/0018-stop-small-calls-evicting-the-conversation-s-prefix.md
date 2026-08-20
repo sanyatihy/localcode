@@ -59,13 +59,29 @@ cost lives in something a script does not stage.
 ## Tasks
 
 - [x] The premise is tested deliberately: a fixed conversation, a small call interleaved, and the cache-hit rate recorded per turn against the baseline config
-- [ ] Every request of a real session on `config/agent.env` is accounted from the server's own log — prompt, ingested, reused, and how the slot was chosen — so the turns that ingest from zero are identified rather than inferred
+- [x] Every request of a real session on `config/agent.env` is accounted from the server's own log — prompt, ingested, reused, and how the slot was chosen — so the turns that ingest from zero are identified rather than inferred
 - [ ] What those turns have in common is named, and either reproduced with `prefixprobe` or shown to be beyond what a scripted conversation can stage
 - [ ] The fix that cause implies is measured against the same conversation, served by `config/agent.env` if it wins, and `docs/TECH.md` records the per-turn ingest cost before and after
 
 ## Open questions
 
 ## Log
+- 2026-08-20 — **a real session on this config does not re-read itself either.** Thirteen
+  requests of a `claude -p` session over a copy of this repo: 145,180 prompt tokens, 16,308
+  ingested, 88.8% reused. One request ingested from zero, and it is the first, which has
+  nothing to reuse by construction. Twelve of the thirteen were chosen by LCP similarity
+  and hit between 79% and 99%.
+
+  **The session made no calls beside the conversation at all** — its prompts grow
+  monotonically from 3,130 to 18,208 — because `CLAUDE_CODE_DISABLE_TERMINAL_TITLE` in
+  `harness/claude-code/claude-code.env` suppresses them for `claude -p`. The traffic this
+  feature is named after does not occur under the environment the repo ships.
+
+  What is left that could ingest 22,770 tokens from zero is a session's *first* request.
+  It is cold by construction, and at ~90 tok/s it costs the four minutes the observation
+  reports. 0016 runs bounded sessions and starts a fresh one each time, so that shape pays
+  it once per session rather than once. The next box tests it: a second session against the
+  same server either reuses the first's preamble or does not.
 - 2026-08-20 — **boxes 2 and 3 are replaced, and the premise with them.** `PARALLEL=2` and
   a second small model both stop side traffic taking the slot, which the box below measured
   as costing the conversation nothing — measuring them would price a fix for a fault this
