@@ -1,6 +1,8 @@
 package eval
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -32,5 +34,32 @@ func TestSampleReadsWiredAndAnonymous(t *testing.T) {
 	}
 	if h := s.Headroom(); h < 0 || h > s.TotalGB {
 		t.Errorf("headroom outside the machine: %v of %v GB", h, s.TotalGB)
+	}
+}
+
+// The committed floor is what every sweep is judged against, so it has to load and to be
+// a number this machine can actually clear: 0014 measured 27.50 GB resident with the model
+// serving at 32k and an editor open, which leaves 4.5.
+func TestTheCommittedMachineFileLoads(t *testing.T) {
+	m, err := LoadMachine("../../config/machine.json")
+	if err != nil {
+		t.Fatalf("committed machine config: %v", err)
+	}
+	if m.MinHeadroomGB <= 0 || m.MinHeadroomGB > 8 {
+		t.Errorf("min_headroom_gb = %.2f, which is outside anything 0014 measured", m.MinHeadroomGB)
+	}
+}
+
+// A file that names no floor must not read as a machine with room.
+func TestLoadMachineRefusesAFloorlessFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "machine.json")
+	if err := os.WriteFile(p, []byte(`{"note":"nothing here"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadMachine(p); err == nil {
+		t.Error("a config with no floor was accepted")
+	}
+	if _, err := LoadMachine(filepath.Join(t.TempDir(), "absent.json")); err == nil {
+		t.Error("a missing config was accepted")
 	}
 }
