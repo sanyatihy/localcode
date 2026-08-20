@@ -27,7 +27,9 @@ at all. The decision is which, if either, survives contact with a 32 GB M2 Max.
 - **No change to the target model or quant**, and no fine-tuning of any head — out of scope
   project-wide.
 - **Not a runtime migration.** If the MLX candidate wins, that reopens 0006 as its own
-  feature; this measures, it does not switch what the project serves.
+  feature; this measures, it does not switch what the project serves. It would reopen it on
+  more than speed: MTPLX serves the Anthropic `/v1/messages` 0008 needs and reports acceptance
+  and cache state, which are two of the three reasons 0006 stayed on llama.cpp.
 - **No custom kernels or trained heads.** `mlx.fast`'s challenge is exactly that, and it is a
   research programme rather than a config change.
 
@@ -110,17 +112,16 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   weights — MTPLX routes M1 and M2 to the FP16 siblings and its own doctor resolves this id as
   the default here. `Optimized-Quality` is 29.95 GB of weights, which no screen is needed to
   reject; `Bare-Speed` at 16.29 GB is the footprint-matched build if the recommended one fails.
-- **Does the MLX candidate reach the editor path?** MTPLX serves an Anthropic-compatible
-  `/v1/messages` with tool calls, which is one of 0006's three reasons to stay on llama.cpp,
-  and its dashboard reports acceptance and cache state, which is a second. Leaning **note it and
-  do not chase it here** — that is 0006's reopening, and it needs its own comparison.
-- **Draft depth?** MTPLX auto-tunes depth on the machine; DFlash2's card runs `n-max 7` while
-  the MLX backend warns `block_size <= 5` for quantized targets. Leaning **let A auto-tune and
-  record what it chose, and measure B at 5 and 7 only**.
-- **Is running an unmerged PR as a serving path a human call?** The measurement is not;
-  adoption would pin this project to a branch. Leaning **INBOX only if B actually wins**.
+- ~~**Draft depth?**~~ **Answered by B's rejection: A auto-tunes and the row records what it
+  chose.** The pair of depths B was to be measured at is moot — it cannot serve one token.
+- ~~**Is running an unmerged PR as a serving path a human call?**~~ **Answered: there is
+  nothing to ask.** It was to go to the inbox only if B won, and B is inadmissible here.
 
 ## Log
+
+- 2026-08-20 — the editor-path question moves into the non-goal that already owned it: what
+  MTPLX serves is a property of the candidate, not something this feature has to decide, and a
+  claimed feature carrying a question nobody here can answer reads as work that is waiting.
 
 - 2026-08-20 — **candidate B is inadmissible here, measured rather than inferred, so box 5
   takes its second branch and no suite pass is owed to it.** At both contexts the fork loads,
