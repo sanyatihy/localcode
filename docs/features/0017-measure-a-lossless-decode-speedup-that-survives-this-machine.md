@@ -105,10 +105,11 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 
 ## Open questions
 
-- **Which MTPLX checkpoint?** `Optimized-Speed` is dynamic-4bit at 20.4 GB peaking at 23.6 GB,
-  which the screen may reject; `Optimized-Quality` and an M1/M2 FP16 build also exist and are
-  undocumented for size here. Leaning **screen all three before running any**, since the screen
-  is 90 seconds and a suite pass is not.
+- ~~**Which MTPLX checkpoint?**~~ **Answered: `Optimized-Speed-FP16`, and one screen rather
+  than three.** The FP16 build is not a fourth option but this machine's build of the same
+  weights — MTPLX routes M1 and M2 to the FP16 siblings and its own doctor resolves this id as
+  the default here. `Optimized-Quality` is 29.95 GB of weights, which no screen is needed to
+  reject; `Bare-Speed` at 16.29 GB is the footprint-matched build if the recommended one fails.
 - **Does the MLX candidate reach the editor path?** MTPLX serves an Anthropic-compatible
   `/v1/messages` with tool calls, which is one of 0006's three reasons to stay on llama.cpp,
   and its dashboard reports acceptance and cache state, which is a second. Leaning **note it and
@@ -120,6 +121,19 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   adoption would pin this project to a branch. Leaning **INBOX only if B actually wins**.
 
 ## Log
+
+- 2026-08-20 — **candidate B is inadmissible here, measured rather than inferred, so box 5
+  takes its second branch and no suite pass is owed to it.** At both contexts the fork loads,
+  answers `/health` with 200, then fails every Metal command buffer with
+  `kIOGPUCommandBufferCallbackErrorOutOfMemory` and returns 500 on the first token; quantising
+  the drafter's KV, the only memory lever this build has, does not change that. The drafter
+  costs 0.71 GB of wired memory over the same config without it. The design's headroom
+  arithmetic is also no longer an assumption: the allocator refused at **22.16 GB wired**,
+  against the 24 GB `iogpu.wired_limit_mb` implies and the 22.29 GB where 0014's desktop died.
+- 2026-08-20 — **the screen asks for one token, because health is not admissibility.** Its
+  first build scored both of B's cells admissible on a 200 from `/health` while the server
+  could not generate a word. A config that cannot produce a token is now inadmissible whatever
+  its memory says, and every row carries that request's status beside the verdict.
 
 - 2026-08-20 — **rescoped from "measure DFlash2" after research on `mlx.fast`, MTPLX and
   practitioner benchmarks.** Naming one vendor in the title made the doc argue for a candidate
