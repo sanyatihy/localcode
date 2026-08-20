@@ -60,12 +60,29 @@ cost lives in something a script does not stage.
 
 - [x] The premise is tested deliberately: a fixed conversation, a small call interleaved, and the cache-hit rate recorded per turn against the baseline config
 - [x] Every request of a real session on `config/agent.env` is accounted from the server's own log — prompt, ingested, reused, and how the slot was chosen — so the turns that ingest from zero are identified rather than inferred
-- [ ] What those turns have in common is named, and either reproduced with `prefixprobe` or shown to be beyond what a scripted conversation can stage
+- [x] What those turns have in common is named, and either reproduced with `prefixprobe` or shown to be beyond what a scripted conversation can stage
 - [ ] The fix that cause implies is measured against the same conversation, served by `config/agent.env` if it wins, and `docs/TECH.md` records the per-turn ingest cost before and after
 
 ## Open questions
 
 ## Log
+- 2026-08-20 — **the turns that ingest from zero are the ones with nothing to reuse, and
+  there is one.** Two sessions back to back against one server: 22 requests, 286,148 prompt
+  tokens, 34,386 ingested, 88.0% reused. The only from-zero ingest is the first request of
+  the first session, against a server that had never served that prefix.
+
+  A fresh session is not one of them. The second session's first request sent the same
+  3,130-token preamble and ingested 516 of it — 83.5% reused, 4.5 s against the first
+  session's 27.6 s. So about 516 tokens of Claude Code's preamble differ between two
+  otherwise identical runs, and they sit at its tail. **That settles what `docs/TECH.md`
+  leaves open** where it records Claude Code re-ingesting its preamble on every run and says what
+  changes is not established.
+
+  It reproduces with the probe, which is what makes it a property of the server rather than
+  of one harness: turn 1 of every condition ingests its whole prompt and every later turn
+  ingests only what is new. The scripted conversation and the real session agree, and the
+  deepest real request — 21,813 tokens, the size the problem statement reports — reused 97%
+  of itself.
 - 2026-08-20 — **a real session on this config does not re-read itself either.** Thirteen
   requests of a `claude -p` session over a copy of this repo: 145,180 prompt tokens, 16,308
   ingested, 88.8% reused. One request ingested from zero, and it is the first, which has
