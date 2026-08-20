@@ -102,7 +102,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 - [x] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
 - [x] The candidate that cleared the screen is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
-- [ ] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
+- [x] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
 - [ ] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
 - [ ] `docs/TECH.md`'s "multi-token prediction is not reachable here" is corrected: it is reachable, it is a net loss in llama.cpp on Metal, and it is the better of the two mechanisms on MLX
 
@@ -117,6 +117,19 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **the curve is the finding, and it crosses the rule's own bands.** 1.57x on the
+  ranking suite's short prompts, 1.40x at 8k, 1.34x at 16k, **1.26x at 32k** — adopt, then
+  record-and-do-not-adopt, without the mechanism changing. Acceptance holds at 3.94-3.97 at
+  every depth, so what decays is not the drafting but the cost of a verification step: both
+  sides slow with depth, 0.105 to 0.170 s/token on the baseline, and speculation cannot make
+  attention over a longer cache cheaper. This is why the box asked for a curve. A point at
+  either end would have been a different verdict, and the point everyone quotes is the
+  shallow one.
+- 2026-08-20 — the depth fixtures could not carry the measurement and three were added.
+  `retrieval-*.json` answers in 12 tokens, which is too few to divide into a per-token figure;
+  `decode-*.json` asks for the key and then 120 numbers, and returns 384. The first validation
+  run also showed why wall is the wrong clock: 279 seconds, of which 247 were prefill.
 
 - 2026-08-20 — **candidate C measures 1.57x on decode at 32k, and it is lossless by
   measurement rather than by argument**: 0.1050 against 0.0669 s/token over 12 accepted pairs,

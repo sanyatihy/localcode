@@ -19,6 +19,9 @@ BASELINE="${BASELINE:-config/tuned.env}"
 CANDIDATE="${CANDIDATE:?CANDIDATE is the serving config under test}"
 SESSION="${SESSION:?SESSION labels the pair, and only rows sharing one may be divided}"
 TASKS="${TASKS:-tasks}"
+# TASK runs one fixture instead of a directory, which is what a depth curve wants: each
+# point is its own pair, and mixing depths into one session would average the curve away.
+TASK="${TASK:-}"
 REPEATS="${REPEATS:-3}"
 RESULTS="${RESULTS:-results/pair.jsonl}"
 PORT="${PORT:-8081}"
@@ -56,7 +59,8 @@ for side in "$BASELINE" "$CANDIDATE"; do
     echo "  LOAD FAILED — see /tmp/pair-$label.log" >&2
     exit 2
   fi
-  go run ./cmd/eval -tasks "$TASKS" -n "$REPEATS" -config "$label" -session "$SESSION" \
+  if [ -n "$TASK" ]; then set -- -task "$TASK"; else set -- -tasks "$TASKS"; fi
+  go run ./cmd/eval "$@" -n "$REPEATS" -config "$label" -session "$SESSION" \
     -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
 done
 stop_server
