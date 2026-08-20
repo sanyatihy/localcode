@@ -9,8 +9,10 @@
 # the noise being cancelled here.
 #
 # The scorer streams, because decode is the half of the clock a speculative decoder can
-# move and only the client can see where prefill ended. `scripts/screen.sh` decides
-# whether a config may run at all; this decides whether it is worth running.
+# move and only the client can see where prefill ended, and it hashes fixed greedy probes
+# on each side: lossless is the premise of the comparison, so a mismatch takes the ratio
+# away rather than appearing beside it. `scripts/screen.sh` decides whether a config may
+# run at all; this decides whether it is worth running.
 set -euo pipefail
 
 BASELINE="${BASELINE:-config/tuned.env}"
@@ -55,7 +57,7 @@ for side in "$BASELINE" "$CANDIDATE"; do
     exit 2
   fi
   go run ./cmd/eval -tasks "$TASKS" -n "$REPEATS" -config "$label" -session "$SESSION" \
-    -stream -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
+    -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
 done
 stop_server
 

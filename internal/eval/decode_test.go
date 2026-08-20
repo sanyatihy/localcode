@@ -59,7 +59,10 @@ func TestDecodeSecondsNeedsAStream(t *testing.T) {
 func TestStreamMeasuresDecodeApartFromPrefill(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		flush := w.(http.Flusher)
+		flush, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("the test server must flush, or there is no stream to measure")
+		}
 		time.Sleep(120 * time.Millisecond) // prefill
 		for _, tok := range []string{"O", "K"} {
 			_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", tok)
