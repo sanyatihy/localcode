@@ -1,9 +1,9 @@
 ---
 id: 0016
 title: Hand off between sessions instead of compacting
-status: Draft
+status: Shipped
 created: 2026-08-19
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review:
