@@ -97,6 +97,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 ## Tasks
 
 - [x] Both candidates are screened against 0014's desktop verdict at 32k and 49k — a load plus 90 s of sampling — and the admissible profile for each is recorded before any suite runs
+- [x] Native MTP on the served GGUF — the head llama.cpp already ships past — is screened at 32k and 49k like the other two, and recorded as candidate C
 - [ ] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
 - [ ] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
 - [ ] Candidate A (MTPLX) is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
@@ -116,6 +117,24 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **candidate C is admissible at the grind profile and not at the editor one,
+  which is the first split this feature has produced.** At 32k it ingests 29,491 tokens and
+  answers, peaking at 22.10 GB against the baseline's 21.67 — 0.43 GB for a drafter that loads
+  no second model. At 49k the same allocator error fires on the first prefill batch, one
+  second in, where the baseline finishes the fill at 22.02 GB. Two conditions on the 32k
+  result, both discovered by getting them wrong: it needs `--parallel 1`, since llama.cpp's
+  default of four slots OOMs on its own, and `--n-gpu-layers 999` blocks the build's memory
+  fitter, which is a lever left unpulled rather than one that failed. So boxes 2, 4 and 6 have
+  a candidate at 32k, and the editor profile has none.
+
+- 2026-08-20 — **a third candidate, found in the target's own weights, and a box added for
+  it.** The GGUF this project already serves carries Qwen3.8's MTP head; stock llama.cpp logs
+  those tensors as unused and drops them, and PR #27342's build makes an MTP draft context
+  against the same weights rather than loading a second model — the no-extra-memory property
+  the design credited to candidate A, on the runtime this project already runs. It loads at
+  the settled config and generates with no allocator error, so it goes above the scorer box:
+  boxes 2, 4 and 6 were waiting on an admissible candidate and this may be one.
 
 - 2026-08-20 — **the feature waits for a release rather than a run, and `check:` says when to
   look.** Both candidates are out on memory, so boxes 2, 4 and 6 have nothing admissible to
