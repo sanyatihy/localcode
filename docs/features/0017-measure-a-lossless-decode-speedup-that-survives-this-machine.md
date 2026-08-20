@@ -100,7 +100,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 - [x] Native MTP on the served GGUF — the head llama.cpp already ships past — is screened at 32k and 49k like the other two, and recorded as candidate C
 - [x] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
 - [x] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
-- [ ] Candidate A (MTPLX) is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
+- [ ] The candidate that cleared the screen is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
 - [ ] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
 - [ ] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
@@ -117,6 +117,10 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — box 4 no longer names candidate A: it is inadmissible here, and the box's
+  subject is whichever candidate cleared the screen, which is C. Rewritten rather than
+  quietly pointed at a different config, since the box is what a later session reads.
 
 - 2026-08-20 — **both voids are in, and the fidelity one is what earns the word lossless.**
   Throttling is read from `pmset -g therm`, which needs no privileges — a gate that wants a
