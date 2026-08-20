@@ -99,7 +99,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 - [x] Both candidates are screened against 0014's desktop verdict at 32k and 49k — a load plus 90 s of sampling — and the admissible profile for each is recorded before any suite runs
 - [x] Native MTP on the served GGUF — the head llama.cpp already ships past — is screened at 32k and 49k like the other two, and recorded as candidate C
 - [x] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
-- [ ] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
+- [x] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
 - [ ] Candidate A (MTPLX) is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
 - [ ] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
@@ -117,6 +117,15 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **both voids are in, and the fidelity one is what earns the word lossless.**
+  Throttling is read from `pmset -g therm`, which needs no privileges — a gate that wants a
+  password is a gate that gets skipped — and is cumulative like swap, so it is sampled either
+  side of a run and the worse reading decides. Fidelity is checked directly rather than
+  argued: fixed prompts at temperature zero, hashed on each side, and a mismatch takes the
+  ratio away instead of appearing beside it. Two thresholds beyond the box: a sample past four
+  times its own side's median is a stall rather than a slow decode, and a side with fewer than
+  three accepted samples reports no ratio at all.
 
 - 2026-08-20 — **decode is isolated by streaming, because the client is the only side that
   can see where prefill ended.** The rule against trusting a server's own rate and the demand

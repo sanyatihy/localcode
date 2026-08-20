@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -136,7 +137,14 @@ func run(args []string, stdout, stderr *os.File) error {
 				pa = &pairAgg{}
 				paired[r.Session][r.Config] = pa
 			}
-			pa.add(r)
+			// A fidelity row is evidence about the pair rather than a scored task: it
+			// carries a hash and no timings, and counting it as an unmeasured run would
+			// report the instrument as a gap in the measurement.
+			if r.Kind == "fidelity" {
+				pa.fidelity = r.FidelityHash
+			} else {
+				pa.add(r)
+			}
 		}
 
 		if r.Outcome == eval.Inadmissible {
@@ -272,12 +280,26 @@ func versus(a, base *agg) string {
 	return strings.Join(parts, "  ")
 }
 
+// minPairs is how many accepted samples a side needs before its mean is a mean. Fewer
+// than three is one machine state and a coincidence, not a measurement.
+const minPairs = 3
+
+// stallFactor rejects a sample slower than this multiple of its side's median. A run that
+// hit a stall — a thermal event the cap did not report, a background process taking the
+// GPU — is not a slow decode, and averaging it in moves the ratio by more than the effect
+// being measured. The threshold is imported rather than invented: it is the one the
+// ranked MLX harness this method comes from uses.
+const stallFactor = 4.0
+
 // pairAgg is one config's decode measurements inside one session.
 type pairAgg struct {
 	secPerToken []float64
 	tau         []float64
+	fidelity    string
 	swapped     int
+	throttled   int
 	unmeasured  int
+	stalled     int
 }
 
 func (p *pairAgg) add(r eval.Row) {
@@ -288,13 +310,38 @@ func (p *pairAgg) add(r eval.Row) {
 		p.unmeasured++
 		return
 	}
-	// A run whose swap grew measured the pager, which the vision calls void rather than
-	// slow. Counted and named, never averaged in.
+	// A run whose swap grew measured the pager, and one the machine capped measured the
+	// cap. The vision calls the first void rather than slow; the second is the same kind
+	// of thing. Counted and named, never averaged in.
 	if r.MemMeasured && r.SwapDeltaMB > 0 {
 		p.swapped++
 		return
 	}
+	if r.Throttled {
+		p.throttled++
+		return
+	}
 	p.secPerToken = append(p.secPerToken, r.DecodeSeconds/float64(r.CompletionTokens))
+}
+
+// accepted drops stalls and reports what is left. Done at read time rather than at add
+// time because a sample can only be judged against the median of the samples beside it.
+func (p *pairAgg) accepted() []float64 {
+	if len(p.secPerToken) < 2 {
+		return p.secPerToken
+	}
+	sorted := append([]float64(nil), p.secPerToken...)
+	sort.Float64s(sorted)
+	median := sorted[len(sorted)/2]
+	var out []float64
+	for _, v := range p.secPerToken {
+		if median > 0 && v > stallFactor*median {
+			p.stalled++
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 // reportPaired prints the decode ratio for each session, against the baseline named on
@@ -306,7 +353,7 @@ func (p *pairAgg) add(r eval.Row) {
 // and cannot move prefill, and on a deep prompt wall is nearly all prefill. Sessions
 // exist so the two sides were measured back to back on one machine state; dividing
 // across sessions would measure host drift as well as the change.
-func reportPaired(stdout *os.File, paired map[string]map[string]*pairAgg, baseline string) {
+func reportPaired(stdout io.Writer, paired map[string]map[string]*pairAgg, baseline string) {
 	if len(paired) == 0 {
 		return
 	}
@@ -331,12 +378,19 @@ func reportPaired(stdout *os.File, paired map[string]map[string]*pairAgg, baseli
 			_, _ = fmt.Fprintf(stdout, "    no baseline: name one with -baseline, or measure one config without speculation\n")
 			continue
 		}
-		bm := meanF(configs[base].secPerToken)
+		bm := meanF(configs[base].accepted())
 		for _, name := range sortedKeys(configs) {
 			c := configs[name]
+			samples := c.accepted()
 			note := ""
 			if c.swapped > 0 {
 				note += fmt.Sprintf("  (%d void: swap grew)", c.swapped)
+			}
+			if c.throttled > 0 {
+				note += fmt.Sprintf("  (%d void: machine throttled)", c.throttled)
+			}
+			if c.stalled > 0 {
+				note += fmt.Sprintf("  (%d void: stalled past %.0fx the median)", c.stalled, stallFactor)
 			}
 			if c.unmeasured > 0 {
 				note += fmt.Sprintf("  (%d unmeasured)", c.unmeasured)
@@ -347,16 +401,27 @@ func reportPaired(stdout *os.File, paired map[string]map[string]*pairAgg, baseli
 			}
 			if name == base {
 				_, _ = fmt.Fprintf(stdout, "    %-28s %6.4f s/token over %d  %s  (baseline)%s\n",
-					name, bm, len(c.secPerToken), tau, note)
+					name, bm, len(samples), tau, note)
 				continue
 			}
-			m := meanF(c.secPerToken)
+			m := meanF(samples)
 			r := "ratio unavailable"
-			if m > 0 && bm > 0 {
+			// Lossless is the premise of the whole comparison, so a mismatch is not a
+			// caveat printed beside the number — it takes the number away.
+			mismatch := c.fidelity != "" && configs[base].fidelity != "" && c.fidelity != configs[base].fidelity
+			switch {
+			case mismatch:
+				r = "VOID: greedy output differs from the baseline — not lossless"
+			case len(samples) < minPairs || len(configs[base].accepted()) < minPairs:
+				r = fmt.Sprintf("too few accepted pairs (need %d)", minPairs)
+			case m > 0 && bm > 0:
 				r = fmt.Sprintf("%.2fx", bm/m)
 			}
+			if c.fidelity == "" || configs[base].fidelity == "" {
+				note += "  (fidelity unchecked)"
+			}
 			_, _ = fmt.Fprintf(stdout, "    %-28s %6.4f s/token over %d  %s  %s%s\n",
-				name, m, len(c.secPerToken), tau, r, note)
+				name, m, len(samples), tau, r, note)
 		}
 	}
 }

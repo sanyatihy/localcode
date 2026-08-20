@@ -84,6 +84,16 @@ type Row struct {
 	DraftN             int     `json:"draft_n,omitempty"`
 	DraftAccepted      int     `json:"draft_accepted,omitempty"`
 
+	// Throttled marks a run the machine capped, with the limit it was held to. Void for
+	// the same reason a swapped run is: the number measures the cap and not the model.
+	Throttled  bool `json:"throttled,omitempty"`
+	SpeedLimit int  `json:"speed_limit,omitempty"`
+
+	// FidelityHash is over the fixed greedy probes, on a row of kind "fidelity". Two
+	// configs in one session that disagree here did not decode the same text, and the
+	// speed ratio between them is void whatever it says.
+	FidelityHash string `json:"fidelity_hash,omitempty"`
+
 	// Session pairs a candidate with the baseline it is to be read against. An unpaired
 	// before-and-after measures host drift as well as the change; rows sharing a session
 	// were measured on one machine state, back to back, and only those may be divided.
@@ -146,6 +156,8 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 		AcceptanceMeasured: res.AcceptanceMeasured,
 		DraftN:             res.DraftN,
 		DraftAccepted:      res.DraftAccepted,
+		Throttled:          res.Throttled,
+		SpeedLimit:         res.SpeedLimit,
 	}
 }
 
