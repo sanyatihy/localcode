@@ -1,9 +1,9 @@
 ---
 id: 0018
 title: Stop small calls evicting the conversation's prefix
-status: Draft
+status: Shipped
 created: 2026-08-20
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review:
