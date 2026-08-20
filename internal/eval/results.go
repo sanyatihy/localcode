@@ -45,6 +45,11 @@ type Row struct {
 	ServedNCtx  int    `json:"served_n_ctx"`
 	ServedModel string `json:"served_model"`
 
+	// Forced is true when the preflight refused and the run was started anyway. Such a
+	// row measured a machine the check judged unable to carry it, so it is marked rather
+	// than averaged in with the rest.
+	Forced bool `json:"forced,omitempty"`
+
 	TaskID      string  `json:"task_id"`
 	Kind        string  `json:"kind"`
 	Outcome     Outcome `json:"outcome"`

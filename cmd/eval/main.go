@@ -41,6 +41,8 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs.SetOutput(stderr)
 	var (
 		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "OpenAI-compatible endpoint")
+		machine  = fs.String("machine", "config/machine.json", "machine properties: the headroom a sweep needs")
+		force    = fs.Bool("force", false, "start even when the preflight refuses, and mark every row forced")
 		taskPath = fs.String("task", "", "path to a single task fixture")
 		tasksDir = fs.String("tasks", "", "directory of task fixtures to run as a suite")
 		repeats  = fs.Int("n", 1, "passes over the suite")
@@ -132,6 +134,20 @@ func run(args []string, stdout, stderr *os.File) error {
 		sampling.PresencePenalty = presPen
 	}
 
+	// Asked before the first task, because a sweep that pages measures the pager and the
+	// rows say so only once the machine time is spent.
+	machineCfg, err := eval.LoadMachine(*machine)
+	if err != nil {
+		return err
+	}
+	pre := eval.Check(eval.Sample(), machineCfg.MinHeadroomGB)
+	if why := pre.Refuse(); why != "" {
+		if !*force {
+			return fmt.Errorf("the machine cannot carry this sweep: %s", why)
+		}
+		_, _ = fmt.Fprintf(stderr, "eval: starting anyway under -force: %s\n", why)
+	}
+
 	ctx := context.Background()
 	client := eval.NewClient(*endpoint, *timeout)
 	client.API = *api
@@ -166,6 +182,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			}
 			if *results != "" {
 				row := eval.NewRow(*config, rep, *thinking, *effort, sampling, props, task.Kind, res)
+				row.Forced = *force
 				if err := eval.AppendRow(*results, row); err != nil {
 					return fmt.Errorf("cannot append result: %w", err)
 				}
