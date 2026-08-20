@@ -38,7 +38,7 @@ func NewClaudeCode(envFile string) *ClaudeCode {
 func (c *ClaudeCode) Name() string { return "claude-code" }
 
 func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
-	env, err := envFromFile(c.envFile)
+	env, err := EnvFromFile(c.envFile)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
 	)
 }
 
-// envFromFile builds the child environment from the committed file, dropping every
+// EnvFromFile builds a child environment from the committed file, dropping every
 // ANTHROPIC_* and CLAUDE_* entry the parent happens to carry.
 //
 // Dropping them is the point. A stray ANTHROPIC_API_KEY in the launching shell takes
@@ -61,7 +61,7 @@ func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
 // a dozen CLAUDE_CODE_* variables that change the tool set — measurably, since one such
 // environment produced 21 tools where a clean one produced 18. A run has to be produced by
 // the config that is committed, or the label on the row is a claim about the wrong thing.
-func envFromFile(path string) ([]string, error) {
+func EnvFromFile(path string) ([]string, error) {
 	vars, err := parseEnvFile(path)
 	if err != nil {
 		return nil, err
