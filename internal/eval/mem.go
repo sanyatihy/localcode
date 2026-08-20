@@ -1,6 +1,9 @@
 package eval
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -20,6 +23,29 @@ type MemSample struct {
 	WiredGB     float64 `json:"wired_gb"`
 	AnonymousGB float64 `json:"anonymous_gb"`
 	OK          bool    `json:"-"` // false when the platform did not answer
+}
+
+// Machine is what config/ records about the hardware, kept there rather than in Go because
+// a floor derived on 32 GB is wrong on the next machine and would be re-derived by hand.
+type Machine struct {
+	MinHeadroomGB float64 `json:"min_headroom_gb"`
+}
+
+// LoadMachine reads it. A file that names no floor is an error rather than a zero, which
+// would carry every sweep and read as a machine with room.
+func LoadMachine(path string) (Machine, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Machine{}, err
+	}
+	var m Machine
+	if err := json.Unmarshal(b, &m); err != nil {
+		return Machine{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if m.MinHeadroomGB <= 0 {
+		return Machine{}, fmt.Errorf("%s: min_headroom_gb must be above zero", path)
+	}
+	return m, nil
 }
 
 // Preflight reports whether this machine can carry a sweep, with the numbers it read.
