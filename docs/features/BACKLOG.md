@@ -67,4 +67,13 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   the incumbent. Promote when: a harness is scored that compacts or truncates rather than
   stopping, or 0011 finds the window binds on something else. Note Pi ingests a fifth as much
   per task, so the pressure this relieves may be the incumbent's own.
-
+- **The `mlx.fast` challenge harness, as a scorer** — Layr-Labs' Qwen3.8-27B ranked harness pins
+  checkpoint, MTP head and prompts by SHA-256, pairs candidate against serial decode in one
+  session, and gates on thermals and token fidelity. 0017 imports the gates; the harness itself
+  wants ~36 GiB and an M5 Max runner. Promote when: a machine can run it, or the suite needs a
+  hidden prompt pool it cannot overfit.
+- **antirez's `ds4`, as a method rather than an engine** — a pure-C Metal runtime whose kernels
+  are byte-validated against the reference forward, running a 284B MoE at 26.68 tok/s on a
+  128 GB M3 Max. Not runnable here and a different model. Promote when: a lossless claim needs
+  proving at the kernel level rather than at the token level, which 0017's fidelity gate does
+  more cheaply.
