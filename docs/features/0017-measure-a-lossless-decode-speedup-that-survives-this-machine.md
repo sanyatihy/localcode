@@ -103,8 +103,8 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 - [x] The candidate that cleared the screen is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
 - [x] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
-- [ ] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
-- [ ] `docs/TECH.md`'s "multi-token prediction is not reachable here" is corrected: it is reachable, it is a net loss in llama.cpp on Metal, and it is the better of the two mechanisms on MLX
+- [x] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
+- [x] `docs/TECH.md`'s "multi-token prediction is not reachable here" is corrected: it is reachable, it is a net loss in llama.cpp on Metal, and it is the better of the two mechanisms on MLX
 
 ## Open questions
 
@@ -117,6 +117,19 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **the verdict splits four ways, and one of them is undecided.** Adopt for the
+  grind profile at 32,768. Record and do not adopt for long prompts, where the curve reaches
+  1.26x. Refused at 49,152, where the allocator will not carry it. Attended is undecided:
+  every screen here ran unattended, and that half of the rule needs 0014's desktop verdict
+  against a config peaking 0.19 GB under where that desktop died. The rejections are recorded
+  with their numbers beside the winner, since a rule that only records winners is not a rule.
+- 2026-08-20 — the correction box was itself half wrong, and is corrected rather than applied.
+  "Multi-token prediction is not reachable here" was true of `mlx_lm` and false of the project:
+  the head ships inside the GGUF this repo already serves. The draft also had the two runtimes
+  the wrong way round. It expected a net loss on llama.cpp and the better mechanism on MLX.
+  llama.cpp is where it runs, and the MLX runtime that implements it cannot hold a context
+  on 32 GB.
 
 - 2026-08-20 — **the curve is the finding, and it crosses the rule's own bands.** 1.57x on the
   ranking suite's short prompts, 1.40x at 8k, 1.34x at 16k, **1.26x at 32k** — adopt, then
@@ -139,8 +152,8 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   baseline's 25/27, failing the same two tasks 0013 built to discriminate — at 0.7 that is
   sampling, and the identical greedy hash is what rules out a distribution change. Three
   candidate runs and two baseline runs swapped and are void. And **one run in 27 returned no
-  token at all in 240 seconds** and hit its budget: not a slow decode but a hang, once, which
-  one occurrence cannot characterise and which the ratio never saw because a run with no
+  token at all in 240 seconds** before hitting its budget. That is a hang rather than a slow
+  decode. One occurrence cannot characterise it, and the ratio never saw it: a run with no
   tokens has no decode figure.
 - 2026-08-20 — the reporter was scoring the fidelity probe as a task, which handed every
   config that ran one a free pass and moved the denominator. Instrument rows are skipped now.
@@ -179,10 +192,10 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   a candidate at 32k, and the editor profile has none.
 
 - 2026-08-20 — **a third candidate, found in the target's own weights, and a box added for
-  it.** The GGUF this project already serves carries Qwen3.8's MTP head; stock llama.cpp logs
-  those tensors as unused and drops them, and PR #27342's build makes an MTP draft context
-  against the same weights rather than loading a second model — the no-extra-memory property
-  the design credited to candidate A, on the runtime this project already runs. It loads at
+  it.** The GGUF this project already serves carries Qwen3.8's MTP head, and stock llama.cpp
+  logs those tensors as unused and drops them. PR #27342's build makes an MTP draft context
+  against the same weights instead of loading a second model. That is the no-extra-memory
+  property the design credited to candidate A, on the runtime this project already runs. It loads at
   the settled config and generates with no allocator error, so it goes above the scorer box:
   boxes 2, 4 and 6 were waiting on an admissible candidate and this may be one.
 
@@ -206,9 +219,9 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   same reason 0014 was — a rule fixed before the runs, and two rejections that have to stay
   falsifiable.
 
-- 2026-08-20 — the editor-path question moves into the non-goal that already owned it: what
-  MTPLX serves is a property of the candidate, not something this feature has to decide, and a
-  claimed feature carrying a question nobody here can answer reads as work that is waiting.
+- 2026-08-20 — the editor-path question moves into the non-goal that already owned it. What
+  MTPLX serves is a property of the candidate rather than something this feature decides, and
+  a claimed feature carrying a question nobody here can answer reads as work that is waiting.
 
 - 2026-08-20 — **candidate B is inadmissible here, measured rather than inferred, so box 5
   takes its second branch and no suite pass is owed to it.** At both contexts the fork loads,
