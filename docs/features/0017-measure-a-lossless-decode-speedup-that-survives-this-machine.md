@@ -100,7 +100,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 - [x] Native MTP on the served GGUF — the head llama.cpp already ships past — is screened at 32k and 49k like the other two, and recorded as candidate C
 - [x] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
 - [x] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
-- [ ] The candidate that cleared the screen is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
+- [x] The candidate that cleared the screen is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
 - [ ] The context sweep 8k/16k/32k is run for whichever candidates cleared the screen, and reported as a curve rather than a point
 - [ ] The per-profile verdict is decided by the rule above and recorded in `docs/TECH.md` with the number that beat the alternative, including a rejection
@@ -117,6 +117,20 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **candidate C measures 1.57x on decode at 32k, and it is lossless by
+  measurement rather than by argument**: 0.1050 against 0.0669 s/token over 12 accepted pairs,
+  acceptance length 3.94, and the greedy probes hash identically on both sides. That clears
+  the 1.5x bar the rule set before any run, for the unattended profile.
+  Three things the number does not say, all on the row. Quality is 23/27 against the
+  baseline's 25/27, failing the same two tasks 0013 built to discriminate — at 0.7 that is
+  sampling, and the identical greedy hash is what rules out a distribution change. Three
+  candidate runs and two baseline runs swapped and are void. And **one run in 27 returned no
+  token at all in 240 seconds** and hit its budget: not a slow decode but a hang, once, which
+  one occurrence cannot characterise and which the ratio never saw because a run with no
+  tokens has no decode figure.
+- 2026-08-20 — the reporter was scoring the fidelity probe as a task, which handed every
+  config that ran one a free pass and moved the denominator. Instrument rows are skipped now.
 
 - 2026-08-20 — box 4 no longer names candidate A: it is inadmissible here, and the box's
   subject is whichever candidate cleared the screen, which is C. Rewritten rather than

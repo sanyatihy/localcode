@@ -147,6 +147,13 @@ func run(args []string, stdout, stderr *os.File) error {
 			}
 		}
 
+		// A fidelity row is the instrument's own evidence, not a task the model was
+		// scored on. Counting it would add a free pass to every config that ran one and
+		// move the denominator the pass rate is read against.
+		if r.Kind == "fidelity" {
+			continue
+		}
+
 		if r.Outcome == eval.Inadmissible {
 			a.inadmissible++
 			a.whyExcluded = r.Detail
