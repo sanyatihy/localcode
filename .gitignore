@@ -1,4 +1,6 @@
-results/*.jsonl
+# Live scratch: rows accumulate across runs, and a run's server log explains them
+# only until the next one. Snapshots go to docs/data/ when a feature ships.
+results/
 
 # MLX runs from its own venv; the pins are committed, the wheels are not.
 mlx/.venv/

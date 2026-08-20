@@ -144,6 +144,14 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 	return &out, nil
 }
 
+// Converse sends one conversation as it stands and reports what the server ingested
+// against what it reused. It carries no sampling and no thinking toggle: a caller whose
+// request *is* the conversation is measuring the server's defaults, which on the
+// Messages path is the only thing it could be measuring anyway.
+func (c *Client) Converse(ctx context.Context, msgs []Message, maxTokens int) (*Response, error) {
+	return c.Complete(ctx, chatRequest{Messages: msgs, MaxTokens: maxTokens})
+}
+
 // ServerProps is what the endpoint reports about itself. Recording it beside every
 // result is a guard against the sweep's most damaging silent failure: mislabelling.
 // When a run varies server-level flags, a config label is a human's claim about what
