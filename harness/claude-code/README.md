@@ -81,15 +81,29 @@ Under 40 lines, because every line is read again at every session start.
 injects it. With no handoff to print it prints the shape above instead; either way it
 prints the standing instruction to keep the file current.
 
+[`hooks/pre-compact.sh`](hooks/pre-compact.sh) refuses every compaction and appends what
+fired to `results/precompact.jsonl`. Exit 2 is the only code that blocks one; neither
+stream reaches the model, so the record is a file. Both triggers are refused, because a
+manual `/compact` re-ingests the conversation exactly as an automatic one does.
+
+**A refused compaction does not end the session**, measured at 2.1.233. The turn
+completes normally and `PreCompact` fires again on the next one, once per turn for as
+long as the conversation stays over the threshold. What ends a session here is the
+declared window: `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refuses a send that would exceed it,
+and refusal is what stops the client spending generation on a summary in the meantime,
+not what bounds the session.
+
 [`hooks.json`](hooks.json) is a settings document rather than a fragment, so one committed
 file has two readers: `claude --settings harness/claude-code/hooks.json` takes it directly,
 and `scripts/claude-code-settings.sh` merges it into `.claude/settings.local.json` for the
 extension, which reads only that. The command is written against `$CLAUDE_PROJECT_DIR`,
 which is the checkout — a feature is always worked in a worktree of its own, so an absolute
-path would run in one of them.
+path would run in only one of them.
 
 Verified in both readers at 2.1.233: a marker written into `HANDOFF.md` came back out of a
-fresh `claude -p` session, through `--settings` and through the project-scoped file.
+fresh `claude -p` session, through `--settings` and through the project-scoped file. The
+refusal was verified on both triggers — `/compact` in a print session, and an automatic one
+forced by `--autocompact 100000` against a conversation deliberately grown past it.
 
 ## It cannot be offline
 

@@ -50,8 +50,10 @@ Three hooks make it automatic rather than a thing the model must remember:
 
 **Refusing to compact is the load-bearing choice.** Compaction is the harness deciding to
 spend generation on a summary; a bounded session that ends and hands off spends it on the
-work instead. The model is also told to keep `HANDOFF.md` current, and the `SessionEnd`
-extraction is the net under that instruction rather than the mechanism.
+work instead. Refusing does not itself end a session — the driver's bound does — so what
+the refusal buys is the generation, not the ending. The model is also told to keep
+`HANDOFF.md` current, and the `SessionEnd` extraction is the net under that instruction
+rather than the mechanism.
 
 A driver then runs fresh sessions until the topmost box is ticked or a bound is reached.
 Each starts near the preamble floor — 3,711 tokens for the four tools 0008 measured — rather
@@ -63,18 +65,18 @@ used, peak context per session, wall clock, and whether the box was finished at 
 ## Tasks
 
 - [x] `HANDOFF.md` is specified and ignored by git, and a `SessionStart` hook injects it into every new session
-- [ ] A `PreCompact` hook refuses compaction and records that it fired, so a session ends rather than re-ingesting itself
+- [x] A `PreCompact` hook refuses compaction and records that it fired, so no session re-ingests itself
 - [ ] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
 - [ ] A driver runs fresh sessions until the topmost box is ticked or a bound is hit, recording each session's peak context
 - [ ] The mechanism is measured against the same box driven without it, and the outcome — including "not worth it" — is recorded in `docs/TECH.md`
 
-## Open questions
-
-- Does a refused compaction leave the session able to continue, or does it die on the next
-  turn? Leaning **it dies**, which is acceptable because the handoff is already written — but
-  it is the first thing the first box should establish, since the whole design rests on it.
-
 ## Log
+- 2026-08-20 — a refused compaction leaves the session running: the turn completes and
+  `PreCompact` fires again on the next one, once per turn while the conversation stays over
+  the threshold. The leaning was that it dies, and the box said the refusal was what made a
+  session end. It is not — the declared window is, by refusing a send it cannot fit — so the
+  box now claims only what the refusal does, and bounding a session is the driver's box
+  alone. The open question goes with the answer.
 - 2026-08-20 — the `SessionStart` payload field is `source`, not `session_start_reason`;
   the table said the latter and no such field is sent. Nothing reads it yet — the hook
   fires on every source and branches on the file instead — but a matcher written against

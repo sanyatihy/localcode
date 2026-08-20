@@ -9,6 +9,16 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/harness/claude-code/hooks/pre-compact.sh"
+          }
+        ]
+      }
     ]
   }
 }
