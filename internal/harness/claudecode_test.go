@@ -2,6 +2,7 @@ package harness
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,10 +92,10 @@ func TestTheCommittedEnvironmentParses(t *testing.T) {
 	}
 }
 
-// The SessionStart hook is what puts the previous session's working state in front of the
-// next one, and no Go code reads it: the committed document is asserted here so a rename
+// The hooks are what make the handoff automatic rather than something the model has to
+// remember, and no Go code reads them: the committed document is asserted here so a rename
 // or a malformed edit fails the offline gate rather than a session.
-func TestTheCommittedHooksRunTheSessionStartScript(t *testing.T) {
+func TestTheCommittedHooksRunScriptsThatAreThere(t *testing.T) {
 	b, err := os.ReadFile("../../harness/claude-code/hooks.json")
 	if err != nil {
 		t.Fatal(err)
@@ -110,27 +111,29 @@ func TestTheCommittedHooksRunTheSessionStartScript(t *testing.T) {
 	if err := json.Unmarshal(b, &settings); err != nil {
 		t.Fatalf("hooks.json does not parse: %v", err)
 	}
-	entries := settings.Hooks["SessionStart"]
-	if len(entries) != 1 || len(entries[0].Hooks) != 1 {
-		t.Fatalf("SessionStart no longer names exactly one command: %+v", entries)
-	}
-	hook := entries[0].Hooks[0]
-	if hook.Type != "command" {
-		t.Errorf("hook type is %q, not a command", hook.Type)
-	}
-	// $CLAUDE_PROJECT_DIR is what lets one committed path run in every worktree, and a
-	// feature is always worked in one — an absolute path would run only where it was
-	// written, and a bare relative path only from wherever the session was launched.
-	rest, ok := strings.CutPrefix(hook.Command, "$CLAUDE_PROJECT_DIR/")
-	if !ok {
-		t.Fatalf("command %q is not resolved against $CLAUDE_PROJECT_DIR", hook.Command)
-	}
-	info, err := os.Stat(filepath.Join("../..", rest))
-	if err != nil {
-		t.Fatalf("the hook command is not in the repository: %v", err)
-	}
-	if info.Mode()&0o111 == 0 {
-		t.Errorf("%s is not executable, so Claude Code cannot run it", rest)
+	for _, event := range []string{"SessionStart", "PreCompact"} {
+		entries := settings.Hooks[event]
+		if len(entries) != 1 || len(entries[0].Hooks) != 1 {
+			t.Fatalf("%s no longer names exactly one command: %+v", event, entries)
+		}
+		hook := entries[0].Hooks[0]
+		if hook.Type != "command" {
+			t.Errorf("%s hook type is %q, not a command", event, hook.Type)
+		}
+		// $CLAUDE_PROJECT_DIR is what lets one committed path run in every worktree, and
+		// a feature is always worked in one — an absolute path would run in a single
+		// checkout, and a bare relative path only from wherever the session was launched.
+		rest, ok := strings.CutPrefix(hook.Command, "$CLAUDE_PROJECT_DIR/")
+		if !ok {
+			t.Fatalf("%s command %q is not resolved against $CLAUDE_PROJECT_DIR", event, hook.Command)
+		}
+		info, err := os.Stat(filepath.Join("../..", rest))
+		if err != nil {
+			t.Fatalf("the %s command is not in the repository: %v", event, err)
+		}
+		if info.Mode()&0o111 == 0 {
+			t.Errorf("%s is not executable, so Claude Code cannot run it", rest)
+		}
 	}
 }
 
@@ -170,5 +173,52 @@ func TestTheSessionStartHookPrintsTheHandoffOrTheShapeOfOne(t *testing.T) {
 	// there is a handoff to print with it.
 	if !strings.Contains(got, "Keep HANDOFF.md current") {
 		t.Errorf("the instruction to keep it current was dropped:\n%s", got)
+	}
+}
+
+// Exit 2 is the only code that blocks a compaction; every other one lets it proceed. The
+// record is the other half — nothing the hook prints reaches the model or the user, so a
+// session that stopped because it could not be compacted would otherwise say so nowhere.
+func TestThePreCompactHookRefusesAndRecordsThatItFired(t *testing.T) {
+	script, err := filepath.Abs("../../harness/claude-code/hooks/pre-compact.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	fire := func(trigger string) {
+		t.Helper()
+		cmd := exec.Command(script)
+		cmd.Stdin = strings.NewReader(`{"session_id":"s1","trigger":"` + trigger + `"}`)
+		cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+root)
+		out, err := cmd.CombinedOutput()
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+			t.Fatalf("hook exited %v, and only 2 refuses a compaction: %s", err, out)
+		}
+	}
+
+	// A refused compaction leaves the session running, so the hook fires again on the next
+	// turn: the record appends rather than replacing, or a session's later refusals are
+	// invisible.
+	fire("auto")
+	fire("auto")
+
+	b, err := os.ReadFile(filepath.Join(root, "results", "precompact.jsonl"))
+	if err != nil {
+		t.Fatalf("nothing was recorded: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("recorded %d refusals, want 2:\n%s", len(lines), b)
+	}
+	var fired map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &fired); err != nil {
+		t.Fatalf("the record is not JSON: %v", err)
+	}
+	if fired["trigger"] != "auto" {
+		t.Errorf("the trigger was not carried through: %v", fired["trigger"])
+	}
+	if fired["at"] == nil {
+		t.Error("the record carries no time, so refusals cannot be placed in a session")
 	}
 }
