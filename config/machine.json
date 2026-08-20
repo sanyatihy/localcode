@@ -1,0 +1,4 @@
+{
+  "note": "What this project knows about the machine it runs on, measured rather than assumed. See docs/TECH.md.",
+  "min_headroom_gb": 4.0
+}

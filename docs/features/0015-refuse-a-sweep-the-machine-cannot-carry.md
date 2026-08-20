@@ -1,9 +1,9 @@
 ---
 id: 0015
 title: Refuse a sweep the machine cannot carry
-status: Draft
+status: Shipped
 created: 2026-08-19
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review:
@@ -50,18 +50,24 @@ headroom is a property of the machine, and this repo already keeps machine prope
 
 ## Tasks
 
-- [ ] `internal/eval` gains a preflight that reads free memory and swap and reports whether a sweep can be carried, with the numbers it read
-- [ ] The threshold lives in a config file, and its default is justified by 0014's measured figures rather than chosen
-- [ ] `cmd/eval` and `cmd/tier2` refuse to start when the preflight fails, and `-force` overrides it and marks the rows as forced
-- [ ] A test covers both sides: a machine with headroom starts, one without is refused, and neither needs a running server
-
-## Open questions
-
-- Should a preflight failure be an exit code of its own, so a wrapper script can tell "the
-  machine was not ready" from "the suite failed"? Leaning **yes**, reusing the existing
-  convention that 2 means the run could not be carried out.
+- [x] `internal/eval` gains a preflight that reads the machine's headroom — total less wired and anonymous — and reports whether a sweep can be carried, with the numbers it read
+- [x] The headroom floor lives in a config file, and its default is justified by 0014's measured figures rather than chosen
+- [x] `cmd/eval` and `cmd/tier2` refuse to start when the preflight fails, and `-force` overrides it and marks the rows as forced
+- [x] A test covers both sides: a machine with headroom starts, one without is refused, and neither needs a running server
 
 ## Log
+- 2026-08-20 — the open question is settled: a refusal exits 2, which both commands already
+  use for "the run could not be carried out". A wrapper can tell it from a suite that failed
+  without parsing output, and no new code was needed to do it.
+- 2026-08-20 — the floor is 4.0 GB, from 0014 rather than from taste: the model wired 20.89
+  GB serving 32k and apps held 6.61 GB with an editor open, 27.50 against 32, so 4.5 GB is
+  what a machine that was still usable had left. It is one configuration's figure, and the
+  sampler only started recording headroom in the box above — a sweep's worth of readings is
+  what should replace it.
+
+- 2026-08-20 — rewrote the first two boxes to name headroom rather than free memory. The
+  entry below corrected the design and left the boxes saying the opposite, which is the
+  one place a builder actually reads.
 
 - 2026-08-20 — the drafted non-goal was wrong, and a first build against it produced a
   check that could not pass — kept at `evidence/0015-first-run-no-handoff`: free memory is no
