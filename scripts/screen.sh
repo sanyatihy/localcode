@@ -25,8 +25,16 @@ LABEL="${LABEL:?LABEL names this candidate in the results file}"
 CTX="${CTX:?CTX is the context the config claims to serve}"
 CONDITION="${CONDITION:-unlabelled}"
 PORT="${PORT:-8081}"
-PROC="${PROC:-llama-server}"          # pgrep pattern: what to stop first, and whose RSS to read
+PROC="${PROC:-llama-server}"          # pgrep pattern for sweeping a leftover server away
+# A runtime that sets its own process title cannot be found by pattern — MTPLX's command line
+# is just the Python binary — so the server this run launched is tracked by its pid, and a
+# runtime with a stop command of its own is given the chance to use it.
+STOP_CMD="${STOP_CMD:-}"
 SECONDS_TO_SAMPLE="${SECONDS_TO_SAMPLE:-90}"
+# How big the request that precedes the window is. A runtime that reserves its KV at load is
+# judged by the load; one that allocates per request is not judged at all until a prompt
+# occupies the context, and the same screen has to cover both. Unset means one line.
+SMOKE_TOKENS="${SMOKE_TOKENS:-}"
 LOAD_TIMEOUT="${LOAD_TIMEOUT:-600}"
 OUT="${OUT:-results/screen.jsonl}"
 [ $# -ge 1 ] || { echo "usage: LABEL=... CTX=... $0 <serve command...>" >&2; exit 2; }
@@ -35,6 +43,7 @@ mkdir -p "$(dirname "$OUT")"
 # Same shape as the ladder's, and for the same reason: an 18 GB process does not exit on a
 # fixed sleep, and the next server binding while the old one lives measures the wrong one.
 stop_server() {
+  if [ -n "$STOP_CMD" ]; then eval "$STOP_CMD" >/dev/null 2>&1 || true; fi
   pkill -f "$PROC" 2>/dev/null || true
   local deadline=$((SECONDS + 90))
   while pgrep -f "$PROC" >/dev/null; do
@@ -50,7 +59,7 @@ wait_healthy() {
   local deadline=$((SECONDS + LOAD_TIMEOUT)) grace=$((SECONDS + 20))
   while [ $SECONDS -lt $deadline ]; do
     [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health" 2>/dev/null)" = "200" ] && return 0
-    if [ $SECONDS -ge $grace ] && ! pgrep -f "$PROC" >/dev/null; then return 1; fi
+    if [ $SECONDS -ge $grace ] && ! kill -0 "$server_pid" 2>/dev/null; then return 1; fi
     sleep 3
   done
   return 1
@@ -65,8 +74,7 @@ served_ctx() {
 }
 
 server_rss_gb() {
-  ps -Ao rss,comm,args 2>/dev/null | grep -F "$PROC" | grep -v grep \
-    | awk '{s+=$1} END {printf "%.3f", s/1048576}'
+  ps -o rss= -p "$server_pid" 2>/dev/null | awk '{printf "%.3f", $1/1048576}'
 }
 
 stop_server
@@ -94,6 +102,7 @@ trap 'kill "$sampler" 2>/dev/null || true' EXIT
 
 load_start=$SECONDS
 nohup "$@" > "/tmp/screen-$LABEL.log" 2>&1 &
+server_pid=$!
 if wait_healthy; then
   outcome=ok
   load_seconds=$((SECONDS - load_start))
@@ -104,14 +113,23 @@ if wait_healthy; then
   # One token, before the sampling window: what is being screened is a server that works,
   # and the window should cover the machine in the state a suite would find it.
   python3 -c "
-import json, os, sys
-body={'messages':[{'role':'user','content':'Reply with the single word OK.'}],
-      'max_tokens':8,'temperature':0}
+import json, os, random, sys
+n=int(os.environ.get('SMOKE_TOKENS') or 0)
+if n:
+    random.seed(11)
+    vocab=['session','token','refresh','handler','request','context','buffer','index',
+           'commit','parser','value','result','config','client','server','stream']
+    prompt=' '.join(random.choice(vocab) for _ in range(n))+chr(10)*2+'Reply with the single word OK.'
+else:
+    prompt='Reply with the single word OK.'
+body={'messages':[{'role':'user','content':prompt}],'max_tokens':8,'temperature':0}
 if os.environ.get('SMOKE_MODEL'): body['model']=os.environ['SMOKE_MODEL']
 json.dump(body, sys.stdout)" > /tmp/screen-smoke-req.json
-  smoke_http=$(curl -s -m 300 -o /tmp/screen-smoke-$LABEL.json -w '%{http_code}' \
+  smoke_start=$SECONDS
+  smoke_http=$(curl -s -m 600 -o /tmp/screen-smoke-$LABEL.json -w '%{http_code}' \
       "http://127.0.0.1:$PORT/v1/chat/completions" \
       -H 'Content-Type: application/json' -d @/tmp/screen-smoke-req.json || echo 000)
+  smoke_seconds=$((SECONDS - smoke_start))
   smoke=$(python3 -c "
 import json
 try:
@@ -120,16 +138,17 @@ try:
 except Exception:
     print('error')")
   [ "$smoke_http" = "200" ] || smoke=error
-  echo "    loaded in ${load_seconds}s, smoke=$smoke ($smoke_http), sampling ${SECONDS_TO_SAMPLE}s" >&2
+  echo "    loaded in ${load_seconds}s, smoke=$smoke ($smoke_http) after ${smoke_seconds}s at ${SMOKE_TOKENS:-0} prompt tokens, sampling ${SECONDS_TO_SAMPLE}s" >&2
   sleep "$SECONDS_TO_SAMPLE"
 else
   outcome=load_failed
   load_seconds=$((SECONDS - load_start))
-  loaded=$before; rss=0; served=null; smoke=not_reached; smoke_http=000
+  loaded=$before; rss=0; served=null; smoke=not_reached; smoke_http=000; smoke_seconds=0
   echo "    LOAD FAILED after ${load_seconds}s — see /tmp/screen-$LABEL.log" >&2
 fi
 after=$(./scripts/memprobe.sh)
 kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true
+kill "$server_pid" 2>/dev/null || true
 stop_server
 
 SERVE_CMD="$*" python3 - <<PY >> "$OUT"
@@ -173,7 +192,8 @@ else:
 row={"record": "screen", "condition": "$CONDITION", "label": "$LABEL", "ctx": $CTX,
      "serve": os.environ["SERVE_CMD"], "proc": "$PROC", "port": $PORT,
      "outcome": outcome, "served_n_ctx": json.loads('''$served'''), "load_seconds": $load_seconds,
-     "smoke": "$smoke", "smoke_http": "$smoke_http",
+     "smoke": "$smoke", "smoke_http": "$smoke_http", "smoke_seconds": $smoke_seconds,
+     "smoke_prompt_tokens": ${SMOKE_TOKENS:-0},
      "screen_seconds": $SECONDS_TO_SAMPLE,
      "admissible": admissible, "admissible_reason": why,
      "before": before, "loaded": loaded, "after": after,
