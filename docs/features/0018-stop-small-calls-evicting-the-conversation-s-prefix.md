@@ -61,11 +61,24 @@ cost lives in something a script does not stage.
 - [x] The premise is tested deliberately: a fixed conversation, a small call interleaved, and the cache-hit rate recorded per turn against the baseline config
 - [x] Every request of a real session on `config/agent.env` is accounted from the server's own log — prompt, ingested, reused, and how the slot was chosen — so the turns that ingest from zero are identified rather than inferred
 - [x] What those turns have in common is named, and either reproduced with `prefixprobe` or shown to be beyond what a scripted conversation can stage
-- [ ] The fix that cause implies is measured against the same conversation, served by `config/agent.env` if it wins, and `docs/TECH.md` records the per-turn ingest cost before and after
+- [x] `docs/TECH.md` records what a session's prompt actually costs on this config, what the server does to make it that, and that no serving change follows
 
 ## Open questions
 
 ## Log
+- 2026-08-20 — **the last box drops the fix, because there is nothing left to fix.** It read
+  "the fix that cause implies is measured … served by `config/agent.env` if it wins", and the
+  cause is a prefix the server has never seen. Nothing serves that away: a first request has
+  nothing to reuse by construction. What replaces it is recording what was established, which
+  is the part of that box worth keeping.
+
+  **This ships rather than being dropped.** A drop retires a feature that should not have
+  been built; this one asked a real question about a real cost and answered it in numbers a
+  later feature can read. What it does not produce is a change to the serving config, and
+  that is a result rather than a failure — 0006 and 0010 each ship one. The title is the
+  casualty: it names a mechanism this feature disproved, and it stands because renaming the
+  doc renames the branch that claims it. Retiring it instead is a reviewer's call, and the
+  evidence is committed either way.
 - 2026-08-20 — **the turns that ingest from zero are the ones with nothing to reuse, and
   there is one.** Two sessions back to back against one server: 22 requests, 286,148 prompt
   tokens, 34,386 ingested, 88.0% reused. The only from-zero ingest is the first request of
