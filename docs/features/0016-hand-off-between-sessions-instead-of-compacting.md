@@ -23,8 +23,9 @@ spent reproducing what a commit already records.
 
 ## Non-goals
 
-- **No change to `kit`.** Claims, boards and feature docs already carry state *between*
-  features. What is missing is state between *sessions inside* one box.
+- **No change to `kit` here.** Claims, boards and feature docs already carry state
+  *between* features; what is missing is state between *sessions inside* one box. Whether
+  `kit` is the right owner of that is a real question and a backlog line, not this feature.
 - **No summarising.** The point is not a better compaction; it is not needing one.
 - **No new agent and no orchestration layer.** One harness, run more than once.
 - **No change to what a session may do.** This bounds how long a session lives, not what it
@@ -60,7 +61,9 @@ Each starts near the preamble floor — 3,711 tokens for the four tools 0008 mea
 than wherever the last one ended.
 
 **Whether this is worth it is measurable, and the same box is the measurement**: sessions
-used, peak context per session, wall clock, and whether the box was finished at all.
+used, peak context per session, wall clock, and whether the box was finished at all. The
+driver records all four, and 0011 is what runs them — it is the feature that grinds boxes
+locally, so its runs are the before and after rather than a sweep staged here.
 
 ## Tasks
 
@@ -68,9 +71,13 @@ used, peak context per session, wall clock, and whether the box was finished at 
 - [x] A `PreCompact` hook refuses compaction and records that it fired, so no session re-ingests itself
 - [x] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
 - [x] A driver runs fresh sessions until the topmost box is ticked or a bound is hit, recording each session's peak context
-- [ ] The mechanism is measured against the same box driven without it, and the outcome — including "not worth it" — is recorded in `docs/TECH.md`
+- [ ] What the mechanism does is recorded in `docs/TECH.md` and labelled unmeasured, with the before/after left to 0011 — which is where a box is driven with and without it
 
 ## Log
+- 2026-08-20 — the measurement box moves out. It read as a gate on adopting the mechanism,
+  and the mechanism is apparatus 0011 needs to run at all: 0011 drives boxes locally, so its
+  runs are the with-and-without rather than a sweep staged here. What stays is recording
+  what the mechanism does, labelled unmeasured — a fact this feature can honestly finish.
 - 2026-08-20 — a refused compaction leaves the session running: the turn completes and
   `PreCompact` fires again on the next one, once per turn while the conversation stays over
   the threshold. The leaning was that it dies, and the box said the refusal was what made a
