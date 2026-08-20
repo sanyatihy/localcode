@@ -98,7 +98,7 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 
 - [x] Both candidates are screened against 0014's desktop verdict at 32k and 49k — a load plus 90 s of sampling — and the admissible profile for each is recorded before any suite runs
 - [x] Native MTP on the served GGUF — the head llama.cpp already ships past — is screened at 32k and 49k like the other two, and recorded as candidate C
-- [ ] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
+- [x] The scorer reports a paired, decode-isolated ratio against a baseline measured in the same session, and records acceptance length τ, or records it unavailable rather than absent
 - [ ] A run is voided on thermal throttling and on token-fidelity mismatch, on the same footing as a swapped run, with a test covering both
 - [ ] Candidate A (MTPLX) is run over the tier-1 ranking tasks at 0005's settled sampling and 32k, 3 repeats, appended to `docs/data/`
 - [x] Candidate B (DFlash2) is built from PR #27342 into a scratch prefix with its commit SHA recorded, the Homebrew build left in place, and run identically — or recorded as inadmissible by the screen above, which is a result
@@ -117,6 +117,16 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
   asked only if B won.
 
 ## Log
+
+- 2026-08-20 — **decode is isolated by streaming, because the client is the only side that
+  can see where prefill ended.** The rule against trusting a server's own rate and the demand
+  for a decode-isolated one leave no other instrument: a non-streamed reply reports one clock
+  covering both halves. So `-stream` measures the gap to the first token, `-session` marks the
+  rows that may be divided, and the reporter takes the ratio of seconds per token. Tasks
+  carrying tools stay unstreamed and say so on the row — streamed tool calls arrive as
+  fragments, and a speed number is not worth a scoring bug. Acceptance length is derived from
+  the server's draft counters and recorded as unavailable when it drafted nothing, which is
+  not an acceptance of zero.
 
 - 2026-08-20 — **candidate C is admissible at the grind profile and not at the editor one,
   which is the first split this feature has produced.** At 32k it ingests 29,491 tokens and

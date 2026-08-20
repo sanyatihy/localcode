@@ -110,6 +110,23 @@ type Result struct {
 	PromptPerSecond  float64 `json:"prompt_per_second"`
 	GenPerSecond     float64 `json:"gen_per_second"`
 	WallSeconds      float64 `json:"wall_seconds"`
+
+	// Decode, separated from prefill by the client rather than by the server. A
+	// speculative decoder moves decode and cannot move prefill, so wall hides the whole
+	// effect on any run whose prompt is deep — the editor profile is 96.7% prefill.
+	// DecodeMeasured is false when the run was not streamed, and the rate is then absent
+	// rather than zero.
+	TTFTSeconds     float64 `json:"ttft_seconds,omitempty"`
+	DecodeSeconds   float64 `json:"decode_seconds,omitempty"`
+	DecodePerSecond float64 `json:"decode_per_second,omitempty"`
+	DecodeMeasured  bool    `json:"decode_measured"`
+
+	// Acceptance length, and whether it could be read at all. A server that does not
+	// speculate reports nothing here, which is not an acceptance of zero.
+	AcceptanceLength   float64 `json:"acceptance_length,omitempty"`
+	AcceptanceMeasured bool    `json:"acceptance_measured"`
+	DraftN             int     `json:"draft_n,omitempty"`
+	DraftAccepted      int     `json:"draft_accepted,omitempty"`
 }
 
 func (r Result) Passed() bool { return r.Outcome == Pass }
@@ -193,6 +210,11 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	if len(t.Tools) > 0 {
 		req.ToolChoice = "auto"
 	}
+	// Streamed only when nothing else depends on the reply's shape. Tool calls arrive as
+	// fragments that would have to be reassembled to be scored, and a speed measurement
+	// is not worth a scoring bug: those tasks keep the unstreamed path and their rows say
+	// decode was not measured.
+	req.Stream = c.Stream && len(t.Tools) == 0
 	if thinking != nil {
 		req.ChatTemplateKwargs = map[string]any{"enable_thinking": *thinking}
 	}
@@ -242,6 +264,18 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 		PromptPerSecond:  resp.Timings.PromptPerSecond,
 		GenPerSecond:     resp.Timings.PredictedPerSecond,
 		WallSeconds:      resp.Wall.Seconds(),
+	}
+	if secs, ok := resp.DecodeSeconds(); ok {
+		res.TTFTSeconds = resp.TTFT.Seconds()
+		res.DecodeSeconds = secs
+		res.DecodeMeasured = true
+		if n := resp.Usage.CompletionTokens; n > 0 {
+			res.DecodePerSecond = float64(n) / secs
+		}
+	}
+	if tau, ok := resp.AcceptanceLength(); ok {
+		res.AcceptanceLength, res.AcceptanceMeasured = tau, true
+		res.DraftN, res.DraftAccepted = *resp.Timings.DraftN, *resp.Timings.DraftNAccepted
 	}
 	if len(resp.Error) > 0 && string(resp.Error) != "null" {
 		res.Outcome, res.Detail = FailServer, truncate(string(resp.Error), 200)

@@ -65,6 +65,11 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	// Rows that carry a session are the ones a ratio may be taken over, kept aside so
+	// the paired section can divide them after the summary. Everything else about the
+	// report is unchanged by their presence.
+	paired := map[string]map[string]*pairAgg{}
+
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
 	// Which groups compare harnesses rather than thinking modes, so the first column
@@ -121,6 +126,18 @@ func run(args []string, stdout, stderr *os.File) error {
 			props = fmt.Sprintf("ctx=%d model=%s", r.ServedNCtx, r.ServedModel)
 		}
 		served[group] = props
+
+		if r.Session != "" {
+			if paired[r.Session] == nil {
+				paired[r.Session] = map[string]*pairAgg{}
+			}
+			pa := paired[r.Session][r.Config]
+			if pa == nil {
+				pa = &pairAgg{}
+				paired[r.Session][r.Config] = pa
+			}
+			pa.add(r)
+		}
 
 		if r.Outcome == eval.Inadmissible {
 			a.inadmissible++
@@ -226,6 +243,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			}
 		}
 	}
+	reportPaired(stdout, paired, *baseline)
 	_, _ = fmt.Fprintln(stdout)
 	return nil
 }
@@ -252,6 +270,95 @@ func versus(a, base *agg) string {
 	}
 	parts = append(parts, ratio("wall", meanF(a.wall), meanF(base.wall)))
 	return strings.Join(parts, "  ")
+}
+
+// pairAgg is one config's decode measurements inside one session.
+type pairAgg struct {
+	secPerToken []float64
+	tau         []float64
+	swapped     int
+	unmeasured  int
+}
+
+func (p *pairAgg) add(r eval.Row) {
+	if r.AcceptanceMeasured {
+		p.tau = append(p.tau, r.AcceptanceLength)
+	}
+	if !r.DecodeMeasured || r.CompletionTokens <= 0 || r.DecodeSeconds <= 0 {
+		p.unmeasured++
+		return
+	}
+	// A run whose swap grew measured the pager, which the vision calls void rather than
+	// slow. Counted and named, never averaged in.
+	if r.MemMeasured && r.SwapDeltaMB > 0 {
+		p.swapped++
+		return
+	}
+	p.secPerToken = append(p.secPerToken, r.DecodeSeconds/float64(r.CompletionTokens))
+}
+
+// reportPaired prints the decode ratio for each session, against the baseline named on
+// the command line or, failing that, against the config that reported no acceptance —
+// a run that drafted nothing is the run with the mechanism off, and that is what a
+// candidate is divided by.
+//
+// The ratio is of seconds per token and not of wall: a speculative decoder moves decode
+// and cannot move prefill, and on a deep prompt wall is nearly all prefill. Sessions
+// exist so the two sides were measured back to back on one machine state; dividing
+// across sessions would measure host drift as well as the change.
+func reportPaired(stdout *os.File, paired map[string]map[string]*pairAgg, baseline string) {
+	if len(paired) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(stdout, "\npaired decode ratio\n")
+	for _, session := range sortedKeys(paired) {
+		configs := paired[session]
+		base := baseline
+		if _, ok := configs[base]; !ok {
+			base = ""
+			for _, name := range sortedKeys(configs) {
+				if len(configs[name].tau) == 0 {
+					if base != "" {
+						base = "" // two candidates for the reference is not a guess to make
+						break
+					}
+					base = name
+				}
+			}
+		}
+		_, _ = fmt.Fprintf(stdout, "  %s\n", session)
+		if base == "" {
+			_, _ = fmt.Fprintf(stdout, "    no baseline: name one with -baseline, or measure one config without speculation\n")
+			continue
+		}
+		bm := meanF(configs[base].secPerToken)
+		for _, name := range sortedKeys(configs) {
+			c := configs[name]
+			note := ""
+			if c.swapped > 0 {
+				note += fmt.Sprintf("  (%d void: swap grew)", c.swapped)
+			}
+			if c.unmeasured > 0 {
+				note += fmt.Sprintf("  (%d unmeasured)", c.unmeasured)
+			}
+			tau := "tau unavailable"
+			if len(c.tau) > 0 {
+				tau = fmt.Sprintf("tau=%.2f", meanF(c.tau))
+			}
+			if name == base {
+				_, _ = fmt.Fprintf(stdout, "    %-28s %6.4f s/token over %d  %s  (baseline)%s\n",
+					name, bm, len(c.secPerToken), tau, note)
+				continue
+			}
+			m := meanF(c.secPerToken)
+			r := "ratio unavailable"
+			if m > 0 && bm > 0 {
+				r = fmt.Sprintf("%.2fx", bm/m)
+			}
+			_, _ = fmt.Fprintf(stdout, "    %-28s %6.4f s/token over %d  %s  %s%s\n",
+				name, m, len(c.secPerToken), tau, r, note)
+		}
+	}
 }
 
 func rate(pass, total int) float64 {
