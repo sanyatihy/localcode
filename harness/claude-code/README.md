@@ -93,6 +93,13 @@ declared window: `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refuses a send that would exce
 and refusal is what stops the client spending generation on a summary in the meantime,
 not what bounds the session.
 
+[`hooks/session-end.sh`](hooks/session-end.sh) writes a handoff when the session wrote
+none, and leaves one that exists alone. It calls no model: it reads the transcript for what
+is recorded mechanically — the files the session edited and read, its last few tool calls,
+and the last thing it said — because spending generation on a summary after the session has
+ended buys even less than compaction does. Everything it extracts is cut to one line, since
+a shell command in a transcript can be a whole heredoc.
+
 [`hooks.json`](hooks.json) is a settings document rather than a fragment, so one committed
 file has two readers: `claude --settings harness/claude-code/hooks.json` takes it directly,
 and `scripts/claude-code-settings.sh` merges it into `.claude/settings.local.json` for the
@@ -103,7 +110,8 @@ path would run in only one of them.
 Verified in both readers at 2.1.233: a marker written into `HANDOFF.md` came back out of a
 fresh `claude -p` session, through `--settings` and through the project-scoped file. The
 refusal was verified on both triggers — `/compact` in a print session, and an automatic one
-forced by `--autocompact 100000` against a conversation deliberately grown past it.
+forced by `--autocompact 100000` against a conversation deliberately grown past it. All
+three events fire in a print session, which is the form the driver runs.
 
 ## It cannot be offline
 
