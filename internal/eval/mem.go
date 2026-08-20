@@ -14,9 +14,35 @@ import (
 // Free memory is recorded but is not a pressure signal on macOS — it sits near zero
 // whether idle or paging. The swap delta across a run is the signal.
 type MemSample struct {
-	FreeGB     float64 `json:"free_gb"`
-	SwapUsedMB float64 `json:"swap_used_mb"`
-	OK         bool    `json:"-"` // false when the platform did not answer
+	FreeGB      float64 `json:"free_gb"`
+	SwapUsedMB  float64 `json:"swap_used_mb"`
+	TotalGB     float64 `json:"total_gb"`
+	WiredGB     float64 `json:"wired_gb"`
+	AnonymousGB float64 `json:"anonymous_gb"`
+	OK          bool    `json:"-"` // false when the platform did not answer
+}
+
+// Preflight reports whether this machine can carry a sweep, with the numbers it read.
+// Headroom is total less wired and anonymous — what competes for the RAM — because free
+// memory is no pressure signal on macOS (see MemSample) and a floor on it would refuse
+// every sweep this project runs.
+type Preflight struct {
+	MemSample
+	HeadroomGB float64 `json:"headroom_gb"`
+	FloorGB    float64 `json:"floor_gb"`
+	Carries    bool    `json:"carries"`
+}
+
+// Headroom is the arithmetic docs/TECH.md uses: what is left after wired and anonymous.
+func (s MemSample) Headroom() float64 {
+	return s.TotalGB - s.WiredGB - s.AnonymousGB
+}
+
+// Check runs a sample against a headroom floor in GB. A floor of 0 refuses nothing, and
+// a sample the platform did not answer is refused: no number is not a big number.
+func Check(s MemSample, floorGB float64) Preflight {
+	h := s.Headroom()
+	return Preflight{MemSample: s, HeadroomGB: h, FloorGB: floorGB, Carries: s.OK && h >= floorGB}
 }
 
 // pageSize is read, never assumed. It was hardcoded to 4096 once, on a machine that pages
@@ -42,14 +68,40 @@ func sampleMemory() MemSample {
 	var s MemSample
 	if out, err := exec.Command("vm_stat").Output(); err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
-			if !strings.HasPrefix(line, "Pages free:") {
+			// Each counter is keyed off its label: vm_stat's field positions differ by
+			// macOS version, and a shifted parse records a plausible number that is not
+			// the one the verdict rests on.
+			var label string
+			switch {
+			case strings.HasPrefix(line, "Pages free:"):
+				label = "Pages free:"
+			case strings.HasPrefix(line, "Pages wired down:"):
+				label = "Pages wired down:"
+			case strings.HasPrefix(line, "Anonymous pages:"):
+				label = "Anonymous pages:"
+			default:
 				continue
 			}
-			f := strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(line, "Pages free:")), ".")
-			if n, err := strconv.ParseFloat(f, 64); err == nil {
-				s.FreeGB = n * page / 1073741824
-				s.OK = true
+			n, err := strconv.ParseFloat(strings.TrimSuffix(
+				strings.TrimSpace(strings.TrimPrefix(line, label)), "."), 64)
+			if err != nil {
+				continue
 			}
+			gb := n * page / 1073741824
+			switch label {
+			case "Pages free:":
+				s.FreeGB = gb
+			case "Pages wired down:":
+				s.WiredGB = gb
+			case "Anonymous pages:":
+				s.AnonymousGB = gb
+			}
+			s.OK = true
+		}
+	}
+	if out, err := exec.Command("sysctl", "-n", "hw.memsize").Output(); err == nil {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64); err == nil && n > 0 {
+			s.TotalGB = n / 1073741824
 		}
 	}
 	if out, err := exec.Command("sysctl", "-n", "vm.swapusage").Output(); err == nil {

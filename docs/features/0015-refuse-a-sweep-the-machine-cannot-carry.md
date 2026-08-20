@@ -50,7 +50,7 @@ headroom is a property of the machine, and this repo already keeps machine prope
 
 ## Tasks
 
-- [ ] `internal/eval` gains a preflight that reads the machine's headroom — total less wired and anonymous — and reports whether a sweep can be carried, with the numbers it read
+- [x] `internal/eval` gains a preflight that reads the machine's headroom — total less wired and anonymous — and reports whether a sweep can be carried, with the numbers it read
 - [ ] The headroom floor lives in a config file, and its default is justified by 0014's measured figures rather than chosen
 - [ ] `cmd/eval` and `cmd/tier2` refuse to start when the preflight fails, and `-force` overrides it and marks the rows as forced
 - [ ] A test covers both sides: a machine with headroom starts, one without is refused, and neither needs a running server
