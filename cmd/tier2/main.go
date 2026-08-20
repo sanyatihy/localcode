@@ -73,6 +73,7 @@ type config struct {
 	label       string
 	repeats     int
 	sandbox     string // sandbox profile applied to the harness; empty runs it online
+	forced      bool
 	budget      time.Duration
 	keep        bool
 }
@@ -86,6 +87,8 @@ func run(args []string, stdout, stderr *os.File) error {
 		fixtures = fs.String("fixtures", "", "directory of fixtures; every one tier 2 can drive is run")
 		profile  = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
 		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "endpoint the harnesses are pointed at, asked what it serves")
+		machine  = fs.String("machine", "config/machine.json", "machine properties: the headroom a sweep needs")
+		force    = fs.Bool("force", false, "start even when the preflight refuses, and mark every row forced")
 		piExt    = fs.String("pi-extension", "harness/pi/local-provider.js", "pi provider extension")
 		ocCfg    = fs.String("opencode-config", "harness/opencode/opencode.json", "opencode provider config")
 		ccEnv    = fs.String("claude-code-env", "harness/claude-code/claude-code.env", "claude code environment file")
@@ -107,6 +110,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 	cfg := config{
+		forced:  *force,
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
 		desk: desk, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
@@ -122,6 +126,19 @@ func run(args []string, stdout, stderr *os.File) error {
 	ds, err := buildDrivers(cfg)
 	if err != nil {
 		return err
+	}
+
+	// Asked before the first task: a sweep that pages measures the pager, and tier 2 spends
+	// hours rather than minutes finding that out.
+	machineCfg, err := eval.LoadMachine(*machine)
+	if err != nil {
+		return err
+	}
+	if why := eval.Check(eval.Sample(), machineCfg.MinHeadroomGB).Refuse(); why != "" {
+		if !*force {
+			return fmt.Errorf("the machine cannot carry this sweep: %s", why)
+		}
+		_, _ = fmt.Fprintf(stderr, "tier2: starting anyway under -force: %s\n", why)
 	}
 
 	tasks, err := loadTasks(cfg)
@@ -239,6 +256,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	// process can claim to have set.
 	row := eval.NewRow(cfg.label, rep, "", "", eval.Sampling{}, props, "tier2", res)
 	row.Harness, row.Profile = d.Name(), cfg.desk.Name
+	row.Forced = cfg.forced
 	row.Offline = cfg.sandbox != ""
 	// What the run cost the server: ingested, reused from a held prefix, generated. Tier 1
 	// reads the same three off a response body; a harness never shows this process one, so

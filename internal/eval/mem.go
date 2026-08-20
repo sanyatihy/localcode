@@ -25,6 +25,19 @@ type MemSample struct {
 	OK          bool    `json:"-"` // false when the platform did not answer
 }
 
+// Refuse reports why a sweep must not start, and "" when it may. The message names every
+// number the verdict used, because a refusal a human cannot check is one they will force.
+func (p Preflight) Refuse() string {
+	if p.Carries {
+		return ""
+	}
+	if !p.OK {
+		return "the platform did not answer the memory probe, so headroom is unknown; -force starts anyway"
+	}
+	return fmt.Sprintf("%.2f GB headroom against a %.2f GB floor (%.2f GB free, %.0f MB swap in use); -force starts anyway",
+		p.HeadroomGB, p.FloorGB, p.FreeGB, p.SwapUsedMB)
+}
+
 // Machine is what config/ records about the hardware, kept there rather than in Go because
 // a floor derived on 32 GB is wrong on the next machine and would be re-derived by hand.
 type Machine struct {
@@ -63,6 +76,10 @@ type Preflight struct {
 func (s MemSample) Headroom() float64 {
 	return s.TotalGB - s.WiredGB - s.AnonymousGB
 }
+
+// Sample is how a command reads this machine. A package variable so a test can hand the
+// check a machine of its own, which is the only nondeterminism in the path.
+var Sample = sampleMemory
 
 // Check runs a sample against a headroom floor in GB. A floor of 0 refuses nothing, and
 // a sample the platform did not answer is refused: no number is not a big number.
