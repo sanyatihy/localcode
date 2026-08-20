@@ -48,6 +48,11 @@ func run(args []string, stdout, stderr *os.File) error {
 		repeats  = fs.Int("n", 1, "passes over the suite")
 		config   = fs.String("config", "unlabelled", "label for the serving config under test")
 		results  = fs.String("results", "", "append a JSONL row here; empty writes none")
+		// Streaming is what separates decode from prefill, and a session is what makes
+		// two configs' decode rates divisible: rows sharing one were measured back to
+		// back on one machine state. An unpaired before-and-after measures host drift.
+		stream   = fs.Bool("stream", false, "stream the reply so decode is measured apart from prefill")
+		session  = fs.String("session", "", "label pairing this run with the baseline it is read against")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
 		// Passed through rather than validated against a list. Qwen3.8 takes
 		// low/medium/xhigh; the next model will take something else, and a harness that
@@ -151,6 +156,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	ctx := context.Background()
 	client := eval.NewClient(*endpoint, *timeout)
 	client.API = *api
+	client.Stream = *stream
 
 	// A backend that cannot introspect is still scoreable — MLX serves completions
 	// without llama.cpp's /props. What is lost is the guard that checks the served
@@ -183,6 +189,7 @@ func run(args []string, stdout, stderr *os.File) error {
 			if *results != "" {
 				row := eval.NewRow(*config, rep, *thinking, *effort, sampling, props, task.Kind, res)
 				row.Forced = *force
+				row.Session = *session
 				if err := eval.AppendRow(*results, row); err != nil {
 					return fmt.Errorf("cannot append result: %w", err)
 				}

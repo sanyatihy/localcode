@@ -70,6 +70,24 @@ type Row struct {
 	PromptPerSecond  float64 `json:"prompt_per_second"`
 	GenPerSecond     float64 `json:"gen_per_second"`
 	WallSeconds      float64 `json:"wall_seconds"`
+
+	// Decode isolated from prefill, and acceptance length, both as the task records
+	// them. The *_measured flags carry "the instrument could not read this" separately
+	// from a zero, because a speculative mechanism that is off and one that accepts
+	// nothing produce the same number and mean opposite things.
+	TTFTSeconds        float64 `json:"ttft_seconds,omitempty"`
+	DecodeSeconds      float64 `json:"decode_seconds,omitempty"`
+	DecodePerSecond    float64 `json:"decode_per_second,omitempty"`
+	DecodeMeasured     bool    `json:"decode_measured"`
+	AcceptanceLength   float64 `json:"acceptance_length,omitempty"`
+	AcceptanceMeasured bool    `json:"acceptance_measured"`
+	DraftN             int     `json:"draft_n,omitempty"`
+	DraftAccepted      int     `json:"draft_accepted,omitempty"`
+
+	// Session pairs a candidate with the baseline it is to be read against. An unpaired
+	// before-and-after measures host drift as well as the change; rows sharing a session
+	// were measured on one machine state, back to back, and only those may be divided.
+	Session string `json:"session,omitempty"`
 }
 
 // ToolCallValid reports whether the model produced a syntactically valid, schema-
@@ -119,6 +137,15 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 		PromptPerSecond:  res.PromptPerSecond,
 		GenPerSecond:     res.GenPerSecond,
 		WallSeconds:      res.WallSeconds,
+
+		TTFTSeconds:        res.TTFTSeconds,
+		DecodeSeconds:      res.DecodeSeconds,
+		DecodePerSecond:    res.DecodePerSecond,
+		DecodeMeasured:     res.DecodeMeasured,
+		AcceptanceLength:   res.AcceptanceLength,
+		AcceptanceMeasured: res.AcceptanceMeasured,
+		DraftN:             res.DraftN,
+		DraftAccepted:      res.DraftAccepted,
 	}
 }
 
