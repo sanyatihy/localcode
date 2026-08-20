@@ -124,13 +124,18 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 
 // AppendRow writes one row and syncs it. A sweep is a multi-hour unattended job on
 // this hardware, so a row must survive the process dying halfway through it.
-func AppendRow(path string, r Row) error {
+func AppendRow(path string, r Row) error { return AppendJSON(path, r) }
+
+// AppendJSON is the same durability for a row of another shape. Later features record
+// observations this Row cannot express, and they must not have to reimplement the sync
+// to get the guarantee above.
+func AppendJSON(path string, v any) error {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
-	b, err := json.Marshal(r)
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
