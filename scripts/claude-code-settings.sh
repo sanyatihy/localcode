@@ -37,12 +37,8 @@ awk '
 { echo '{'; echo '  "env": {'; cat "$OUT.body"; echo '  }'; echo '}'; } > "$OUT.env"
 rm -f "$OUT.body"
 
-# The hooks are already a settings document of their own, so one committed file is both
-# what an editor session reads from here and what `claude --settings` takes on the command
-# line. That second reader is why they are a file rather than written inline below.
-#
-# Merged into whatever is there rather than replacing it: this script owns `env` and
-# `hooks`, and Claude Code writes the permissions a session was granted into the same file.
+# This script owns `env` and `hooks` and merges rather than replaces: Claude Code writes
+# granted permissions into the same file.
 python3 - "$OUT.env" "$HOOKSFILE" "$OUT" <<'PY'
 import json, os, sys
 
