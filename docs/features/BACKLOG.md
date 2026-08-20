@@ -30,6 +30,13 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   which is the only reproducible comparison but deliberately blind to Hermes' main bet.
   Promote when: a harness is in daily use and the question is whether it improved on
   this repo specifically.
+- **The host-RAM prompt cache, against the memory ceiling** — llama-server keeps prefixes
+  it has evicted from a slot in host RAM and restores them, which is what makes reuse
+  survive traffic beside the conversation (0018). The budget is `--cache-ram`, 8192 MiB by
+  default and unset in every config here, and it is bought from the same 32 GB the weights
+  and the KV reservation sit in. 0014's attended ceiling was walked without accounting for
+  it. Promote when: the ceiling is re-walked, or a session at depth is seen swapping with
+  the model's own footprint unchanged.
 - **Warm prompt-cache reuse across agent turns** — llama-server can hold KV across
   requests; agent loops resend a near-identical prefix every turn. Promote when: 0008
   or 0010 shows prompt processing dominating real session latency.

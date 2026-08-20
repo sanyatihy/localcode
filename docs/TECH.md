@@ -318,6 +318,52 @@ not. The extension hosting Claude Code has none of that, because the agent runs 
 Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
 other harnesses, not here.
 
+## A conversation is ingested once, and traffic beside it changes nothing
+
+Measured two ways on `config/agent.env`: a scripted conversation whose every prompt is known
+to the token, and two real `claude -p` sessions accounted from the server's own log.
+
+| | prompt tokens | ingested | reused |
+|---|---|---|---|
+| scripted, 5 turns to 28,126 | 90,400 | 28,121 | 68.9% |
+| the same, with a 5,531-token call between every turn | 90,400 | **28,121** | 68.9% |
+| the same, that call opening with the conversation's system prompt | 90,400 | **28,121** | 68.9% |
+| scripted, 8 turns to 43,195 | 204,916 | 43,188 | 78.9% |
+| two real sessions, 22 requests, deepest 21,813 | 286,148 | 34,386 | 88.0% |
+
+**A conversation ingests each token once.** 28,121 is the final prompt of that 28,126-token
+conversation, and the per-turn figures are 8,034, then 5,027, then 5,020 a turn — what each
+turn adds. Interleaving calls moves none of them.
+
+**The server's host-RAM prompt cache is why.** llama-server keeps a prefix it evicts from a
+slot and restores it for the next request that wants it, bounded by `--cache-ram`: 8192 MiB
+by default, set in no config here. This model's q8_0 KV costs **138.1 KiB a token** — 65
+layers, 4 KV heads, 256 wide for K and V — so that budget holds ~60,700 tokens, more than
+this config's whole 49,152 window and a call beside it. **It is bought from the same 32 GB
+the weights and the KV reservation sit in**, which 0014's ceiling was walked without.
+
+**`selected slot by LRU` does not mean a lost prefix.** All 15 requests of one run logged it
+and reused 161,735 tokens between them. It says how a slot was chosen, not what the server
+still held.
+
+**Only a prefix the server has never seen ingests from zero**, and across two whole sessions
+that is one request. A fresh session is not one: the second session's first request sent the
+same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516
+tokens of Claude Code's preamble differ between two otherwise identical runs**, at its tail.
+
+**What traffic beside the conversation costs is its own ingest** — 215.9 s over four calls at
+28k, 375.9 s over seven at 43k. That is charged to the session's wall clock, and no slot
+count or second endpoint removes it.
+
+### Reading it yourself
+
+`cmd/prefixprobe` replays a fixed conversation and records what each turn was charged;
+`scripts/prefixrun.sh` walks one config through the conditions, restarting the server between
+them so the second is not served the first's leftovers. `cmd/prefixlog` does the same for
+traffic nobody scripted, off the server's log. Its one derived figure — the prompt, which the
+server does not print — is checked against the endpoint's own rows with `-check`, and agrees
+on every request and every field of the ceiling run.
+
 ## Sessions hand off instead of compacting
 
 A session in this checkout writes `HANDOFF.md` — untracked working state inside one task
@@ -480,8 +526,9 @@ writing to reading.
 
 **Input tokens are not the cost they appear to be.** The frontier column is dominated by
 cache reads, which is why 138 million of them accompany 539,000 generated. The local column
-is the same shape for a different reason: at 49,152 the conversation is re-ingested most
-turns, which is time rather than money.
+is the same shape for a different reason: the conversation is resent whole every turn, which
+at 49,152 is time rather than money. **The re-ingest this first claimed does not happen** —
+measured since, a conversation ingests each token once; see the section above.
 
 ## What the local tier finishes unattended
 
@@ -552,8 +599,10 @@ rate.
 **Preamble size does not explain the token spread.** Pi's fixed preamble is *larger* than
 Claude Code's at the same three tools — 3,922 against 3,711 — yet Pi ingests a fifth as
 much per task, because Claude Code re-ingests roughly its whole preamble on every run while
-Pi's survives in the server's prefix cache. What changes in Claude Code's prefix between two
-runs is not established here.
+Pi's survives in the server's prefix cache. **What changes in that prefix between two runs is
+516 tokens at its tail**, measured since: a second session's first request reused 83.5% of a
+3,130-token preamble. A preamble re-ingested in full is therefore a server that has not seen
+it, rather than a prefix that differs.
 
 **Every harness completes a task offline**, with the network denied in the kernel and only
 the loopback the model is served on left open. Claude Code included: it holds under token
