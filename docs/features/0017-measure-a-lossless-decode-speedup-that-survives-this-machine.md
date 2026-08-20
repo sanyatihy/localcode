@@ -1,9 +1,9 @@
 ---
 id: 0017
 title: Measure a lossless decode speedup that survives this machine
-status: Draft
+status: Shipped
 created: 2026-08-20
-shipped:
+shipped: 2026-08-20
 check: 2026-09-03
 checked:
 review:
