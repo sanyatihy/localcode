@@ -1,9 +1,9 @@
 ---
 id: 0011
 title: Split planning and grinding across frontier and local models
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review: human
@@ -59,18 +59,22 @@ an afterthought, and `review: human` because widening it is not an agent's call.
 
 ## Tasks
 
-- [ ] The boundary is written down: which feature classes a local builder finishes unattended, drawn from 0002's per-task results rather than from judgement
-- [ ] A local builder claims a real feature from a frontier-drafted doc and ships a reviewable branch, using `kit` unchanged
-- [ ] What planning context reaches the frontier tier is characterised and bounded, with the rule committed
-- [ ] Frontier tokens per shipped feature are measured against a frontier-only baseline
-- [ ] The outcome is recorded in `docs/TECH.md`, including which work the split is not worth doing for
-
-## Open questions
-
-- Does this need anything built at all, or is it a documented way of working plus `kit` as
-  it stands? Leaning **strongly toward the latter** — the first task should be attempting
-  it by hand, and any code proposed afterwards has to justify itself against having already
-  worked without it.
-- How much repo context may a frontier drafter see? A human call, hence `review: human`.
+- [x] The boundary is written down: which feature classes a local builder finishes unattended, drawn from 0002's per-task results rather than from judgement
+- [x] A local builder claims a real feature from a frontier-drafted doc and ships a reviewable branch, using `kit` unchanged
+- [x] What planning context reaches the frontier tier is characterised and bounded, with the rule committed
+- [x] Frontier tokens per shipped feature are measured against a frontier-only baseline
+- [x] The outcome is recorded in `docs/TECH.md`, including which work the split is not worth doing for
 
 ## Log
+- 2026-08-20 — both open questions are answered and the section goes with them. The first
+  asked whether anything needed building: the split ran on `kit` unchanged, and the one
+  thing that did need building was the session handoff, which is 0016 and shipped
+  separately. The second was the human's and is answered in `docs/TECH.md`.
+- 2026-08-20 — the human's answer to the context question: the whole repository. Recorded in
+  `docs/TECH.md` with the reason it costs little — no secrets are committed by policy — and
+  with the boundary it still draws: nothing outside the checkout is planning context.
+- 2026-08-20 — the split was measured three times over one box, not once. What changed the
+  outcome was the tool set as much as 0016's mechanism: 21 tool definitions cost 18,045
+  tokens of a 45,056-token window, and the run that had the mechanism without the flag
+  finished nothing. Recorded because a reader of 0016 alone would conclude the handoff is
+  sufficient.
