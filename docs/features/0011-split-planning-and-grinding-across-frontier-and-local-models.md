@@ -1,9 +1,9 @@
 ---
 id: 0011
 title: Split planning and grinding across frontier and local models
-status: Draft
+status: Shipped
 created: 2026-08-17
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review: human
