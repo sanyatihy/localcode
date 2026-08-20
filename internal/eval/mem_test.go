@@ -3,6 +3,7 @@ package eval
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +62,44 @@ func TestLoadMachineRefusesAFloorlessFile(t *testing.T) {
 	}
 	if _, err := LoadMachine(filepath.Join(t.TempDir(), "absent.json")); err == nil {
 		t.Error("a missing config was accepted")
+	}
+}
+
+// Both sides of the decision a command makes, on readings this process supplies rather
+// than on the machine it happens to run on: a sweep starts, or it is refused and says why.
+// Neither side needs a server, and neither needs the machine to be in any particular state.
+func TestRefuseCoversBothSides(t *testing.T) {
+	// 0014's measured machine: 20.89 GB wired serving 32k, 6.61 GB of apps, 32 GB total.
+	carries := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61, FreeGB: 0.31, SwapUsedMB: 1631, OK: true}
+	if why := Check(carries, 4.0).Refuse(); why != "" {
+		t.Errorf("a machine with 4.5 GB headroom was refused: %s", why)
+	}
+
+	// The same machine with a browser open, which 0014 says does not fit beside the model.
+	cannot := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 9.5, FreeGB: 0.31, SwapUsedMB: 4096, OK: true}
+	why := Check(cannot, 4.0).Refuse()
+	if why == "" {
+		t.Fatal("a machine with 1.6 GB headroom was allowed to start")
+	}
+	for _, want := range []string{"1.61 GB headroom", "4.00 GB floor", "0.31 GB free", "4096 MB", "-force"} {
+		if !strings.Contains(why, want) {
+			t.Errorf("refusal %q does not name %q", why, want)
+		}
+	}
+
+	// A platform that did not answer is refused rather than assumed roomy.
+	if why := Check(MemSample{}, 4.0).Refuse(); !strings.Contains(why, "did not answer") {
+		t.Errorf("an unmeasured machine refused with %q", why)
+	}
+}
+
+// Sample is the seam that keeps the two sides above off this machine. A command that read
+// the machine directly could not be tested at all.
+func TestSampleIsSubstitutable(t *testing.T) {
+	original := Sample
+	t.Cleanup(func() { Sample = original })
+	Sample = func() MemSample { return MemSample{TotalGB: 32, WiredGB: 30, AnonymousGB: 1, OK: true} }
+	if p := Check(Sample(), 4.0); p.Carries {
+		t.Errorf("substituted reading was ignored: %+v", p)
 	}
 }
