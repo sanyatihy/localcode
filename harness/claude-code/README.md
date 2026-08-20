@@ -61,6 +61,36 @@ Confirmed by running the CLI in a checkout with **no environment set at all** �
 answered and the request arrived at the local server, so the settings file supplied both
 the endpoint and the credential.
 
+## The session handoff
+
+`HANDOFF.md` at the root of the checkout carries working state **inside** one task box:
+which files matter, what was tried, what is next. It is untracked — the branch's commits
+and the feature doc's boxes are what carry state between features, and a reviewer should
+read those rather than a diary — and it is written in this shape:
+
+    # Handoff
+    **Box:** the task box being worked, copied from the feature doc
+    **Files:** each path that matters, and why it does
+    **Tried:** what was done, and what came of it
+    **Next:** the one thing to do next
+
+Under 40 lines, because every line is read again at every session start.
+
+[`hooks/session-start.sh`](hooks/session-start.sh) prints it, and Claude Code adds a
+`SessionStart` hook's plain-text stdout to the session's context — so printing is what
+injects it. With no handoff to print it prints the shape above instead; either way it
+prints the standing instruction to keep the file current.
+
+[`hooks.json`](hooks.json) is a settings document rather than a fragment, so one committed
+file has two readers: `claude --settings harness/claude-code/hooks.json` takes it directly,
+and `scripts/claude-code-settings.sh` merges it into `.claude/settings.local.json` for the
+extension, which reads only that. The command is written against `$CLAUDE_PROJECT_DIR`,
+which is the checkout — a feature is always worked in a worktree of its own, so an absolute
+path would run in one of them.
+
+Verified in both readers at 2.1.233: a marker written into `HANDOFF.md` came back out of a
+fresh `claude -p` session, through `--settings` and through the project-scoped file.
+
 ## It cannot be offline
 
 `ANTHROPIC_BASE_URL` routes every model call, so no prompt reaches a hosted model. It does

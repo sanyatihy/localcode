@@ -44,7 +44,7 @@ Three hooks make it automatic rather than a thing the model must remember:
 
 | hook | receives | what it does |
 |---|---|---|
-| `SessionStart` | `session_start_reason` | prints `HANDOFF.md`, which is injected into the new session |
+| `SessionStart` | `source` | prints `HANDOFF.md`, which is injected into the new session |
 | `PreCompact` | `transcript_path`, `trigger` | refuses compaction (exit 2) and records that it fired |
 | `SessionEnd` | `transcript_path` | writes a fallback handoff when the model did not |
 
@@ -62,7 +62,7 @@ used, peak context per session, wall clock, and whether the box was finished at 
 
 ## Tasks
 
-- [ ] `HANDOFF.md` is specified and ignored by git, and a `SessionStart` hook injects it into every new session
+- [x] `HANDOFF.md` is specified and ignored by git, and a `SessionStart` hook injects it into every new session
 - [ ] A `PreCompact` hook refuses compaction and records that it fired, so a session ends rather than re-ingesting itself
 - [ ] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
 - [ ] A driver runs fresh sessions until the topmost box is ticked or a bound is hit, recording each session's peak context
@@ -75,3 +75,7 @@ used, peak context per session, wall clock, and whether the box was finished at 
   it is the first thing the first box should establish, since the whole design rests on it.
 
 ## Log
+- 2026-08-20 — the `SessionStart` payload field is `source`, not `session_start_reason`;
+  the table said the latter and no such field is sent. Nothing reads it yet — the hook
+  fires on every source and branches on the file instead — but a matcher written against
+  the wrong name would have matched nothing and failed silently.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Write harness/claude-code/claude-code.env into the project-scoped settings file the
-# editor extension reads, in the checkout given (default: the current one).
+# Write harness/claude-code/claude-code.env and harness/claude-code/hooks.json into the
+# project-scoped settings file the editor extension reads, in the checkout given
+# (default: the current one).
 #
 # Two forms of one configuration exist because two clients read different things: a shell
 # sources the env file, and the extension does not — it spawns its own process, which
@@ -14,8 +15,10 @@ set -euo pipefail
 
 ROOT="${1:-$PWD}"
 ENVFILE="$ROOT/harness/claude-code/claude-code.env"
+HOOKSFILE="$ROOT/harness/claude-code/hooks.json"
 OUT="$ROOT/.claude/settings.local.json"
 [ -f "$ENVFILE" ] || { echo "no env file at $ENVFILE" >&2; exit 2; }
+[ -f "$HOOKSFILE" ] || { echo "no hooks file at $HOOKSFILE" >&2; exit 2; }
 
 mkdir -p "$ROOT/.claude"
 awk '
@@ -31,6 +34,30 @@ awk '
   END { print "" }
 ' "$ENVFILE" > "$OUT.body"
 
-{ echo '{'; echo '  "env": {'; cat "$OUT.body"; echo '  }'; echo '}'; } > "$OUT"
+{ echo '{'; echo '  "env": {'; cat "$OUT.body"; echo '  }'; echo '}'; } > "$OUT.env"
 rm -f "$OUT.body"
+
+# The hooks are already a settings document of their own, so one committed file is both
+# what an editor session reads from here and what `claude --settings` takes on the command
+# line. That second reader is why they are a file rather than written inline below.
+#
+# Merged into whatever is there rather than replacing it: this script owns `env` and
+# `hooks`, and Claude Code writes the permissions a session was granted into the same file.
+python3 - "$OUT.env" "$HOOKSFILE" "$OUT" <<'PY'
+import json, os, sys
+
+envfile, hooksfile, outfile = sys.argv[1:4]
+kept = {}
+if os.path.exists(outfile):
+    with open(outfile) as f:
+        kept = json.load(f)
+with open(envfile) as f:
+    env = json.load(f)
+with open(hooksfile) as f:
+    hooks = json.load(f)
+with open(outfile, "w") as f:
+    json.dump({**kept, **env, **hooks}, f, indent=2)
+    f.write("\n")
+PY
+rm -f "$OUT.env"
 echo "wrote $OUT" >&2
