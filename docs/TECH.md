@@ -374,6 +374,36 @@ into `docs/data/`.
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
+## What the split costs, and what it saves
+
+0010 was built end to end by the frontier tier; 0015's first box was drafted by it and built
+by the local one. Both figures come from the harness's own transcripts, and the windows are
+stated because they are the weak part of the measurement — a window holds everything done in
+it, not only the feature.
+
+| | turns | tokens in | tokens generated |
+|---|---|---|---|
+| **0010, frontier throughout** — 12 boxes, 5 h | 468 | 138,772,396 | 539,327 |
+| **0015 box 1, frontier drafting only** — 15 min | 50 | 22,902,916 | 66,152 |
+| 0015 box 1, local builder finishing it | 68 | 1,532,612 | 12,147 |
+
+**Per box, the frontier tier spent about 45,000 generated tokens on 0010 and about 16,500
+drafting all four of 0015's** — and the box itself was then built for 12,147 generated
+tokens that cost nothing. The doc is the frontier tier's whole contribution, and it is
+written once for every box in it.
+
+**Two things stop this being a clean multiple.** The features are not the same size: 0010
+carried a 60-run sweep and 0015's box is one function. And the frontier figure excludes
+review, which is real and recurring — reviewing the first local build, finding its check
+could never pass, and correcting the doc took the frontier tier a further session. A split
+that ships nothing without review does not remove frontier cost so much as move it from
+writing to reading.
+
+**Input tokens are not the cost they appear to be.** The frontier column is dominated by
+cache reads, which is why 138 million of them accompany 539,000 generated. The local column
+is the same shape for a different reason: at 49,152 the conversation is re-ingested most
+turns, which is time rather than money.
+
 ## What the local tier finishes unattended
 
 Drawn from the per-task record rather than from judgement: every tier-1 fixture at the
