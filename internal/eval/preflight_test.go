@@ -5,33 +5,39 @@ import (
 	"testing"
 )
 
-// Both sides of the verdict, on fixed readings: a machine with headroom carries a sweep,
-// one without is refused, and neither side needs a running server — the reading is
-// injected through SamplePreflight rather than taken from this machine.
+// A machine loaded like 0014's measured one: 20.89 GB wired serving at 32k, 6.61 GB of
+// apps, 32 GB total — 4.5 GB of headroom, and free memory near zero either way.
+func loaded(headroomGB float64) MemSample {
+	return MemSample{
+		TotalGB: 32, WiredGB: 20.89, AnonymousGB: 32 - 20.89 - headroomGB,
+		FreeGB: 0.31, SwapUsedMB: 1631, OK: true,
+	}
+}
+
 func TestCheckPreflight(t *testing.T) {
-	const floor = 11.0 // 0014's arithmetic: 32 GB minus 20.89 wired at 32k minus 6.61 of apps
 	tests := []struct {
 		name    string
 		sample  MemSample
+		floor   float64
 		carries bool
 	}{
-		{"headroom carries", MemSample{FreeGB: 14.2, SwapUsedMB: 0, OK: true}, true},
-		{"at the floor carries", MemSample{FreeGB: 11.0, SwapUsedMB: 512, OK: true}, true},
-		{"no headroom is refused", MemSample{FreeGB: 3.7, SwapUsedMB: 4096, OK: true}, false},
-		// Swap in use is reported with the verdict but does not decide it: free memory is
-		// the pre-run signal (the model must fit on top of what is resident), and a swap
-		// floor would be a second threshold this box did not ask for.
-		{"free but already swapping still carries", MemSample{FreeGB: 12.5, SwapUsedMB: 8192, OK: true}, true},
-		{"a silent platform refuses rather than guesses", MemSample{}, false},
+		{"headroom above the floor carries", loaded(6.0), 4.0, true},
+		{"exactly at the floor carries", loaded(4.0), 4.0, true},
+		{"below the floor is refused", loaded(1.5), 4.0, false},
+		// The reading that broke the first version: free memory sat at 0.31 GB through
+		// 0010's whole sweep, clean runs included.
+		{"near-zero free memory does not decide it", loaded(6.0), 4.0, true},
+		{"a silent platform refuses rather than guesses", MemSample{}, 4.0, false},
+		{"no total means no verdict", MemSample{WiredGB: 4, AnonymousGB: 4, OK: true}, 4.0, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			p := CheckPreflight(tc.sample, floor)
+			p := CheckPreflight(tc.sample, tc.floor)
 			if p.Carries != tc.carries {
-				t.Errorf("carries = %v, want %v (free %.2f GB, swap %.0f MB)",
-					p.Carries, tc.carries, p.FreeGB, p.SwapUsedMB)
+				t.Errorf("carries = %v, want %v (headroom %.2f GB, floor %.2f)",
+					p.Carries, tc.carries, p.HeadroomGB, p.MinHeadroomGB)
 			}
-			if p.FreeGB != tc.sample.FreeGB || p.SwapUsedMB != tc.sample.SwapUsedMB || p.MinFreeGB != floor {
+			if p.FreeGB != tc.sample.FreeGB || p.SwapUsedMB != tc.sample.SwapUsedMB {
 				t.Errorf("verdict does not carry the numbers it read: %+v", p)
 			}
 		})
@@ -39,11 +45,28 @@ func TestCheckPreflight(t *testing.T) {
 }
 
 func TestPreflightRefusalNamesItsNumbers(t *testing.T) {
-	p := CheckPreflight(MemSample{FreeGB: 3.7, SwapUsedMB: 4096, OK: true}, 11.0)
-	got := p.Refusal()
-	for _, want := range []string{"3.70 GB free", "4096 MB of swap in use", "11.00 GB floor", "-force"} {
+	got := CheckPreflight(loaded(1.5), 4.0).Refusal()
+	for _, want := range []string{"1.50 GB headroom", "4.00 GB floor", "0.31 GB free", "1631 MB", "-force"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("refusal %q does not name %q", got, want)
 		}
+	}
+	if unmeasured := (Preflight{}).Refusal(); !strings.Contains(unmeasured, "did not answer") {
+		t.Errorf("an unmeasured machine refuses with %q", unmeasured)
+	}
+}
+
+// The sampler must produce a verdict-shaped reading on the machine it runs on, or the
+// check is testable and useless. Skipped where the platform does not answer, which is CI.
+func TestSampleMemoryReadsWhatTheVerdictNeeds(t *testing.T) {
+	s := SamplePreflight()
+	if !s.OK {
+		t.Skip("platform did not answer the memory probe")
+	}
+	if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 {
+		t.Fatalf("sampler returned nothing to decide on: %+v", s)
+	}
+	if h := s.HeadroomGB(); h < 0 || h > s.TotalGB {
+		t.Errorf("headroom %.2f GB is impossible against %.2f GB total", h, s.TotalGB)
 	}
 }

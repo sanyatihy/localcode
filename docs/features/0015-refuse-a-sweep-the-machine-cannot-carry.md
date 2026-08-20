@@ -23,15 +23,16 @@ has before it starts, and says nothing.
 
 - **No scheduling and no waiting.** This refuses or warns; it does not sleep until memory
   frees up, and it does not decide when a better moment is.
-- **No new memory instrument.** `internal/eval/mem.go` already samples free memory and
-  swap; this is a decision made from what it already reports.
+- **No second memory instrument.** `internal/eval/mem.go` stays the one sampler. It now
+  reads wired, anonymous and total alongside free and swap, because the verdict needs a
+  number that reflects pressure — see the log.
 - **No change to how a run is scored.** A row that swapped is still recorded exactly as it
   is today. The point is to stop the sweep starting, not to reinterpret its output.
 
 ## Design
 
-The check is arithmetic on numbers this repo already has: swap in use before the run, and
-free memory. 0014 measured the model at 20.89 GB wired serving 32k and apps at 6.61 GB with
+The check is arithmetic on numbers this repo already has: total memory against what is
+wired and anonymous, which is what competes for it. 0014 measured the model at 20.89 GB wired serving 32k and apps at 6.61 GB with
 an editor open, against 32 GB — so roughly 11 GB is left for everything that is not the
 model, and a browser does not fit in it.
 
@@ -62,6 +63,14 @@ headroom is a property of the machine, and this repo already keeps machine prope
 
 ## Log
 
+- 2026-08-20 — the drafted non-goal was wrong and task 1 was built on it: free memory is no
+  pressure signal on macOS, as `mem.go` says in its own comment, and across 0010's 60-run
+  sweep it read 0.16–0.65 GB whether the run swapped or not. A floor on it refuses every
+  sweep this project runs. The verdict is now headroom — total less wired and anonymous,
+  the arithmetic `docs/TECH.md` uses — and the sampler reads those three. What this changes
+  downstream: the threshold task 2 puts in config is a headroom floor, and its default
+  cannot be 0014's 11 GB figure, which is the budget for everything that is not the model
+  rather than the margin a run needs.
 - 2026-08-19 — Task 1: `internal/eval/preflight.go` gains the preflight. `SamplePreflight`
   takes one reading through the existing sampler (a package variable, for the same reason
   `Now` is), and `CheckPreflight` decides from a fixed reading against a threshold passed

@@ -16,8 +16,18 @@ import (
 type MemSample struct {
 	FreeGB     float64 `json:"free_gb"`
 	SwapUsedMB float64 `json:"swap_used_mb"`
-	OK         bool    `json:"-"` // false when the platform did not answer
+
+	// Wired plus anonymous is what competes for the machine's memory; file-backed pages
+	// are evictable and do not. docs/TECH.md derives the ceiling from these two.
+	WiredGB     float64 `json:"wired_gb"`
+	AnonymousGB float64 `json:"anonymous_gb"`
+	TotalGB     float64 `json:"total_gb"`
+
+	OK bool `json:"-"` // false when the platform did not answer
 }
+
+// HeadroomGB is what is left for anything not already resident.
+func (s MemSample) HeadroomGB() float64 { return s.TotalGB - s.WiredGB - s.AnonymousGB }
 
 // pageSize is read, never assumed. It was hardcoded to 4096 once, on a machine that pages
 // at 16384, and every free-memory figure recorded before that was found was four times
@@ -41,15 +51,27 @@ func sampleMemory() MemSample {
 	}
 	var s MemSample
 	if out, err := exec.Command("vm_stat").Output(); err == nil {
+		pages := map[string]*float64{
+			"Pages free:":       &s.FreeGB,
+			"Pages wired down:": &s.WiredGB,
+			"Anonymous pages:":  &s.AnonymousGB,
+		}
 		for _, line := range strings.Split(string(out), "\n") {
-			if !strings.HasPrefix(line, "Pages free:") {
-				continue
+			for prefix, field := range pages {
+				if !strings.HasPrefix(line, prefix) {
+					continue
+				}
+				f := strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(line, prefix)), ".")
+				if n, err := strconv.ParseFloat(f, 64); err == nil {
+					*field = n * page / 1073741824
+					s.OK = true
+				}
 			}
-			f := strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(line, "Pages free:")), ".")
-			if n, err := strconv.ParseFloat(f, 64); err == nil {
-				s.FreeGB = n * page / 1073741824
-				s.OK = true
-			}
+		}
+	}
+	if out, err := exec.Command("sysctl", "-n", "hw.memsize").Output(); err == nil {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64); err == nil {
+			s.TotalGB = n / 1073741824
 		}
 	}
 	if out, err := exec.Command("sysctl", "-n", "vm.swapusage").Output(); err == nil {

@@ -2,48 +2,42 @@ package eval
 
 import "fmt"
 
-// Preflight is the memory state read once, before the first task, and the decision made
-// from it: can this machine carry a sweep, or will its timings measure the pager? 0010's
-// two-hour sweep at 65,536 produced exactly such timings — 25 of 60 rows grew swap — and
-// nothing said so until the machine time was spent. A run that swaps measures paging
-// rather than inference (0003), so the question is asked before the first task instead of
-// answered by the rows afterwards.
+// Preflight is the memory state read before the first task and the verdict taken from it.
 type Preflight struct {
-	FreeGB     float64 `json:"free_gb"`
-	SwapUsedMB float64 `json:"swap_used_mb"`
-	MinFreeGB  float64 `json:"min_free_gb"` // the threshold this verdict was made against
-	Carries    bool    `json:"carries"`
-	OK         bool    `json:"ok"` // false when the platform did not answer; a refusal on silence would refuse every machine
+	HeadroomGB    float64 `json:"headroom_gb"`
+	MinHeadroomGB float64 `json:"min_headroom_gb"`
+	FreeGB        float64 `json:"free_gb"`
+	SwapUsedMB    float64 `json:"swap_used_mb"`
+	Carries       bool    `json:"carries"`
+	OK            bool    `json:"ok"`
 }
 
-// SamplePreflight reads the memory state once. It is a package variable rather than a
-// plain function for the same reason Now is: it is the only nondeterminism in this
-// check, and a test that wants a fixed reading sets it directly — neither side of the
-// verdict then needs a machine, let alone a running server.
+// SamplePreflight is a package variable for the same reason Now is: it is the only
+// nondeterminism here, and a test sets it directly rather than needing a machine.
 var SamplePreflight = func() MemSample { return sampleMemory() }
 
-// CheckPreflight decides from a reading already taken, so the decision is testable on
-// fixed numbers and the reading stays one call site. The threshold is passed in rather
-// than held here: what counts as too little headroom is a property of the machine, it
-// lives in config/ with the other machine properties, and a constant in Go would be
-// re-derived by anyone on other hardware.
-func CheckPreflight(s MemSample, minFreeGB float64) Preflight {
-	p := Preflight{FreeGB: s.FreeGB, SwapUsedMB: s.SwapUsedMB, MinFreeGB: minFreeGB, OK: s.OK}
-	// Free memory is the pre-run signal even though it is not a pressure signal during a
-	// run: what must fit is the model's wired footprint on top of what is already
-	// resident, and 0014 measured that arithmetic — 20.89 GB wired at 32k plus 6.61 GB of
-	// apps against 32 GB leaves roughly 11 GB for everything else. Swap in use is carried
-	// on the verdict so a refusal fails loudly with both numbers it read, not one.
-	p.Carries = s.OK && s.FreeGB >= minFreeGB
-	return p
+// CheckPreflight decides from a reading already taken, against a threshold passed in.
+//
+// The verdict is headroom — total memory less wired and anonymous — and not free memory,
+// which mem.go documents as no pressure signal at all: across 0010's 60-run sweep it read
+// 0.16–0.65 GB whether the run swapped or not, so any floor on it refuses everything.
+func CheckPreflight(s MemSample, minHeadroomGB float64) Preflight {
+	return Preflight{
+		HeadroomGB:    s.HeadroomGB(),
+		MinHeadroomGB: minHeadroomGB,
+		FreeGB:        s.FreeGB,
+		SwapUsedMB:    s.SwapUsedMB,
+		Carries:       s.OK && s.TotalGB > 0 && s.HeadroomGB() >= minHeadroomGB,
+		OK:            s.OK && s.TotalGB > 0,
+	}
 }
 
-// Refusal is the message a command prints when it refuses to start: the numbers that
-// were read, the threshold they failed against, and what would override the refusal.
+// Refusal is what a command prints instead of starting.
 func (p Preflight) Refusal() string {
-	if p.OK {
-		return fmt.Sprintf("the machine cannot carry this sweep: %.2f GB free with %.0f MB of swap in use, "+
-			"below the %.2f GB floor; start it anyway with -force", p.FreeGB, p.SwapUsedMB, p.MinFreeGB)
+	if !p.OK {
+		return "the platform did not answer the memory probe, so a sweep cannot be checked; start it anyway with -force"
 	}
-	return "the platform did not answer the memory probe; a sweep cannot be checked and will not start unforced"
+	return fmt.Sprintf("the machine cannot carry this sweep: %.2f GB headroom against a %.2f GB floor "+
+		"(%.2f GB free, %.0f MB of swap already in use); start it anyway with -force",
+		p.HeadroomGB, p.MinHeadroomGB, p.FreeGB, p.SwapUsedMB)
 }
