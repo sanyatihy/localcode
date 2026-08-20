@@ -39,6 +39,13 @@ add_opt --top-k "${TOP_K:-}"
 add_opt --presence-penalty "${PRESENCE_PENALTY:-}"
 add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
 
+# Speculative decoding, absent from every config that does not use it. The draft model and
+# the mechanism are part of how a measurement was produced, so they live in the config with
+# everything else rather than being passed at the call site.
+add_opt --spec-draft-hf "${SPEC_DRAFT_HF:-}"
+add_opt --spec-type "${SPEC_TYPE:-}"
+add_opt --spec-draft-n-max "${SPEC_DRAFT_N_MAX:-}"
+
 # A template override is a path, and llama-server resolves it against its own working
 # directory. Make it absolute here and fail on a missing file, rather than letting the
 # server fall back to the model's own template and serve something nobody asked for.
@@ -48,5 +55,11 @@ if [ -n "${CHAT_TEMPLATE_FILE:-}" ]; then
   args+=(--chat-template-file "$CHAT_TEMPLATE_FILE")
 fi
 
-echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT" >&2
-exec llama-server "${args[@]}"
+# Which build served it is part of the record too: 0017 measures a mechanism that exists
+# only in an unmerged pull request, so the binary that has it cannot be the one on PATH.
+SERVER_BIN="${SERVER_BIN:-llama-server}"
+command -v "$SERVER_BIN" >/dev/null 2>&1 || [ -x "$SERVER_BIN" ] || {
+  echo "$CONFIG names a server that is not there: $SERVER_BIN" >&2; exit 2; }
+
+echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT via $SERVER_BIN" >&2
+exec "$SERVER_BIN" "${args[@]}"

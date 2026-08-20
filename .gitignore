@@ -1,7 +1,8 @@
 results/*.jsonl
 
-# MLX runs from its own venv; the pins are committed, the wheels are not.
+# MLX and MTPLX each run from their own venv; the pins are committed, the wheels are not.
 mlx/.venv/
+mtplx/.venv/
 
 # Working state inside a task box, not history.
 HANDOFF.md
