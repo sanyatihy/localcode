@@ -111,7 +111,7 @@ func TestTheCommittedHooksRunScriptsThatAreThere(t *testing.T) {
 	if err := json.Unmarshal(b, &settings); err != nil {
 		t.Fatalf("hooks.json does not parse: %v", err)
 	}
-	for _, event := range []string{"SessionStart", "PreCompact"} {
+	for _, event := range []string{"SessionStart", "PreCompact", "SessionEnd"} {
 		entries := settings.Hooks[event]
 		if len(entries) != 1 || len(entries[0].Hooks) != 1 {
 			t.Fatalf("%s no longer names exactly one command: %+v", event, entries)
@@ -220,5 +220,68 @@ func TestThePreCompactHookRefusesAndRecordsThatItFired(t *testing.T) {
 	}
 	if fired["at"] == nil {
 		t.Error("the record carries no time, so refusals cannot be placed in a session")
+	}
+}
+
+// The fallback is the net under an instruction, so what it must never do is overwrite the
+// handoff the instruction produced: a session that wrote one knows what it meant to do,
+// and an extraction can only know what the session did.
+func TestTheSessionEndHookWritesAHandoffOnlyWhenTheSessionWroteNone(t *testing.T) {
+	script, err := filepath.Abs("../../harness/claude-code/hooks/session-end.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	transcript := filepath.Join(root, "transcript.jsonl")
+	said := func(blocks string) string {
+		return `{"type":"assistant","message":{"content":[` + blocks + "]}}\n"
+	}
+	body := said(`{"type":"tool_use","name":"Read","input":{"file_path":"`+root+`/read.go"}}`) +
+		said(`{"type":"tool_use","name":"Edit","input":{"file_path":"`+root+`/edited.go"}}`) +
+		said(`{"type":"text","text":"Next: run the tests."}`)
+	if err := os.WriteFile(transcript, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	end := func() {
+		t.Helper()
+		cmd := exec.Command(script)
+		cmd.Stdin = strings.NewReader(`{"session_id":"s1","reason":"other","transcript_path":"` + transcript + `"}`)
+		cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+root)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("hook failed: %v: %s", err, out)
+		}
+	}
+	handoff := filepath.Join(root, "HANDOFF.md")
+
+	end()
+	b, err := os.ReadFile(handoff)
+	if err != nil {
+		t.Fatalf("no fallback was written: %v", err)
+	}
+	got := string(b)
+	// Paths are shown relative to the checkout, which is the only place the next session
+	// stands, and an edited file is what it most likely needs first.
+	for _, want := range []string{"`edited.go` (edited)", "`read.go`", "Next: run the tests."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the fallback does not carry %q:\n%s", want, got)
+		}
+	}
+	// The bound is the point: this is read again at every session start, and a transcript
+	// holds shell commands that are whole heredocs.
+	if n := strings.Count(got, "\n"); n > 40 {
+		t.Errorf("the fallback is %d lines, over the 40 it is specified at:\n%s", n, got)
+	}
+
+	if err := os.WriteFile(handoff, []byte("what the session meant to do\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	end()
+	b, err = os.ReadFile(handoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "what the session meant to do\n" {
+		t.Errorf("the session's own handoff was overwritten:\n%s", b)
 	}
 }

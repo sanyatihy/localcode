@@ -66,7 +66,7 @@ used, peak context per session, wall clock, and whether the box was finished at 
 
 - [x] `HANDOFF.md` is specified and ignored by git, and a `SessionStart` hook injects it into every new session
 - [x] A `PreCompact` hook refuses compaction and records that it fired, so no session re-ingests itself
-- [ ] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
+- [x] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
 - [ ] A driver runs fresh sessions until the topmost box is ticked or a bound is hit, recording each session's peak context
 - [ ] The mechanism is measured against the same box driven without it, and the outcome — including "not worth it" — is recorded in `docs/TECH.md`
 
