@@ -71,7 +71,7 @@ locally, so its runs are the before and after rather than a sweep staged here.
 - [x] A `PreCompact` hook refuses compaction and records that it fired, so no session re-ingests itself
 - [x] A `SessionEnd` hook writes a fallback handoff from the transcript when the model wrote none
 - [x] A driver runs fresh sessions until the topmost box is ticked or a bound is hit, recording each session's peak context
-- [ ] What the mechanism does is recorded in `docs/TECH.md` and labelled unmeasured, with the before/after left to 0011 — which is where a box is driven with and without it
+- [x] What the mechanism does is recorded in `docs/TECH.md` and labelled unmeasured, with the before/after left to 0011 — which is where a box is driven with and without it
 
 ## Log
 - 2026-08-20 — the measurement box moves out. It read as a gate on adopting the mechanism,
