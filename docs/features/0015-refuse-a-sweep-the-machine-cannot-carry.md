@@ -1,9 +1,9 @@
 ---
 id: 0015
 title: Refuse a sweep the machine cannot carry
-status: Draft
+status: Shipped
 created: 2026-08-19
-shipped:
+shipped: 2026-08-20
 check:
 checked:
 review:
