@@ -50,8 +50,8 @@ headroom is a property of the machine, and this repo already keeps machine prope
 
 ## Tasks
 
-- [ ] `internal/eval` gains a preflight that reads free memory and swap and reports whether a sweep can be carried, with the numbers it read
-- [ ] The threshold lives in a config file, and its default is justified by 0014's measured figures rather than chosen
+- [ ] `internal/eval` gains a preflight that reads the machine's headroom — total less wired and anonymous — and reports whether a sweep can be carried, with the numbers it read
+- [ ] The headroom floor lives in a config file, and its default is justified by 0014's measured figures rather than chosen
 - [ ] `cmd/eval` and `cmd/tier2` refuse to start when the preflight fails, and `-force` overrides it and marks the rows as forced
 - [ ] A test covers both sides: a machine with headroom starts, one without is refused, and neither needs a running server
 
@@ -62,6 +62,10 @@ headroom is a property of the machine, and this repo already keeps machine prope
   convention that 2 means the run could not be carried out.
 
 ## Log
+
+- 2026-08-20 — rewrote the first two boxes to name headroom rather than free memory. The
+  entry below corrected the design and left the boxes saying the opposite, which is the
+  one place a builder actually reads.
 
 - 2026-08-20 — the drafted non-goal was wrong, and a first build against it produced a
   check that could not pass — kept at `evidence/0015-first-run-no-handoff`: free memory is no
