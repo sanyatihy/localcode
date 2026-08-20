@@ -60,9 +60,9 @@ func TestEnvFromFileDropsInheritedAgentVariables(t *testing.T) {
 	t.Setenv("CLAUDECODE", "1")
 	t.Setenv("PATH_LIKE_UNRELATED", "keep-me")
 
-	env, err := envFromFile(writeEnv(t, "ANTHROPIC_BASE_URL=\"http://127.0.0.1:8081\"\n"))
+	env, err := EnvFromFile(writeEnv(t, "ANTHROPIC_BASE_URL=\"http://127.0.0.1:8081\"\n"))
 	if err != nil {
-		t.Fatalf("envFromFile: %v", err)
+		t.Fatalf("EnvFromFile: %v", err)
 	}
 	joined := strings.Join(env, "\n")
 	for _, gone := range []string{"ANTHROPIC_API_KEY=", "CLAUDE_CODE_ENABLE_TASKS=", "CLAUDECODE="} {
