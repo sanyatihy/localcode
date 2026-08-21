@@ -25,10 +25,16 @@ more: it serves no Anthropic `/v1/messages`, which the editor flow needs; it rep
 served config or timings, so a run cannot be checked against its label; and its failure
 mode under memory pressure is a hard stall rather than degradation.
 
-**`--prompt-cache-bytes` and `--prompt-cache-size` are mandatory here, not tuning.**
-`mlx_lm` allocates cache capacity eagerly per slot at startup and its LRU is unbounded by
-default; one 16k prompt drove free memory to zero, with swap flat because wired pages
-cannot be paged out.
+**`--prompt-cache-bytes` and `--prompt-cache-size` are mandatory here, not tuning**, and
+the slot count is the part that bites. `mlx_lm`'s LRU is unbounded by default: one 16k
+prompt drove free memory to zero, with swap flat because wired pages cannot be paged out.
+Bounded but generous is no better — capacity is allocated eagerly *per slot* at startup, so
+16 slots left 0.11 GB free on the first request where 2 left 5.38, and every depth row of
+that run hit its budget.
+
+[`config/mlx-4bit.env`](config/mlx-4bit.env) therefore serves **2**, which is what the
+scored comparison ran on and what one agent conversation needs. Reuse breadth and depth
+headroom trade directly against each other on 32 GB.
 
 The full table, and what would reverse the decision:
 [llama.cpp against MLX](../docs/TECH.md#llamacpp-against-mlx).
