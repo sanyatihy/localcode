@@ -74,10 +74,27 @@ is read again at every session start is.
 with the same `Next` mean the sessions are repeating each other, which `-max-sessions` would
 hide behind a count. The run ends and names the handoff to read.
 
-**Continuing is what `localcode` already does.** A session in a repository with a handoff
-inherits it, whether the last one ended on a full context or the developer closed the
-terminal — so there is no resume command to learn. `-fresh` ignores the handoff and starts
-from nothing, for the case where the last one is about work that has been abandoned.
+**A handoff belongs to a chain, and a repository carries as many chains as it has lines of
+work.** One handoff per repository assumes one thing is being worked on there, and two
+unrelated tasks in the same checkout would overwrite each other's state. A chain is one
+`localcode` invocation and every session its handovers produce.
+
+**Starting clean is the default, because that is Claude Code's.** `localcode` inherits
+nothing; `-continue` takes the most recent chain in this repository and `-resume <id>` takes
+a named one, which is the choice `claude` already offers and the one a developer already
+knows. Inheriting by default would make a second task in a repository silently resume the
+first.
+
+**A chain is named by its first session's id**, so it matches what `claude` prints and what
+sits under `~/.claude/projects/`. A session that ends says how to continue it, in the shape
+`claude` uses, because the developer reading that line has just been told the other one.
+
+**`localcode sessions` lists the chains in this repository** — id, when it last ran, and its
+`Next`. A `-resume` that requires an id nobody recorded is a resume nobody uses.
+
+**Automatic handover extends the current chain rather than starting one.** The distinction is
+the whole model: handover is what happens inside an invocation, and choosing a chain is what
+happens between them.
 
 **Bounded, and the bound is a refusal rather than a silence.** `-max-sessions` caps the
 chain, defaulting to a small number. A session that fills its context without advancing the
@@ -86,17 +103,19 @@ handoff to read.
 
 ## Tasks
 
-- [ ] `localcode` ends a session on the first refusal recorded during it, and reports why
-- [ ] the next session starts from the handoff the terminated one wrote, with the original
-      instruction re-issued
-- [ ] the chain is bounded by `-max-sessions`, and reaching it stops with the handoff named
-- [ ] `-no-handoff-chain` runs a single session, and a session that ends normally never
-      starts another
+- [ ] a repository carries several chains, each with its own handoff and archive, and
+      `localcode` starts a new one rather than inheriting
+- [ ] `-continue` resumes the most recent chain and `-resume <id>` a named one
+- [ ] `localcode sessions` lists the chains, and a session that ends says how to continue it
 - [ ] a session's handoff is its own: the supervisor archives the inherited one, and
       `session-end.sh` writes for every session in a chain
+- [ ] `localcode` ends a session on the first refusal recorded during it, and reports why
+- [ ] the next session in the chain starts from that handoff, with the original instruction
+      re-issued
 - [ ] `SessionStart` injects the newest handoff and a bounded digest of the previous four
 - [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
-- [ ] `-fresh` starts a session that ignores the handoff
+- [ ] the chain is bounded by `-max-sessions`, and reaching it stops with the handoff named
+- [ ] `-no-chain` runs a single session, and a session that ends normally never starts another
 - [ ] the README says what the developer sees when a session hands over
 
 ## Open questions
@@ -113,3 +132,8 @@ handoff to read.
 - **The staleness of an inherited handoff was found while planning this, not while using it.**
   It makes a chain freeze at its first handoff, and automatic handover is what turns that
   from an edge case into every session after the first.
+- **One handoff per repository was wrong, and the correction is Claude Code's own model.** It
+  assumed a repository holds one line of work, so a second task in the same checkout would
+  have resumed the first and then overwritten its handoff. Chains are per invocation, the
+  default is clean, and continuing is a choice with an id — which is what `claude` does and
+  therefore what needs no explaining.
