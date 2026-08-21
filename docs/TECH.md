@@ -38,10 +38,8 @@ Design arguments stay in the feature docs; this is the state of the machine.
 
 **Splitting the work across two tiers**
 
-- [The split works, and it is not free](#the-split-works-and-it-is-not-free)
-- [What the split costs, and what it saves](#what-the-split-costs-and-what-it-saves)
+- [The two-tier split, measured](#the-two-tier-split-measured)
 - [What the local tier finishes unattended](#what-the-local-tier-finishes-unattended)
-- [What the frontier tier is shown](#what-the-frontier-tier-is-shown)
 
 **Traps**
 
@@ -50,10 +48,15 @@ Design arguments stay in the feature docs; this is the state of the machine.
 ## Serving
 
 `scripts/serve.sh <config>` starts `llama-server` from a config file and adds no
-flags of its own. `make serve` runs it against `config/baseline.env`;
-`make serve CONFIG=config/<variant>.env` runs a variant. Later features add a file
-per variant rather than editing the baseline — that is what keeps 0003's ladder and
-0004's grid mechanical instead of hand-run.
+flags of its own. `make serve` runs it against `config/tuned.env`, the config the
+measurements settled on; `make serve CONFIG=config/<variant>.env` runs a variant. A
+variant is a new file, never an edit to an existing one — an edited config silently
+changes what an already-recorded number was measured on.
+
+**A ladder rung is not a config file.** `scripts/rungs.sh` derives the contexts worth
+walking from what the machine reports, and `scripts/ladder.sh` generates each cell from
+`config/tuned.env` with the context and KV type moved. Rungs written by hand were facts
+about one laptop, which is the defect the vision names first.
 
 **A config may also name request-level defaults**, which most do not: `TEMP`, `TOP_P`,
 `TOP_K`, `PRESENCE_PENALTY`, `CHAT_TEMPLATE_KWARGS` and `CHAT_TEMPLATE_FILE` become
@@ -444,41 +447,29 @@ terminate: three tier-1 tasks burned their whole budget on reasoning and never w
 answer, one producing 27,234 characters of it. Every thinking-mode number recorded before
 2026-08-18 was taken at `xhigh` whether it says so or not.
 
-The four settings on the three tasks that move (three passes each, 32k/q8_0):
+The three levels on the three tasks that move (three passes each, 32k/q8_0). All three share
+the toggle and the sampling, so they are comparable with each other; the `off` column that
+used to sit beside them was taken at a different sampling and is void, and
+[Sampling and thinking](#sampling-and-thinking-settled) is the clean comparison across the
+toggle.
 
-| task | off | low | medium | xhigh |
-|---|---|---|---|---|
-| `patch-contradiction-rounding` | 3/3 | 1/3 | 2/3 | 0/3, never terminated |
-| `patch-off-by-one` | 3/3 | 3/3 | 3/3 | 2/3, one non-termination |
-| `toolcall-constraint-readonly` † | 2/3 | 3/3 | 3/3 | 3/3 |
+| task | low | medium | xhigh |
+|---|---|---|---|
+| `patch-contradiction-rounding` | 1/3 | 2/3 | 0/3, never terminated |
+| `patch-off-by-one` | 3/3 | 3/3 | 2/3, one non-termination |
+| `toolcall-constraint-readonly` † | 3/3 | 3/3 | 3/3 |
 
-† re-measured after its fixture was fixed; the earlier figures scored the model for refusing
-to patch a file it had not been shown. Its `xhigh` runs complete once the cap is 4096 rather
-than 1024, so that task's non-termination really was a budget problem — unlike the
+† re-measured after its fixture was fixed. Its `xhigh` runs complete once the cap is 4096
+rather than 1024, so that task's non-termination was a budget problem — unlike the
 contradiction task, where raising the cap only bought a longer spiral.
 
-> **Superseded for the toggle.** A clean comparison exists — each mode at its own
-> model-card sampling, in `docs/data/2026-08-18-m2max-32gb-0005-toggle.jsonl`. Read that for
-> anything crossing the toggle. The block below stands only for what does not cross it.
->
-> **Void as a thinking comparison.** Every row in this section was taken at the server's
-> default sampling, identical in both modes. The vision requires each mode to run at its own
-> recommended sampling — `temp 1.0 / top_p 0.95 / top_k 20` on, `temp 0.7 / top_p 0.80 /
-> top_k 20 / presence_penalty 1.5` off — and calls a fixed-sampling comparison of the toggle
-> void. So the `off` column cannot be compared with the others here. What *is* clean is the
-> comparison **among** `low`, `medium` and `xhigh`, which share both the toggle and the
-> sampling. 0005 owns the redo; `cmd/eval` now refuses to set the toggle without sampling.
-
-**Reasoning made this model worse where it moved at all — except where it did the opposite.**
-On the contradicted-specification task, off passes every time and thinking fails 3 of 6, always
-on the same assertion. On the read-only tool-choice task the direction reverses: off reaches for
-the forbidden `edit_file` once in three, and every run with reasoning on takes the constraint.
-Two tasks, two directions, three runs a cell — enough to kill "more thinking is better" as a
-working assumption, not enough to replace it with a rule. On the contradicted-specification
-task, off passes every time and thinking fails 3 of 6 — always on the same assertion, the model
-resolving the contradiction case by case rather than picking one rule. `medium` beating `low`
-is within the noise of three runs and is not a ranking. What the data supports is that more
-reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
+**More reasoning is not a free upgrade, and it does not move in one direction.** On the
+contradicted-specification task thinking fails 3 of 6, always on the same assertion, the model
+resolving the contradiction case by case rather than picking one rule. On the read-only
+tool-choice task the direction reverses: every run with reasoning on takes the constraint.
+`medium` beating `low` is within the noise of three runs and is not a ranking. Two tasks and
+two directions is enough to kill "more thinking is better" as a working assumption, not enough
+to replace it with a rule.
 
 ## Tool-call adherence is not a formatting problem
 
@@ -522,10 +513,10 @@ are mandatory on this hardware, not tuning.
 
 **The decision is to stay on llama.cpp**, and it is closer than the table suggests. MLX wins
 on memory, which is the constraint 0014 showed binds here, and on warm reuse. It loses on
-three things that matter more today: it serves no Anthropic `/v1/messages`, which is what 0008
-needs for the editor flow; it reports no served config or timings, so a run cannot be checked
-against the label it was given; and its failure mode under memory pressure is a hard stall
-rather than degradation, which took three misconfigurations to diagnose.
+three things that matter more today. It serves no Anthropic `/v1/messages`, which the editor
+flow needs. It reports no served config and no timings, so a run cannot be checked against its
+label. And under memory pressure it stalls hard rather than degrading, which took three
+misconfigurations to diagnose.
 
 Decode is measured client-side because `mlx_lm` reports no server-side rate; llama.cpp's own
 figure for pure decode is 9.51 tok/s, so MLX's true decode is higher than the 10.35 shown,
@@ -533,17 +524,16 @@ which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB 
 token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
 configuration change reaches the figures quoted for speculative decoding.
 
-**Multi-token prediction is reachable, and not through this server.** `mlx_lm` 0.31.3 still
-rejects `mlx-community/Qwen3.8-27B-MTP-4bit` with `Model type qwen3_5_mtp not supported`, so
-the sentence this paragraph used to carry was true of MLX and false of the project: the lever
-exists on llama.cpp, where the served GGUF's own MTP head is dropped as unused until a build
-with PR #27342 picks it up. It is measured at 1.26–1.57× depending on prompt depth, and the
+**Multi-token prediction is reachable, and not through this server.** `mlx_lm` 0.31.3 rejects
+`mlx-community/Qwen3.8-27B-MTP-4bit` with `Model type qwen3_5_mtp not supported`. The lever is
+on llama.cpp instead: the served GGUF carries its own MTP head, which stock builds drop as
+unused and PR #27342 picks up. It is measured at 1.26–1.57× depending on prompt depth, and the
 figures are under [Speculative decoding](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). MTPLX, the MLX runtime that does implement
 native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
 
-**What would reverse it:** a 128 GB machine, where slot count stops competing with the model
-and MLX's reuse advantage runs unconstrained — and where MTPLX's 20.68 GB checkpoint would
-have room to hold a context, which is the only thing that stopped it here. `mlx_lm` gaining
+**What would reverse it:** a 128 GB machine. Slot count would stop competing with the model,
+MLX's reuse advantage would run unconstrained, and MTPLX's 20.68 GB checkpoint would have room
+for a context — the only thing that stopped it here. `mlx_lm` gaining
 `qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
 rather than a hypothetical. Or MLX gaining `/v1/messages`.
 
@@ -557,9 +547,9 @@ about, and the honest reading is that neither runtime is disqualified.
 
 Three candidates were screened against 0014's desktop rule before any suite ran, and two
 never generated a token on this machine. What survives is the model's own multi-token
-prediction head, which the served GGUF has carried all along: stock llama.cpp logs those
-tensors as unused and drops them, and the build from llama.cpp PR #27342 makes an MTP draft
-context against the same weights instead of loading a second model.
+prediction head, which the served GGUF has carried all along. Stock llama.cpp logs those
+tensors as unused and drops them; the build from PR #27342 makes an MTP draft context against
+the same weights, loading no second model.
 
 | candidate | extra weights | verdict |
 |---|---|---|
@@ -568,8 +558,8 @@ context against the same weights instead of loading a second model.
 | MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | loads, then out of memory under a real prompt |
 
 **The ratio is of decode and not of wall, measured client-side from the gap to the first
-token.** A speculative decoder moves decode and cannot move prefill, and prefill is most of
-the clock at depth: one validation run spent 279 seconds, 247 of them before the first token.
+token.** A speculative decoder moves decode and cannot move prefill. At depth prefill is most
+of the clock: one validation run spent 279 seconds, 247 of them before the first token.
 Server-reported rates are not used for the comparison, per [the harness's own rule](#the-harness).
 
 | prompt depth | baseline | native MTP | ratio | acceptance |
@@ -580,9 +570,8 @@ Server-reported rates are not used for the comparison, per [the harness's own ru
 | 32 000 | 0.1700 | 0.1346 | **1.26×** | 3.97 |
 
 **Acceptance does not decay; the cost of a verification step does.** Nearly four tokens are
-committed per step at every depth, while both sides slow — 0.105 to 0.170 s/token on the
-baseline — because attention over a longer cache is not something speculation can make
-cheaper. So the same config is adoptable against short prompts and, by the same rule, is
+committed per step at every depth. Both sides slow anyway — 0.105 to 0.170 s/token on the
+baseline — because speculation cannot make attention over a longer cache cheaper. So the same config is adoptable against short prompts and, by the same rule, is
 not against long ones.
 
 **It is lossless by measurement.** Fixed prompts at temperature zero hash identically with
@@ -592,9 +581,9 @@ that changed the answer would be measuring something else.
 **The verdict, per profile.**
 
 - **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
-  bar set before the runs, pass rate is 23/27 against 25/27 on the two tasks 0013 built to
-  discriminate — sampling at 0.7, which the identical greedy hash rules out as a
-  distribution change — and it costs 0.43 GB of wired memory.
+  bar set before the runs, and it costs 0.43 GB of wired memory. Pass rate is 23/27 against
+  25/27 on the two discriminating tasks, at sampling 0.7; the identical greedy hash rules that
+  out as a distribution change.
 - **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
   rule reserves for "measured, not taken", and an agent session's prompt is deep.
 - **Editor, 49,152**: refused. The allocator fails on the first prefill batch, where the
@@ -608,17 +597,17 @@ that changed the answer would be measuring something else.
 Once is not a characterisation, and it is recorded rather than explained.
 
 **The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
-builds a second `llama_context` over the same weights — no second copy — but its cache is
-sized at the context the target serves, so its cost grows with `--ctx-size` like any other.
+builds a second `llama_context` over the same weights, so there is no second copy. Its cache
+is still sized at the context the target serves, so its cost grows with `--ctx-size`.
 Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
 40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
 49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
 and not to the editor.
 
 `--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
-params to free device memory: n_gpu_layers already set by user to 999, abort`, so the build's
-own fitter was being blocked by this project's pinned value — but unpinned at 49,152 it
-reaches 22.255 GB and still refuses. The lever is measured and spent.
+params to free device memory: n_gpu_layers already set by user to 999, abort`, so this
+project's pinned value was blocking the build's own fitter. Unpinned at 49,152 it reaches
+22.255 GB and still refuses. The lever is measured and spent.
 
 A caveat that matters more than the ceiling: **38,912 peaks at 22.28 GB, and 0014's desktop
 died at 22.29.** Serving the ceiling and using the machine are not the same question, and
@@ -647,7 +636,7 @@ anything beats what is already in use, and nothing here does.
 
 **The six failures are two modes, and each tracks one of the axes.** Three sit on
 `patch-contradiction-rounding`, where the doc comment and the test that must keep passing
-disagree; it caught the two low-turn harnesses (Claude Code 2/3, Pi 1/3) and neither of the
+disagree. It caught the two low-turn harnesses — Claude Code 2/3, Pi 1/3 — and neither of the
 two that take more turns. Three sit on `patch-sibling-splitpath`, all the same compile
 error — an in-place edit that drops the `strings` import — and it caught the two harnesses
 that edit (Pi 2/3, OpenCode 1/3) and neither that rewrites the whole file. Frugality costs
@@ -655,9 +644,9 @@ verification; editing costs imports. Three runs a cell, so this is a pattern rat
 rate.
 
 **Preamble size does not explain the token spread.** Pi's fixed preamble is *larger* than
-Claude Code's at the same three tools — 3,922 against 3,711 — yet Pi ingests a fifth as
-much per task, because Claude Code re-ingests roughly its whole preamble on every run while
-Pi's survives in the server's prefix cache. **What changes in that prefix between two runs is
+Claude Code's at the same three tools, 3,922 against 3,711, yet Pi ingests a fifth as much per
+task. Claude Code re-ingests roughly its whole preamble on every run; Pi's survives in the
+server's prefix cache. **What changes in that prefix between two runs is
 516 tokens at its tail**, measured since: a second session's first request reused 83.5% of a
 3,130-token preamble. A preamble re-ingested in full is therefore a server that has not seen
 it, rather than a prefix that differs.
@@ -686,8 +675,10 @@ the count of them is printed beside it. Tokens and turns are indifferent to pagi
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
 what it loads. The context is capacity, not tuning: an extension session's first request
 measures **36,309 tokens** — the full tool set, the project's instructions and the
-editor's context — which does not fit 32,768 before anybody types. A terminal session
-avoids that with `--tools`; the extension has no equivalent.
+editor's context — which does not fit 32,768 before anybody types. **A terminal session
+answers the same question in 45 s against the extension's 462**, on the same model and server.
+`--tools` cuts the preamble to 3,767 tokens, and the extension has no equivalent — so its
+preamble is not reducible from the client side.
 
 **Raising the context buys no speed.** Prefill costs what the prompt is, not what the
 context reserves. That 36,309-token turn measured **434 s of ingest at 83.7 tok/s**, then
@@ -708,8 +699,8 @@ line: a non-leading system message renders as its own ChatML block.
 
 **A declared window catches an overflow between turns, not the preamble a session starts
 with.** `CLAUDE_CODE_MAX_CONTEXT_TOKENS` makes Claude Code count the conversation through
-`count_tokens` and refuse before sending — but a first request larger than the window is
-sent anyway, and comes back as the server's 400.
+`count_tokens` and refuse before sending. A first request larger than the window is sent
+anyway, and comes back as the server's 400.
 
 **An error whose wording is not Anthropic's costs two documented recoveries.** Claude Code
 retries and disables the capability after a mid-conversation-system rejection, and
@@ -732,9 +723,9 @@ valid, 11/12 passing, the same task failing at the same rate. `cmd/eval -api mes
 sends the other dialect to the same grader and refuses sampling flags the Messages body
 cannot carry.
 
-**Cursor's built-in assistant was rejected on architecture.** It does not call the
-configured base URL from this machine: it routes model requests through Cursor's backend
-and rejects plain HTTP, so a local model needs a public HTTPS tunnel and the path becomes
+**Cursor's built-in assistant was rejected on architecture.** It does not call the configured
+base URL from this machine: it routes model requests through Cursor's backend and rejects
+plain HTTP. A local model therefore needs a public HTTPS tunnel, and the path becomes
 Cursor → its backend → tunnel → here. Code leaves the machine even though inference does
 not. The extension hosting Claude Code has none of that, because the agent runs locally.
 
@@ -743,10 +734,10 @@ other harnesses, not here.
 
 ## Sessions hand off instead of compacting
 
-A session in this checkout writes `HANDOFF.md` — untracked working state inside one task
-box — and three Claude Code hooks carry it: `SessionStart` prints it into the next session's
-context, `PreCompact` refuses every compaction, `SessionEnd` extracts one from the transcript
-when the session wrote none. `cmd/handoff` runs a doc's topmost box across fresh sessions
+A session in this checkout writes `HANDOFF.md`, untracked working state inside one task box.
+Three Claude Code hooks carry it: `SessionStart` prints it into the next session's context,
+`PreCompact` refuses every compaction, and `SessionEnd` extracts one from the transcript when
+the session wrote none. `cmd/handoff` runs a doc's topmost box across fresh sessions
 until it is ticked or a bound is reached, recording each session's peak context. The wiring
 is in [`harness/claude-code/`](../harness/claude-code/README.md) with the rest of the client
 configuration.
@@ -766,47 +757,22 @@ with the mechanism and without it, and
 where boxes are driven locally, so it is where those runs happen. Until then this is
 apparatus, not a result.
 
-## The split works, and it is not free
+## The two-tier split, measured
 
 A local builder took a real feature from a frontier-drafted doc and shipped a reviewable
-branch, using `kit` unchanged: it ran `kit next`, claimed, made the worktree, did the
-topmost box only, ticked it in the commit that implements it, ran `make check`, pushed, and
-stopped without merging. Nothing in the protocol needed changing for a 27B model to follow
-it — the branch and the doc's boxes were already the whole interface.
+branch using `kit` unchanged. **Nothing in the protocol needed changing for a 27B model to
+follow it** — the branch and the doc's boxes were already the whole interface.
 
-**Three runs at the same box, and what separated them:**
+**Two things were needed and neither was sufficient**: 0016's hooks, which remove the
+compaction tax, and a restricted tool set, which returns **18,045 tokens — 40% of the
+window** — because Claude Code defines 21 tools unless told otherwise. With the mechanism and
+no room the session produced nothing; with room and no mechanism it finished only after
+compacting. The instruction that worked was the one the `SessionStart` hook already prints:
+the job and the size of the window, not how to work.
 
-| | tools | starting context | orientation | compaction | outcome |
-|---|---|---|---|---|---|
-| 1 | 4 | 11.7k | 19 calls, 17.4k | **taken** — 8 min, recovered 23%, spent again in 6 turns | box done, after compacting |
-| 2 | 21 | 23.5k | 2 calls, 3.5k | 11 refused | **nothing** — no room left |
-| 3 | 4 | **5.5k** | 12 calls, 7.3k | 14 refused | **box done in one session**, gate green |
-
-**Two things were needed and neither was sufficient.** 0016's hooks removed the compaction
-tax, and restricting the tool set returned **18,045 tokens** — 40% of the window — because
-Claude Code defines 21 tools unless told otherwise. Run 2 had the mechanism and no room; run
-1 had room and no mechanism. Only run 3 had both.
-
-**A leaner prompt beat a prescriptive one.** Run 1 was told how to work — read ranges not
-whole files, keep the handoff current, what comments to write. Run 3 was told the job and
-the size of its window, and it wrote its own handoff unprompted, kept comments at 16%
-against the repo's 23%, and left a plan a later session could act on. The instruction that
-worked was the one the `SessionStart` hook already prints.
-
-**Where the split is not worth it.** The first run produced a check that could never pass —
-a floor on free memory, which reads 0.16–0.65 GB on this machine whether a run swaps or
-not. The local tier built exactly what the doc specified, and the doc was wrong. Reviewing
-it, finding that, and correcting the premise cost a frontier session: **more than drafting
-the doc had.** So the split pays where the specification is sound and the work is
-mechanical, and it inverts where the specification is the hard part — which is the same
-boundary the per-task record draws, arrived at from the other side.
-
-## What the split costs, and what it saves
-
-0010 was built end to end by the frontier tier; 0015's first box was drafted by it and built
-by the local one. Both figures come from the harness's own transcripts, and the windows are
-stated because they are the weak part of the measurement — a window holds everything done in
-it, not only the feature.
+What each tier costs, from the harnesses' own transcripts. The windows are stated because
+they are the weak part of the measurement — a window holds everything done in it, not only
+the feature.
 
 | | turns | tokens in | tokens generated |
 |---|---|---|---|
@@ -814,24 +780,29 @@ it, not only the feature.
 | **0015 box 1, frontier drafting only** — 15 min | 50 | 22,902,916 | 66,152 |
 | 0015 box 1, local builder finishing it | 68 | 1,532,612 | 12,147 |
 
-**Per box, the frontier tier spent about 45,000 generated tokens on 0010 and about 16,500
-drafting all four of 0015's** — and the box itself was then built for 12,147 generated
-tokens that cost nothing. The doc is the frontier tier's whole contribution, and it is
-written once for every box in it.
+**Per box the frontier tier spent about 45,000 generated tokens on 0010 and about 16,500
+drafting all four of 0015's**, and the box was then built for 12,147 that cost nothing. The
+doc is the frontier tier's whole contribution and is written once for every box in it.
 
-**Two things stop this being a clean multiple.** The features are not the same size: 0010
-carried a 60-run sweep and 0015's box is one function. And the frontier figure excludes
-review, which is real and recurring — reviewing the first local build, finding its check
-could never pass, and correcting the doc took the frontier tier a further session. A split
-that ships nothing without review does not remove frontier cost so much as move it from
-writing to reading.
+**Three things stop that being a clean multiple.** The features are not the same size — 0010
+carried a 60-run sweep and 0015's box is one function. The frontier figure excludes review,
+which is real and recurring. And input tokens are not the cost they look: the frontier column
+is dominated by cache reads, and the local column by a conversation resent whole every turn,
+which at 49,152 is time rather than money.
 
-**Input tokens are not the cost they appear to be.** The frontier column is dominated by
-cache reads, which is why 138 million of them accompany 539,000 generated. The local column
-is the same shape for a different reason: the conversation is resent whole every turn, which
-at 49,152 is time rather than money. **The re-ingest this first claimed does not happen** —
-measured since, a conversation ingests each token once — see
-[A conversation is ingested once](#a-conversation-is-ingested-once-and-traffic-beside-it-changes-nothing).
+**Where the split inverts.** The first local build produced a check that could never pass — a
+floor on free memory, which reads 0.16–0.65 GB here whether a run swaps or not. The local tier
+built exactly what the doc specified, and the doc was wrong. Finding that and correcting the
+premise cost a frontier session — **more than drafting the doc had.** So the split pays where
+the specification is sound and the work is mechanical, and inverts where the specification is
+the hard part. That is the boundary the per-task record draws, from the other side.
+
+**What the frontier tier is shown: the whole repository — docs, code, git history.** Decided
+by the human this project is for. It costs little to permit because secrets never enter a doc
+and the measurement data is readings from one laptop. The boundary is the repository and not a
+default: nothing outside the checkout is planning context, and a drafter that needs something
+from outside asks for it to be committed, which leaves a record of what was shown. That is the
+vision's named exception used in full — planning leaves the machine, grinding does not.
 
 ## What the local tier finishes unattended
 
@@ -840,9 +811,9 @@ settled config — thinking off, model-card sampling, llama.cpp — and 0010's 6
 runs. The two tiers agree on where the line falls.
 
 **Twelve of the fourteen tier-1 fixtures score 100%, and three of the five agent-loop
-fixtures are 12/12.** Mechanical single-file work — a nil guard, a boundary condition, a
-nil-map init, reading or editing a named file, recalling a key at depth — is finished
-without supervision, in one request or in three turns.
+fixtures are 12/12.** Mechanical single-file work is finished without supervision, in one
+request or in three turns: a nil guard, a boundary condition, a nil-map init, reading or
+editing a named file, recalling a key at depth.
 
 Two classes are not, and neither is mechanical:
 
@@ -858,9 +829,9 @@ fails as `fail_wrong_tool` — told it may not write, it writes anyway, four tim
 the split.**
 
 A third class belongs to the harness rather than the model: **an in-place edit that must
-preserve what it did not write.** `patch-sibling-splitpath` is 9/9 as a whole-file rewrite
-in tier 1 and 9/12 through the agent loop, and every one of those three failures is an
-edit-based harness dropping the `strings` import. Claude Code and Hermes, which rewrite the
+preserve what it did not write.** `patch-sibling-splitpath` is 9/9 as a whole-file rewrite in
+tier 1 and 9/12 through the agent loop. Every one of those three failures is an edit-based
+harness dropping the `strings` import. Claude Code and Hermes, which rewrite the
 file, took it 3/3. 0010 settled on Claude Code, so this class sits inside the boundary as
 configured — and outside it for anyone who switches to an edit-based harness.
 
@@ -868,25 +839,6 @@ configured — and outside it for anyone who switches to an edit-based harness.
 one function, and the instruction is one sentence. Nothing here says what the local tier
 does with a change spanning modules, or with a specification long enough to hold its own
 contradictions. That is what a feature tests, and it is measured rather than extrapolated.
-
-## What the frontier tier is shown
-
-**The whole repository: docs, code, git history.** Decided by the human this project is
-for, which is what `review: human` on 0011 was reserving.
-
-It costs little to permit because of what the repository already is. Secrets never enter a
-doc — a pushed commit cannot be unpublished, so the rule is to name the variable and where
-the value lives — and the measurement data is machine readings from one laptop. What is
-sensitive is not in here.
-
-**The boundary is the repository, and it is a boundary rather than a default.** Nothing
-outside the checkout is planning context: not the shell history, not other repositories on
-the machine, not credentials the environment happens to carry. A drafter that needs
-something from outside asks for it to be brought in and committed, which leaves a record of
-what was shown.
-
-That is the vision's named exception, used in full: planning leaves the machine, grinding
-does not. The local tier reads the same repository and sends nothing anywhere.
 
 ## Gotchas
 
@@ -915,7 +867,7 @@ Each of these has already caused a wrong number in this repo.
   slow to be scheduled: a race that hid through every earlier run appears exactly when the
   measurement gets interesting.
 - **`cmd && run || echo "skipped"` reports a failure as a skip.** The lint target used that
-  shape to tolerate a missing binary, so when golangci-lint was present *and found issues* the
+  shape to tolerate a missing binary. With golangci-lint present *and finding issues*, the
   non-zero exit took the `||` branch: `make check` printed "not installed, SKIPPED" and exited
   0 while CI failed on the same findings. The local gate was green for two pushes that CI
   rejected. A fallback must be reachable only for the condition it describes — write it as an

@@ -52,33 +52,12 @@ type ContextFloorer interface {
 	ContextFloor() int
 }
 
-// A DeskProfile is how the machine is being used while a harness is scored, and it caps
-// the context that may be served. It is the machine's profile; Profile in this package is
-// the model's, and the two are unrelated. Both ceilings are measured against the desktop
-// rather than the model — see docs/TECH.md's measured envelope.
+// A DeskProfile is how the machine is being used while a harness is scored, and it caps the
+// context that may be served. It is the machine's profile, read from config/machine.json;
+// Profile in this package is the model's, and the two are unrelated.
 type DeskProfile struct {
-	Name    string
-	Ceiling int
-}
-
-var deskProfiles = []DeskProfile{
-	{Name: "attended", Ceiling: 57344},
-	{Name: "unattended", Ceiling: 65536},
-}
-
-// LookupDeskProfile resolves a profile by name. There is no default: a tier-2 row that
-// does not say which profile it was taken under cannot be compared with one that does.
-func LookupDeskProfile(name string) (DeskProfile, error) {
-	for _, p := range deskProfiles {
-		if p.Name == name {
-			return p, nil
-		}
-	}
-	known := make([]string, 0, len(deskProfiles))
-	for _, p := range deskProfiles {
-		known = append(known, p.Name)
-	}
-	return DeskProfile{}, fmt.Errorf("unknown desk profile %q; known: %s", name, strings.Join(known, ", "))
+	Name    string `json:"name"`
+	Ceiling int    `json:"ceiling_tokens"`
 }
 
 // Excludes reports why a driver cannot be scored under this profile against this server,

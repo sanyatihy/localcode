@@ -1,6 +1,6 @@
-# Serving (0001). CONFIG is a path to an env file scripts/serve.sh consumes, and
-# docs/TECH.md documents it as such — that meaning is shipped and stays.
-CONFIG   ?= config/baseline.env
+# CONFIG is a path to an env file scripts/serve.sh consumes. The default is the config
+# the measurements settled on, so `make serve` serves what the project concluded.
+CONFIG   ?= config/tuned.env
 
 # Scoring (0002). The eval label is LABEL, not CONFIG: it names a run for the
 # results file, which is a different thing from the file that launched the server.
