@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -166,5 +167,44 @@ func TestPropsUnavailableIsRecordedNotFatal(t *testing.T) {
 	row := NewRow("cfg", 0, "off", "", Sampling{}, ServerProps{}, "toolcall", Result{TaskID: "t"})
 	if row.ServedNCtx != 0 {
 		t.Errorf("unexpected served ctx: %d", row.ServedNCtx)
+	}
+}
+
+// The scorer must not be able to set the toggle without the model saying how. A profile that
+// names no mechanism is refused at load, so no run can reach a request with the toggle
+// silently unset while its row claims a mode.
+func TestLoadProfileRefusesAThinkingMechanismItCannotPerform(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"name":"x","thinking":{"mechanism":"%s","key":"%s"},
+	  "sampling":{"thinking":{},"nonthinking":{}},"reasoning":{}}`
+	for _, tc := range []struct{ mechanism, key string }{
+		{"none", "enable_thinking"},
+		{"http_header", "think"},
+		{"chat_template_kwarg", ""},
+	} {
+		path := filepath.Join(dir, "p.json")
+		if err := os.WriteFile(path, []byte(fmt.Sprintf(body, tc.mechanism, tc.key)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadProfile(path); err == nil {
+			t.Errorf("mechanism %q key %q loaded; it cannot switch the toggle", tc.mechanism, tc.key)
+		}
+	}
+}
+
+// The toggle is rendered from the profile, not from a constant in the scorer: that is the
+// whole of what makes a second model scoreable without editing Go.
+func TestThinkingKwargsComesFromTheProfile(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		kw, err := qwenProfile(t).ThinkingKwargs(on)
+		if err != nil {
+			t.Fatalf("ThinkingKwargs(%v): %v", on, err)
+		}
+		if got, want := kw["enable_thinking"], on; got != want {
+			t.Errorf("ThinkingKwargs(%v) = %v, want the profile key set to %v", on, kw, want)
+		}
+		if len(kw) != 1 {
+			t.Errorf("ThinkingKwargs sent %d keys, want only the one the profile names: %v", len(kw), kw)
+		}
 	}
 }
