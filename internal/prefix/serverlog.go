@@ -8,19 +8,14 @@ import (
 	"strings"
 )
 
-// This file reads what the server says about itself. The probe measures traffic it wrote,
-// and a real session's traffic is nobody's to write: a harness decides what to send and
-// reports in units of its own, so the only per-request account of it is the server's log.
-//
-// Everything below is derived from four lines the server prints for every request. Three
-// are read directly. The fourth — how much of the prompt was already there — is not
-// printed and is derived, which is why Offset exists.
+// This file reads what the server says about itself, because a real session's traffic is
+// nobody's to script. Everything below comes from four lines the server prints per
+// request: three are read directly, and the fourth — how much of the prompt was already
+// there — is derived, which is why Offset exists.
 
-// How a slot was chosen for a request. The server picks by longest common prefix when one
-// slot's contents are close enough to the incoming prompt, and by least-recently-used when
-// none is. It is worth recording and worth not over-reading: a request selected by LRU can
-// still reuse most of its prompt, because a prefix evicted from the slot is restored from
-// the server's host-RAM cache.
+// How a slot was chosen: longest common prefix when one slot's contents are close enough,
+// least-recently-used when none is. Worth not over-reading — an LRU selection can still
+// reuse most of its prompt, because an evicted prefix is restored from host RAM.
 const (
 	SelectedByLCP = "lcp"
 	SelectedByLRU = "lru"
@@ -48,14 +43,10 @@ type LogRow struct {
 	GenSeconds    float64 `json:"gen_seconds"`
 }
 
-// Offset corrects the one derived quantity. The server reports what it ingested and what
-// it generated, but not what it already held; that is the slot's total at release less
-// both. The total it prints is one short of the prompt the API accounts for — measured
-// against the probe's own rows, where the prompt is known to the token — so a row would
-// otherwise under-report reuse by exactly one token per request.
-//
-// It is a constant with a reason rather than a fudge: a change in the server's accounting
-// shows up as this being wrong, and Check is what catches that.
+// Offset corrects the one derived quantity. The slot's total at release runs one token
+// short of the prompt the API accounts for, measured against the probe's rows where every
+// prompt is known to the token. A change in the server's accounting shows up as this being
+// wrong, and Check is what catches it.
 const Offset = 1
 
 // Requests reads a llama-server log and returns one row per request that completed.

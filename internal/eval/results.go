@@ -17,11 +17,9 @@ type Row struct {
 	Config string `json:"config"` // human label for the serving config under test
 	Repeat int    `json:"repeat"`
 
-	// Harness names the agent loop a tier-2 row measured, and Profile the desk profile
-	// it was scored under. Both are empty on tier-1 rows, which drive no harness and
-	// make no claim about the desktop. A tier-2 row needs the profile beside the numbers
-	// because two harnesses scored under different ones are not comparable, and one
-	// harness may be admissible under only one of them.
+	// Harness names the agent loop a tier-2 row measured, Profile the desk profile it was
+	// scored under. Empty on tier-1 rows. Two harnesses scored under different profiles
+	// are not comparable, so the profile travels with the numbers.
 	Harness string `json:"harness,omitempty"`
 	Profile string `json:"profile,omitempty"`
 
@@ -34,10 +32,9 @@ type Row struct {
 	// third state: it leaves the model's own template default alone.
 	Thinking string `json:"thinking"`
 
-	// The effort the thinking was done at. Empty means the model's own default was
-	// left in force, which for Qwen3.8 is xhigh — so an empty value here is a
-	// measurement of xhigh, not of "unset", and rows written before this field
-	// existed are all xhigh whether they say so or not.
+	// Empty means the model's own default was left in force, which for Qwen3.8 is xhigh:
+	// an empty value is a measurement of xhigh, not of "unset". Rows written before this
+	// field existed are all xhigh whether they say so or not.
 	ReasoningEffort string   `json:"reasoning_effort"`
 	Sampling        Sampling `json:"sampling"`
 
@@ -71,10 +68,9 @@ type Row struct {
 	GenPerSecond     float64 `json:"gen_per_second"`
 	WallSeconds      float64 `json:"wall_seconds"`
 
-	// Decode isolated from prefill, and acceptance length, both as the task records
-	// them. The *_measured flags carry "the instrument could not read this" separately
-	// from a zero, because a speculative mechanism that is off and one that accepts
-	// nothing produce the same number and mean opposite things.
+	// The *_measured flags carry "the instrument could not read this" apart from a zero:
+	// a speculative mechanism that is off and one that accepts nothing produce the same
+	// number and mean opposite things.
 	TTFTSeconds        float64 `json:"ttft_seconds,omitempty"`
 	DecodeSeconds      float64 `json:"decode_seconds,omitempty"`
 	DecodePerSecond    float64 `json:"decode_per_second,omitempty"`
@@ -161,13 +157,12 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 	}
 }
 
-// AppendRow writes one row and syncs it. A sweep is a multi-hour unattended job on
-// this hardware, so a row must survive the process dying halfway through it.
+// AppendRow writes one row and syncs it: a sweep is a multi-hour unattended job here, so
+// a row must survive the process dying halfway through.
 func AppendRow(path string, r Row) error { return AppendJSON(path, r) }
 
-// AppendJSON is the same durability for a row of another shape. Later features record
-// observations this Row cannot express, and they must not have to reimplement the sync
-// to get the guarantee above.
+// AppendJSON is the same durability for a row of another shape, so a record this Row
+// cannot express does not have to reimplement the sync to get it.
 func AppendJSON(path string, v any) error {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -182,8 +177,8 @@ func AppendJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	// Close is checked rather than deferred-and-dropped: this is a write path, and a
-	// row that never reached disk would silently shorten a multi-hour sweep's results.
+	// Close is checked rather than deferred-and-dropped: a row that never reached disk
+	// would silently shorten a multi-hour sweep.
 	if _, err := fmt.Fprintf(f, "%s\n", b); err != nil {
 		_ = f.Close()
 		return err

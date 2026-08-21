@@ -233,7 +233,6 @@ func RoundHalf(x float64) int {
 				Dir:      filepath.Join("..", "..", "tasks", tc.fixture),
 				Source:   "broken.go.txt",
 				TestFile: "verify_test.go.txt",
-				Package:  "main",
 			}
 			if got, detail := runPatch(context.Background(), p, tc.correct); got != Pass {
 				t.Errorf("a correct answer scored %q (%s) — the fixture punishes being right", got, detail)
@@ -265,7 +264,6 @@ func TestContradictionFixtureAcceptsEitherResolution(t *testing.T) {
 		Dir:      filepath.Join("..", "..", "tasks", "patch-contradiction-rounding"),
 		Source:   "broken.go.txt",
 		TestFile: "verify_test.go.txt",
-		Package:  "main",
 	}
 	for label, code := range map[string]string{
 		"half away from zero, per the doc comment": `package main
