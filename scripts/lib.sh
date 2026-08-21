@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Shared by every script that starts and stops a server. Sourced, never executed.
+# Shared by every script that starts and stops a server. Sourced, never executed, and so it
+# sets no shell options: `set -euo pipefail` here would leak into whatever sourced it. Every
+# caller sets them itself, and `make check` holds both halves of that to the file mode.
 #
 # These four functions were copied into four scripts and had already drifted into four
 # different answers to the same two traps, which is exactly the failure a second home for a
