@@ -154,3 +154,30 @@ func flagValue(args []string, name string) string {
 	}
 	return ""
 }
+
+func TestStatusReportsWhatIsServed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model_path":"/cache/Qwen3.8-27B-Q4_K_M.gguf",
+			"default_generation_settings":{"n_ctx":49152}}`))
+	}))
+	defer srv.Close()
+
+	code, err := status(srv.URL)
+	if err != nil || code != 0 {
+		t.Fatalf("a serving endpoint must report 0: code %d err %v", code, err)
+	}
+}
+
+// Down is an answer, not a failure to run: a script asking "is it up" gets 1, and 2 stays
+// reserved for the cases where the question could not be put.
+func TestStatusAnswersNoWhenNothingIsServing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+
+	code, err := status(url)
+	if err != nil || code != 1 {
+		t.Fatalf("a dead endpoint must answer 1 with no error: code %d err %v", code, err)
+	}
+}
