@@ -201,3 +201,53 @@ func TestStatusAnswersNoWhenNothingIsServing(t *testing.T) {
 		t.Fatalf("a dead endpoint must answer 1 with no error: code %d err %v", code, err)
 	}
 }
+
+// serve and stop must reach the checkout's own scripts, not a second implementation:
+// stop.sh waits for ~17 GB to be released, and a launcher that re-solved that would be
+// the fifth home for one fact.
+func TestServeAndStopRunTheCheckoutsOwnScripts(t *testing.T) {
+	root := fakeCheckout(t)
+	dir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	for _, name := range []string{"serve.sh", "stop.sh"} {
+		body := "#!/bin/sh\necho " + name + " \"$@\" >> " + marker + "\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if code, err := script(root, "serve.sh", "config/agent.env"); err != nil || code != 0 {
+		t.Fatalf("serve: code %d err %v", code, err)
+	}
+	if code, err := script(root, "stop.sh"); err != nil || code != 0 {
+		t.Fatalf("stop: code %d err %v", code, err)
+	}
+
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "serve.sh config/agent.env") {
+		t.Fatalf("serve.sh must receive the config: %s", got)
+	}
+	if !strings.Contains(string(got), "stop.sh") {
+		t.Fatalf("stop.sh must have run: %s", got)
+	}
+}
+
+func TestScriptPassesTheExitCodeThrough(t *testing.T) {
+	root := fakeCheckout(t)
+	dir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "stop.sh"), []byte("#!/bin/sh\nexit 2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code, err := script(root, "stop.sh"); err != nil || code != 2 {
+		t.Fatalf("want 2 passed through, got %d err %v", code, err)
+	}
+}
