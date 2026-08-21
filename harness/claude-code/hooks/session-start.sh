@@ -2,7 +2,10 @@
 # SessionStart hook. Stdout is added to the session's context; stderr is not.
 set -euo pipefail
 
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+# State goes under LOCALCODE_HANDOFF_DIR when it is set, and under the checkout otherwise.
+# The override is what lets a session run in somebody else's repository: a handoff written
+# to their root is untracked noise in a tree nobody asked us to touch.
+ROOT="${LOCALCODE_HANDOFF_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 HANDOFF="$ROOT/HANDOFF.md"
 
 if [ -s "$HANDOFF" ]; then
@@ -10,9 +13,11 @@ if [ -s "$HANDOFF" ]; then
   echo
   cat "$HANDOFF"
 else
-  cat <<'EOF'
-Nothing was handed to you: HANDOFF.md is absent or empty, so you are the first session on
-this box. Create it at the root of the checkout in this shape:
+  cat <<EOF
+Nothing was handed to you: the handoff is absent or empty, so you are the first session on
+this box. Create it at exactly this path, in this shape:
+
+    $HANDOFF
 
     # Handoff
     **Box:** the task box being worked, copied from the feature doc
@@ -22,10 +27,11 @@ this box. Create it at the root of the checkout in this shape:
 EOF
 fi
 
-cat <<'EOF'
+cat <<EOF
 
-Keep HANDOFF.md current as you work. It is untracked scratch and it is the whole of what
-the next session gets — this one will not be summarised for it. Keep it under 40 lines:
-every line is read again at every session start, and a session that starts by reading a
-diary is the cost this replaces.
+Keep that file current as you work, at that path and nowhere else — writing a HANDOFF.md
+into the repository you are visiting leaves a file its owner did not ask for. It is the
+whole of what the next session gets, since this one will not be summarised for it. Keep it
+under 40 lines: every line is read again at every session start, and a session that starts
+by reading a diary is the cost this replaces.
 EOF
