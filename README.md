@@ -57,6 +57,31 @@ eval` refuses to start when the machine has less headroom than
 [`config/machine.json`](config/machine.json) requires — a sweep that pages measures the
 pager, not the model.
 
+## Coding against the local model
+
+**1.** Serve, in this checkout — **`agent.env`, never `tuned.env`**: it serves the sampling,
+thinking toggle and chat-template override Claude Code never sends itself.
+
+```sh
+make serve CONFIG=config/agent.env     # first run downloads ~17 GB; `make smoke` checks it
+```
+
+**2.** Add to `~/.zshrc`, with the absolute path to this checkout:
+
+```sh
+localclaude() (                     # parens make it a subshell, so nothing leaks into yours
+  set -a; . ~/src/localcode/harness/claude-code/claude-code.env; set +a
+  exec claude --tools Bash,Edit,Read,Write --allowedTools Bash,Edit,Read,Write "$@"
+)
+```
+
+**3.** Run `localclaude` in any repository. **4.** Stop with `pkill -f llama-server`.
+
+Nothing is written to the repository you work in, to your shell, or to `~/.claude`. `--tools`
+cuts the preamble from 18,388 tokens to 3,711 and `--allowedTools` pre-approves that same set,
+which is what runs it unprompted — `--permission-mode auto` calls home for its Bash check and
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` blocks it, while `dontAsk` denies rather than allows.
+
 ## How the repo is laid out
 
 ```
