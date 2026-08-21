@@ -30,6 +30,8 @@ designed for the driven flow, where `cmd/handoff` starts the next session; inter
 - **Not a driver for unattended work.** `cmd/handoff` already runs a task box across sessions
   on a budget. This is the interactive case, and it continues one instruction rather than
   working a list.
+- **Not `claude --resume`.** Resuming re-ingests the conversation that just failed to fit,
+  which is the cost being avoided. A session starts clean and inherits a handoff.
 
 ## Design
 
@@ -54,7 +56,28 @@ session still runs `SessionEnd` and still writes its handoff.
 **The instruction is re-issued; the handoff carries what was done.** A `-p` session gets its
 original prompt again, since the handoff is what says how far it got. This is what
 `cmd/handoff` already does with a task box, and it is why the handoff's `Next` field matters
-more than its `Tried` field.
+more than its `Tried` field. Re-issuing is also what stops the goal drifting: the instruction
+is quoted from the developer every time rather than paraphrased through a chain of handoffs.
+
+**A session never inherits and writes the same file.** The supervisor archives the handoff
+into `handoffs/NNNN.md` before launching, so `HANDOFF.md` is absent at session start and
+`session-end.sh` always writes one. `SessionStart` reads the newest archive when there is
+one. That is what makes the second handoff in a chain describe the second session.
+
+**Long chains carry a digest, not their whole history.** `SessionStart` injects the newest
+handoff whole and one line from each of the previous four — enough to see what has already
+been ruled out, bounded so the injection cannot grow with the chain. The newest handoff
+measured 452 tokens against a 45,056-token window, so the budget is not the constraint; what
+is read again at every session start is.
+
+**A chain that stops advancing is stopped rather than bounded.** Two consecutive handoffs
+with the same `Next` mean the sessions are repeating each other, which `-max-sessions` would
+hide behind a count. The run ends and names the handoff to read.
+
+**Continuing is what `localcode` already does.** A session in a repository with a handoff
+inherits it, whether the last one ended on a full context or the developer closed the
+terminal — so there is no resume command to learn. `-fresh` ignores the handoff and starts
+from nothing, for the case where the last one is about work that has been abandoned.
 
 **Bounded, and the bound is a refusal rather than a silence.** `-max-sessions` caps the
 chain, defaulting to a small number. A session that fills its context without advancing the
@@ -69,12 +92,24 @@ handoff to read.
 - [ ] the chain is bounded by `-max-sessions`, and reaching it stops with the handoff named
 - [ ] `-no-handoff-chain` runs a single session, and a session that ends normally never
       starts another
+- [ ] a session's handoff is its own: the supervisor archives the inherited one, and
+      `session-end.sh` writes for every session in a chain
+- [ ] `SessionStart` injects the newest handoff and a bounded digest of the previous four
+- [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
+- [ ] `-fresh` starts a session that ignores the handoff
 - [ ] the README says what the developer sees when a session hands over
 
 ## Open questions
 
-- Whether an interactive session should resume by replaying the developer's last message or
-  by starting empty with the handoff. `-p` has one instruction and no ambiguity; an
-  interactive session has a conversation, and only its last turn survives in the handoff.
+- Whether the digest should carry each session's `Next` or its `Tried`. `Next` is what the
+  session meant to do and `Tried` is what it did, and only a chain long enough to repeat
+  itself will show which one prevents that.
 
 ## Log
+
+- **Starting clean beat replaying and beat `--resume`.** Both re-ingest a conversation that
+  had just failed to fit, and the measurement that motivated this feature is that a handoff
+  costs 4,265 tokens where the conversation cost 37,837.
+- **The staleness of an inherited handoff was found while planning this, not while using it.**
+  It makes a chain freeze at its first handoff, and automatic handover is what turns that
+  from an edge case into every session after the first.
