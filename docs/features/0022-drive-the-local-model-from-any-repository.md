@@ -96,7 +96,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
 
 ## Tasks
 
-- [ ] `cmd/localcode` runs the agent in the working directory against a server that is
+- [x] `cmd/localcode` runs the agent in the working directory against a server that is
       already up, with 0008's tools and permissions, writing nothing to that repository
 - [ ] `make install` puts it on `PATH` with this checkout's location stamped in, and
       `localcode status` reports what is served
