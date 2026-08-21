@@ -223,43 +223,14 @@ except (OSError, ValueError):
 wired_peak=max(p["wired_gb"] for p in series)
 wired_headroom_min=min(p["wired_headroom_gb"] for p in series)
 
-# WindowServer's progress while the model was under load. Rates are derived here rather
-# than in the probe so the sampling interval stays visible in the raw series.
-desk=[]
-try:
-    desk=sorted((json.loads(x) for x in open("$desk") if x.strip()), key=lambda r: r["t"])
-except (OSError, ValueError):
-    pass
-
-def cores(a, b):
-    span=b["t"]-a["t"]
-    return None if span <= 0 else (b["windowserver_cpu_seconds"]-a["windowserver_cpu_seconds"])/span
-
-steps=[c for c in (cores(a, b) for a, b in zip(desk, desk[1:])) if c is not None]
-
-# Every window of at least the sustain length. A single spike is the compositor doing its
-# job; a spike that does not end is the compositor losing.
-sustained=[]
-for i in range(len(desk)):
-    k=i+1
-    while k < len(desk) and desk[k]["t"] - desk[i]["t"] < $DESK_SUSTAIN_SECONDS:
-        k += 1
-    if k < len(desk):
-        c=cores(desk[i], desk[k])
-        if c is not None:
-            sustained.append(c)
-
-condition="$CONDITION"
-if not condition.startswith("attended"):
-    verdict="not_applicable"
-elif not sustained:
-    verdict="insufficient_samples"
-elif max(sustained) >= $DESK_SATURATED:
-    verdict="fail_saturated"
-elif min(sustained) <= $DESK_STALLED:
-    verdict="fail_stalled"
-else:
-    verdict="pass"
+# WindowServer's progress while the model was under load. Rates are derived from the
+# series rather than in the probe, so the sampling interval stays visible in the raw data.
+# The rule itself lives in scripts/deskverdict.py: a screen judges a cell the same way.
+sys.path.insert(0, "scripts")
+import deskverdict
+desk=deskverdict.load("$desk")
+desktop=deskverdict.verdict(desk, "$CONDITION", $DESK_SATURATED, $DESK_STALLED,
+                            $DESK_SUSTAIN_SECONDS)
 
 print(json.dumps({
   "condition": "$CONDITION", "cell": "$name", "ctx": $ctx, "kv": "$kv",
@@ -275,17 +246,10 @@ print(json.dumps({
   "wired_headroom_min_gb": round(wired_headroom_min, 3),
   "wired_limit_gb": f["wired_limit_gb"], "wired_limit_source": f["wired_limit_source"],
   "wired_samples": len(series) - 2,
-  "desktop_verdict": verdict,
-  "ws_cpu_peak_cores": round(max(steps), 3) if steps else None,
-  "ws_cpu_sustained_max_cores": round(max(sustained), 3) if sustained else None,
-  "ws_cpu_sustained_min_cores": round(min(sustained), 3) if sustained else None,
-  "ws_span_seconds": round(desk[-1]["t"] - desk[0]["t"], 1) if len(desk) > 1 else 0,
-  "ws_samples": len(desk),
-  "desktop_thresholds": {"saturated_cores": $DESK_SATURATED, "stalled_cores": $DESK_STALLED,
-                         "sustain_seconds": $DESK_SUSTAIN_SECONDS},
+  **desktop,
 }))
 print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%.2f GB  headroom_min=%.2f GB"
-      % (verdict, max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min),
+      % (desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min),
       file=sys.stderr)
 PY
 done

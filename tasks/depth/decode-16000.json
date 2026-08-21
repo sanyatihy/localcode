@@ -1,0 +1,18 @@
+{
+  "id": "decode-16000",
+  "kind": "retrieval",
+  "max_tokens": 512,
+  "timeout_seconds": 420,
+  "retrieval": {
+    "depth_tokens": 16000,
+    "position": 0.5,
+    "sentinel": "KEY-7F3A-16000",
+    "question": "What is the deployment key mentioned in the dump?"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "{{BODY}}\n\nReply with the deployment key mentioned above, then write the numbers from 1 to 120 separated by single spaces."
+    }
+  ]
+}

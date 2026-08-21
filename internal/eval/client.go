@@ -5,6 +5,7 @@
 package eval
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -60,6 +61,17 @@ type chatRequest struct {
 	ReasoningEffort    string         `json:"reasoning_effort,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 	Sampling
+
+	// Streaming is how decode gets isolated from prefill. The gap to the first token is
+	// prefill; everything after it is decode, and only the client can see that boundary
+	// — a non-streamed reply reports one wall clock covering both. StreamOptions asks
+	// for the usage and timings block on the final chunk, which a stream otherwise omits.
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type ToolCall struct {
@@ -83,6 +95,13 @@ type Response struct {
 		PromptPerSecond    float64 `json:"prompt_per_second"`
 		PredictedN         int     `json:"predicted_n"`
 		PredictedPerSecond float64 `json:"predicted_per_second"`
+
+		// Speculative counters, present only on a build that speculates and only for a
+		// request that did. Pointers because acceptance is a measurement this project
+		// must be able to record as unavailable rather than as zero, which would read
+		// as "nothing was accepted" — the opposite of "nothing was drafted".
+		DraftN         *int `json:"draft_n"`
+		DraftNAccepted *int `json:"draft_n_accepted"`
 	} `json:"timings"`
 	Usage struct {
 		PromptTokens        int `json:"prompt_tokens"`
@@ -94,6 +113,30 @@ type Response struct {
 	Error json.RawMessage `json:"error"`
 
 	Wall time.Duration `json:"-"` // measured here, not reported by the server
+
+	// TTFT is the gap to the first token of the reply, and Streamed says whether it was
+	// measured at all. Wall less TTFT is decode, which is the half of the clock a
+	// speculative decoder can move; prefill is the half it cannot.
+	TTFT     time.Duration `json:"-"`
+	Streamed bool          `json:"-"`
+}
+
+// AcceptanceLength is tokens committed per verification step — the number published
+// speculative-decoding results are compared on, because a high acceptance *rate* at a
+// short draft can lose to a low rate at a long one. Every step commits one token the
+// target sampled plus whatever drafts it accepted, so the steps are the committed
+// tokens less the accepted drafts. Available is false when the server drafted nothing
+// or does not report it, which is not the same as an acceptance of zero.
+func (r *Response) AcceptanceLength() (tau float64, available bool) {
+	t := r.Timings
+	if t.DraftN == nil || t.DraftNAccepted == nil || *t.DraftN == 0 || t.PredictedN <= 0 {
+		return 0, false
+	}
+	steps := t.PredictedN - *t.DraftNAccepted
+	if steps <= 0 {
+		return 0, false
+	}
+	return float64(t.PredictedN) / float64(steps), true
 }
 
 type Client struct {
@@ -104,6 +147,11 @@ type Client struct {
 	// Anthropic Messages path llama-server converts internally. Empty means APIChat,
 	// so every existing caller keeps the path its numbers were taken on.
 	API string
+
+	// Stream asks for the reply a token at a time, which is what separates prefill from
+	// decode. Off by default: it changes the request, and every speed number recorded
+	// before it was taken without it, so a run that streams is a run that says so.
+	Stream bool
 }
 
 func NewClient(endpoint string, timeout time.Duration) *Client {
@@ -117,6 +165,9 @@ func NewClient(endpoint string, timeout time.Duration) *Client {
 func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, error) {
 	if c.API == APIMessages {
 		return c.completeMessages(ctx, req)
+	}
+	if req.Stream {
+		return c.completeStream(ctx, req)
 	}
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -142,6 +193,117 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 	}
 	out.Wall = time.Since(start)
 	return &out, nil
+}
+
+// completeStream sends the same request as a stream and reassembles it, for the one
+// thing a stream measures that a reply cannot: where prefill ends. The reassembled
+// Response is the same shape, so a caller that does not care about the boundary sees
+// no difference — except tool calls, which arrive as fragments and are not reassembled
+// here. A request carrying tools must not be streamed; Run enforces that.
+func (c *Client) completeStream(ctx context.Context, req chatRequest) (*Response, error) {
+	req.StreamOptions = &streamOptions{IncludeUsage: true}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.Endpoint+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	start := time.Now()
+	resp, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("post: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	out := &Response{Streamed: true}
+	out.Choices = make([]struct {
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
+			Content          string     `json:"content"`
+			ReasoningContent string     `json:"reasoning_content"`
+			ToolCalls        []ToolCall `json:"tool_calls"`
+		} `json:"message"`
+	}, 1)
+
+	var content, reasoning strings.Builder
+	sawToken := false
+	sc := bufio.NewScanner(resp.Body)
+	// A single SSE frame carries one chunk, and a long reasoning delta can exceed the
+	// scanner's default 64 KB line.
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			break
+		}
+		var chunk struct {
+			Choices []struct {
+				FinishReason string `json:"finish_reason"`
+				Delta        struct {
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
+				} `json:"delta"`
+			} `json:"choices"`
+			Usage   *json.RawMessage `json:"usage"`
+			Timings *json.RawMessage `json:"timings"`
+			Error   json.RawMessage  `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue // a frame this client does not model is not a failure of the run
+		}
+		if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+			out.Error = chunk.Error
+		}
+		for _, ch := range chunk.Choices {
+			if ch.Delta.Content != "" || ch.Delta.ReasoningContent != "" {
+				if !sawToken {
+					out.TTFT = time.Since(start)
+					sawToken = true
+				}
+				content.WriteString(ch.Delta.Content)
+				reasoning.WriteString(ch.Delta.ReasoningContent)
+			}
+			if ch.FinishReason != "" {
+				out.Choices[0].FinishReason = ch.FinishReason
+			}
+		}
+		// Usage and timings ride the final chunk, and are re-decoded into the same
+		// fields a non-streamed reply fills so nothing downstream has to know which
+		// path produced the row.
+		if chunk.Usage != nil {
+			_ = json.Unmarshal(*chunk.Usage, &out.Usage)
+		}
+		if chunk.Timings != nil {
+			_ = json.Unmarshal(*chunk.Timings, &out.Timings)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("read stream: %w", err)
+	}
+	out.Wall = time.Since(start)
+	out.Choices[0].Message.Content = content.String()
+	out.Choices[0].Message.ReasoningContent = reasoning.String()
+	return out, nil
+}
+
+// DecodeSeconds is the part of the wall clock a speculative decoder can move: what is
+// left after the first token arrives. Zero and false when the run was not streamed, or
+// when no token ever arrived to divide the clock.
+func (r *Response) DecodeSeconds() (seconds float64, available bool) {
+	if !r.Streamed || r.TTFT <= 0 || r.Wall <= r.TTFT {
+		return 0, false
+	}
+	return (r.Wall - r.TTFT).Seconds(), true
 }
 
 // Converse sends one conversation as it stands and reports what the server ingested
