@@ -5,7 +5,7 @@ status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
 created: YYYY-MM-DD
 shipped:             # fill the date when status flips to Shipped
 check:               # optional — date to check whether this worked. Only for bets.
-checked:             # date you checked; write the outcome in ## Log
+checked:             # written by kit check <id> "<outcome>", never by hand
 review:              # optional — `human` means a person merges this one. kit accept --review
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 related:             # other docs worth reading first
@@ -39,7 +39,16 @@ related:             # other docs worth reading first
 <!-- Decisions only: what was chosen, what it beat, what it costs. Not a walkthrough — the
      code will say what the code does, and this is read alongside it. Call out data-model,
      migration, API and config changes explicitly. Written before the work, so it is the
-     part most likely to be wrong by the end; let `## Log` carry what the doing teaches. -->
+     part most likely to be wrong by the end; let `## Log` carry what the doing teaches.
+
+     One claim per sentence, and evidence gets one clause. Rejected, then the rewrite:
+       no   the cache is per-process because a shared one would need invalidation across
+            workers, which this deployment does not have, and it also drops the dependency
+            we have been trying to get rid of since the last migration
+       yes  The cache is per-process. A shared one needs cross-worker invalidation, which
+            this deployment does not have.
+     The third clause was about the work rather than the system, so it is gone rather
+     than split. -->
 
 ## Tasks
 <!-- Each box is one PR-sized outcome you can verify without asking anyone, in the
