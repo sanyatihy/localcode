@@ -7,7 +7,7 @@
 #   ./runtimes/mlx/compare.sh llamacpp http://127.0.0.1:8081
 #   ./runtimes/mlx/compare.sh mlx      http://127.0.0.1:8082
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 2
 LABEL="${1:?usage: compare.sh <label> <endpoint>}"
 EP="${2:?usage: compare.sh <label> <endpoint>}"
 RES="${RES:-results/0006-runtime.jsonl}"

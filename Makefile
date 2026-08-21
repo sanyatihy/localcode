@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint test smoke verify serve eval report
+.PHONY: help build check fmt vet lint shell test smoke verify serve eval report
 
 ## help: list these targets
 help:
@@ -25,9 +25,11 @@ help:
 build:
 	@go build ./...
 
-## check: the offline gate — gofmt, vet, lint, tests under the race detector
-# What CI runs, so it must need no server and no model weights.
-check: fmt vet lint test
+## check: the offline gate — gofmt, vet, lint, shellcheck, tests under the race detector
+# What CI runs, so it must need no server and no model weights. Go is half this repo by
+# line count; `shell` covers most of the rest, because a bug there does not crash, it
+# produces a wrong measurement.
+check: fmt vet lint shell test
 
 fmt:
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
@@ -43,6 +45,18 @@ lint:
 		golangci-lint run ./...; \
 	else \
 		echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"; \
+	fi
+
+## shell: shellcheck every tracked script, pinned by .shellcheckrc
+# Same `if` as lint, and for the same reason: written as `cmd && run || echo` a real finding
+# also takes the `||` branch and reports itself as a skip. bash -n is the floor when the
+# binary is absent, so a missing shellcheck still cannot let a syntax error through.
+shell:
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck -S style $$(git ls-files '*.sh'); \
+	else \
+		echo "shell: shellcheck not installed, falling back to bash -n (CI will still run it)"; \
+		for f in $$(git ls-files '*.sh'); do bash -n "$$f" || exit 1; done; \
 	fi
 
 test:

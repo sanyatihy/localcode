@@ -66,7 +66,7 @@ code — not the sweep behind them, which needs a server.
 
 ## Tasks
 
-- [ ] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
+- [x] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
 - [ ] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
 - [ ] `make check` fails on a broken relative link or anchor in any tracked markdown file
 - [ ] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
@@ -76,9 +76,18 @@ code — not the sweep behind them, which needs a server.
 
 ## Open questions
 
-- **Should `make check` require `shellcheck`, or keep `lint`'s skip-loudly shape?** Requiring
-  it makes the gate honest on any machine and adds a Homebrew dependency to a repo that has
-  none. Leaning: skip loudly, matching `lint`, since CI is where the gate has to be absolute
-  and CI can install it.
+None.
 
 ## Log
+
+- 2026-08-21 — the open question is settled as it leaned: `make check` skips `shellcheck`
+  loudly, matching `lint`, and CI installs it so the gate is absolute where it has to be. One
+  thing the leaning did not have — the skip is not total, since `bash -n` runs in its place
+  and still catches a syntax error.
+- 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
+  gate added red is not added. What is left of box 2 is the shell-options consistency, which
+  `shellcheck` does not flag.
+- 2026-08-21 — the gate runs at `-S style`, not the `warning` the design assumed. After the
+  three findings were fixed the repo is clean at every severity, so there was no reason to
+  configure the stricter tiers away. `.shellcheckrc` disables one rule: SC1090, sourcing a
+  config path chosen at runtime, which is the design of every script here.
