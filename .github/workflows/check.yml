@@ -25,6 +25,9 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # The gate is minutes; the runner's own limit is six hours. A hung test — one waiting on
+    # a server CI does not have — should fail while somebody is still looking at the push.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -38,5 +41,9 @@ jobs:
           # Pinned to match .golangci.yml and the version used locally. "latest"
           # would let a newly-added lint fail a push that was green when written.
           version: v2.12.2
+
+      # CI is where the gate is absolute: `make check` skips shellcheck loudly when it is
+      # absent, and here it never is.
+      - run: sudo apt-get install -y --no-install-recommends shellcheck
 
       - run: make check

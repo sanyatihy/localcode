@@ -275,7 +275,8 @@ func versus(a, base *agg) string {
 	if a.total != base.total {
 		quality = fmt.Sprintf("pass %+.0f pp", 100*(rate(a.pass, a.total)-rate(base.pass, base.total)))
 	}
-	parts := []string{quality}
+	parts := make([]string, 0, 6)
+	parts = append(parts, quality)
 	for _, m := range []struct {
 		name    string
 		got     []int

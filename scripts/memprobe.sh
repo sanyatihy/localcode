@@ -30,7 +30,7 @@ set -euo pipefail
 # results file is a wrong number, and wired memory is about to be read off the same counter
 # to decide which configs are admissible.
 PAGE=$(pagesize)
-read -r free compressed wired anon <<<"$(vm_stat | awk -v p=$PAGE '
+read -r free compressed wired anon <<<"$(vm_stat | awk -v p="$PAGE" '
   /Pages free/                   {f=$3}
   /Pages occupied by compressor/ {c=$5}
   /Pages wired down/             {w=$4}

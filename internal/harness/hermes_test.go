@@ -71,7 +71,7 @@ func TestHermesBuildsAColdHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(entries) != 1 || entries[0].Name() != "config.yaml" {
-		var names []string
+		names := make([]string, 0, len(entries))
 		for _, e := range entries {
 			names = append(names, e.Name())
 		}
@@ -105,8 +105,15 @@ func TestTheCommittedHermesConfigServesTheLocalEndpoint(t *testing.T) {
 	}
 	// A config below the floor would be refused before a request is made, and the error
 	// would name the context rather than the config that chose it.
+	//
+	// Located before slicing: the loop above reports a missing key with Errorf and carries
+	// on, so an absent marker would slice at -1 and panic where it should fail.
+	at := strings.Index(body, "context_length:")
+	if at < 0 {
+		t.Fatal("committed config names no context_length, so the floor cannot be checked")
+	}
 	var ctx int
-	if _, err := fmt.Sscanf(body[strings.Index(body, "context_length:"):], "context_length: %d", &ctx); err != nil {
+	if _, err := fmt.Sscanf(body[at:], "context_length: %d", &ctx); err != nil {
 		t.Fatalf("context_length unreadable: %v", err)
 	}
 	if ctx < HermesContextFloor {

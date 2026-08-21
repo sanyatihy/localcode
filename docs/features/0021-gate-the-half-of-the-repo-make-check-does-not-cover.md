@@ -1,9 +1,9 @@
 ---
 id: 0021
 title: Gate the half of the repo make check does not cover
-status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
+status: Shipped
 created: 2026-08-21
-shipped:             # fill the date when status flips to Shipped
+shipped: 2026-08-21
 check:               # optional — date to check whether this worked. Only for bets.
 checked:             # written by kit check <id> "<outcome>", never by hand
 review:              # optional — `human` means a person merges this one. kit accept --review
@@ -34,7 +34,7 @@ because a fixed-sampling toggle sweep voided 114 rows.
 - **Not stricter Go linting.** Measured: enabling `revive`, `gocritic`, `prealloc` and nine
   others yields 33 findings, 29 of which are revive demanding doc comments on exported types.
   Adding them would contradict this repo's own comment rule and spend the local tier's context
-  on what the code already says. The three real ones are fixed by hand instead.
+  on what the code already says. The four that are not revive are fixed by hand instead.
 - **Not raising coverage as a number.** The target is the exit-code contract and the refusals,
   which are what other programs depend on. A percentage is not a goal.
 - **No new dependency in the Go build.** `go.mod` has no third-party requires and no `go.sum`;
@@ -66,19 +66,48 @@ code — not the sweep behind them, which needs a server.
 
 ## Tasks
 
-- [ ] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
-- [ ] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
-- [ ] `make check` fails on a broken relative link or anchor in any tracked markdown file
-- [ ] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
-- [ ] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
-- [ ] The three real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
-- [ ] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
+- [x] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
+- [x] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
+- [x] `make check` fails on a broken relative link or anchor in any tracked markdown file
+- [x] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
+- [x] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
+- [x] The real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
+- [x] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
 
 ## Open questions
 
-- **Should `make check` require `shellcheck`, or keep `lint`'s skip-loudly shape?** Requiring
-  it makes the gate honest on any machine and adds a Homebrew dependency to a repo that has
-  none. Leaning: skip loudly, matching `lint`, since CI is where the gate has to be absolute
-  and CI can install it.
+None.
 
 ## Log
+
+- 2026-08-21 — the open question is settled as it leaned: `make check` skips `shellcheck`
+  loudly, matching `lint`, and CI installs it so the gate is absolute where it has to be. One
+  thing the leaning did not have — the skip is not total, since `bash -n` runs in its place
+  and still catches a syntax error.
+- 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
+  gate added red is not added. What is left of box 2 is the shell-options consistency, which
+  `shellcheck` does not flag.
+- 2026-08-21 — the trial found **four** non-revive findings, not the three the design said.
+  One is real: `hermes_test.go` located `context_length:` with `strings.Index` and sliced on
+  the result, while the loop above reports a missing key with `Errorf` and carries on — so an
+  absent marker panicked where it should have failed. Verified by removing the marker and
+  watching it fail cleanly. The other three are preallocation, cosmetic and taken anyway so
+  the trial's result is reproducible at zero.
+- 2026-08-21 — `cmd/prefixlog`'s tests take their server-log fixture from
+  `internal/prefix`'s own rather than inventing one. A hand-written log passed the parser's
+  shape check and produced no rows, which would have made the test assert that the command
+  refuses everything.
+- 2026-08-21 — the refusal tests assert the *wording* as well as the exit, because a refusal
+  a reader cannot act on is one they will force. An unknown desk profile has to name the ones
+  the machine declares, and the sampling guard has to say "sampling".
+- 2026-08-21 — the link check also catches an anchor on a non-markdown target, which the
+  design did not ask for and which is the same defect: a heading cannot exist in a file that
+  has no headings.
+- 2026-08-21 — the file mode turned out to be the rule box 2 needed. Every executable script
+  must `set -euo pipefail`; `scripts/lib.sh` is the one non-executable, is sourced, and must
+  set nothing, since options set there leak into the caller. `make check` holds both halves,
+  so this is enforced rather than written down.
+- 2026-08-21 — the gate runs at `-S style`, not the `warning` the design assumed. After the
+  three findings were fixed the repo is clean at every severity, so there was no reason to
+  configure the stricter tiers away. `.shellcheckrc` disables one rule: SC1090, sourcing a
+  config path chosen at runtime, which is the design of every script here.
