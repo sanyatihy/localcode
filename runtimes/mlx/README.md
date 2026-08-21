@@ -5,9 +5,9 @@ Apple's MLX serving the same model, so `cmd/eval` can score it with nothing chan
 nobody can re-run is not evidence.
 
 ```sh
-./mlx/setup.sh                      # one venv, from the committed pins
-./mlx/serve.sh                      # mlx_lm on 127.0.0.1:8082, so both can be configured at once
-./mlx/compare.sh mlx http://127.0.0.1:8082
+./runtimes/mlx/setup.sh                      # one venv, from the committed pins
+./runtimes/mlx/serve.sh                      # mlx_lm on 127.0.0.1:8082, so both can be configured at once
+./runtimes/mlx/compare.sh mlx http://127.0.0.1:8082
 ```
 
 Both runtimes can be **configured** at once and must never be **loaded** at once: on 32 GB
@@ -37,4 +37,4 @@ scored comparison ran on and what one agent conversation needs. Reuse breadth an
 headroom trade directly against each other on 32 GB.
 
 The full table, and what would reverse the decision:
-[llama.cpp against MLX](../docs/TECH.md#llamacpp-against-mlx).
+[llama.cpp against MLX](../../docs/TECH.md#llamacpp-against-mlx).

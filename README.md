@@ -64,12 +64,11 @@ pager, not the model.
 ```
 cmd/        the six commands, each with its exit codes documented in its package comment
 internal/   the packages behind them: eval (scoring), harness (adapters), prefix, handoff
-config/     one .env per serving config — the single source of truth for every measurement
+config/     one .env per serving config, plus machine.json — every limit this laptop imposes
 scripts/    the shell around a measurement: serve, ladder, screen, pair, probe
 tasks/      the fixtures the model is scored on; tasks/depth/ is the deep floor check
 harness/    how each coding agent is pointed at the local endpoint
-mlx/        the MLX runtime that lost to llama.cpp, kept reproducible
-mtplx/      the MTP runtime that ran out of memory here, kept for the same reason
+runtimes/   the runtimes that lost to llama.cpp, kept because a comparison must be re-runnable
 docs/       vision, as-built facts, feature history, and the raw data
 results/    live scratch, gitignored; snapshots land in docs/data/ when a feature ships
 ```
