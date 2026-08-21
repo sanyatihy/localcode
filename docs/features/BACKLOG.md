@@ -44,3 +44,11 @@ trigger nobody watches is not an idea, it is a hedge.
   category of rule as doing the topmost one. Promote when: a second project wants it, or the box
   parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
   shell hooks at all, or only the rule.
+- **Bounding what a tool result may put in the context** — one real session reached its
+  limit with 74.6% of the window spent on tool results and 23.6% on the calls themselves,
+  against 1.7% of the model's own text and two user messages. Nothing caps a command's
+  output, so `seq 1 100000` costs a session. 0023 makes a full context survivable rather
+  than fatal, and does not slow down how fast one fills. Promote when: a session hands over
+  more than once on work that should have fitted, or when the cap is cheap enough to try —
+  head-limiting Bash output is a hook, not a feature.
+

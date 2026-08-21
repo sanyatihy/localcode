@@ -87,11 +87,11 @@ feature gets one.
 
 ### Where two agents can still collide
 
-**Run `kit audit` after every merge that brings in docs from another branch.** `kit new`
-reads the next free id from disk and never asks the network, so two agents drafting at once
-can both write `0009`. The files differ, so they merge cleanly and `audit` reports
-`duplicate-id` at HIGH. Fix it before claiming either: give one doc a free id, rename its
-file, and rename its branch.
+**Run `kit audit` after a merge that brings in docs drafted with no remote.** `kit new`
+reserves an id by pushing `refs/kit/ids/<id>`, so two agents drafting off one remote are
+never handed the same number; with no remote there is nothing to reserve against and both
+can write `0009`. They merge cleanly, so `audit` reports `duplicate-id` at HIGH. Fix it
+before claiming either: give one doc a free id, rename its file, and rename its branch.
 
 ### How to write
 
