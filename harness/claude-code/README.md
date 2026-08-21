@@ -8,6 +8,17 @@ in it comes from Claude Code's own documentation read against 2.1.233.
     set -a; . harness/claude-code/claude-code.env; set +a
     claude -p "…" --tools Bash,Edit,Read,Write
 
+## Which of the two flows you want
+
+**Working in another repository: use `localcode`** (0022), which is this configuration
+installed. It starts the server, sandboxes the agent, keeps its state out of the repository
+being visited, and carries the handoff — see [the README](../../README.md#coding-against-the-local-model).
+
+**Working on localcode itself: source the file above, or `claude --settings
+harness/claude-code/hooks.json`.** That is the flow the rest of this page describes, and the
+one 0008 measured. `HANDOFF.md` stays at the checkout root here; `LOCALCODE_HANDOFF_DIR` is
+what moves it, and only `localcode` sets it.
+
 ## It needs the server configured for it
 
 Serve **[`config/agent.env`](../../config/agent.env), not `config/tuned.env`**. Two things it
