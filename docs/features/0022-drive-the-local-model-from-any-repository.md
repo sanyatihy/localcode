@@ -109,7 +109,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
       directory, temp and the cache roots, with reads unrestricted
 - [x] a write denied outside that set names the path and the line that would allow it, and
       `~/.config/localcode/writable` widens it
-- [ ] the network is loopback-only by default and `--net` opens it for one session, both
+- [x] the network is loopback-only by default and `--net` opens it for one session, both
       asserted against a real endpoint
 - [ ] the README's manual is the installed command, and `harness/claude-code/README.md`
       says which of the two flows a reader wants

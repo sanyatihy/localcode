@@ -286,7 +286,7 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 
 func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd)
+	path, err := writeSandboxProfile(state, cwd, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 		t.Skip("no seatbelt on this platform")
 	}
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd)
+	profile, err := writeSandboxProfile(state, cwd, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,5 +383,61 @@ func TestExtraWritableReadsTheConfigAndExpandsHome(t *testing.T) {
 	want := []string{filepath.Join(home, ".cargo"), "/opt/homebrew/var"}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("got %v, want %v (comments and blanks dropped, ~ expanded)", got, want)
+	}
+}
+
+// The endpoint has to stay reachable or nothing works, and everything else has to be
+// unreachable or the sandbox is not a boundary for the repository's source. Both halves
+// are asserted against a real listener rather than by reading the profile.
+func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip("no seatbelt on this platform")
+	}
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("no curl to probe with")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("reached"))
+	}))
+	defer srv.Close()
+
+	state, cwd := t.TempDir(), t.TempDir()
+	profile, err := writeSandboxProfile(state, cwd, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := func(url string) string {
+		out, _ := exec.Command("/usr/bin/sandbox-exec", "-f", profile,
+			"/usr/bin/curl", "-s", "-m", "5", url).CombinedOutput()
+		return string(out)
+	}
+
+	// httptest listens on loopback, which is where the model is too.
+	if got := probe(srv.URL); !strings.Contains(got, "reached") {
+		t.Fatalf("loopback must stay reachable, got %q", got)
+	}
+	// 192.0.2.0/24 is TEST-NET-1: reserved, routable-looking, and never a real host, so a
+	// refusal here is the sandbox rather than someone's firewall.
+	if got := probe("http://192.0.2.1/"); strings.Contains(got, "reached") {
+		t.Fatalf("outbound must be refused, got %q", got)
+	}
+}
+
+func TestNetOpensOutboundForTheSession(t *testing.T) {
+	state, cwd := t.TempDir(), t.TempDir()
+	path, err := writeSandboxProfile(state, cwd, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "(deny network*)") {
+		t.Fatalf("-net must lift the network denial:\n%s", body)
+	}
+	// Writes stay confined either way: -net is about reachability, not about the filesystem.
+	if !strings.Contains(string(body), "(deny file-write*)") {
+		t.Fatalf("-net must not widen writes:\n%s", body)
 	}
 }
