@@ -11,10 +11,11 @@ Do this only when you are asked to plan.
 1. **Read `docs/VISION.md` first.** A feature that cannot be traced to it is the wrong
    feature. Split by `## What done looks like`: each observable outcome is at least one
    feature.
-2. **A feature records one decision.** That is the test. If the whole story fits in a
-   commit message, it is a `BACKLOG.md` line and a commit instead. Size is the sanity
-   check on top: too big is one nobody can review in a sitting, too small changes nothing
-   observable and is a task box.
+2. **A feature is one shipped increase in what the project can do, or can be trusted to
+   do.** Name it in one sentence an operator would recognise: "the board no longer hands one
+   feature to two agents", not "refactor `Mine`". No such sentence means it is a task box in
+   another feature, or a chore commit. A sentence that needs an "and" is two features. A
+   change nobody could review in one sitting is too big — split it by value, not by layer.
 3. **Draft the whole set in one session, not the first one only.** Write every doc with
    `kit new "<title>"`. Never copy the template by hand.
 4. **Fill `needs:` on every draft.** List the feature ids that must ship before this one
@@ -25,8 +26,8 @@ Do this only when you are asked to plan.
    containing an id is a claim on that feature.
 6. **Leave every doc `status: Draft`.** `kit ship` and `kit drop` are the only things that
    change a status. Never edit `status:` or `shipped:` by hand.
-7. **Put what you cannot decide in `## Open questions`.** If only a human can answer it,
-   run `kit block <id> "<question, with your leaning>"` instead. Never guess.
+7. **Never invent a product decision on the human's behalf.** What you cannot settle goes in
+   `## Open questions`; what only a human can answer goes to `kit block <id> "<question>"`.
 8. **The round must reach the default branch before anything on it can be claimed.**
    `kit claim` refuses otherwise.
 
