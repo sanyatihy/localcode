@@ -135,7 +135,15 @@ func run(o opts) (int, error) {
 	}
 	env = append(env, "LOCALCODE_HANDOFF_DIR="+state)
 
-	argv := []string{"--tools", agentTools, "--allowedTools", agentTools, "--settings", settings}
+	argv := []string{
+		"--tools", agentTools, "--allowedTools", agentTools,
+		"--settings", settings,
+		// The model is the only thing that sees a denied write: claude gives a tool's
+		// stderr to it rather than passing it through. So the fix has to be knowledge the
+		// session already has, not something printed afterwards by a process that never
+		// learns the write was refused.
+		"--append-system-prompt", sandboxBriefing(cwd),
+	}
 	// The instruction goes last and only when there is one: with no prompt this is an
 	// interactive session, which is the common case for a developer in their own repo.
 	if len(o.args) > 0 {
@@ -164,7 +172,9 @@ func run(o opts) (int, error) {
 	cmd := exec.Command(sandboxExec, sandboxArgv...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
+
+	err = cmd.Run()
+	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			return exit.ExitCode(), nil
@@ -403,6 +413,9 @@ func writeSandboxProfile(state, cwd string) (string, error) {
 		filepath.Join(home, ".cache"),            // where XDG ones do
 		filepath.Join(home, ".claude"),           // the agent's own history and project state
 	}
+	// Whatever this developer's ecosystems need, named once by them rather than guessed
+	// once by us.
+	writable = append(writable, extraWritable()...)
 
 	var b strings.Builder
 	b.WriteString("(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n")
@@ -430,4 +443,55 @@ func writeSandboxProfile(state, cwd string) (string, error) {
 func sbplString(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	return `"` + r.Replace(s) + `"`
+}
+
+// writableConfigPath is the one place a developer widens the policy. It is a list of
+// paths rather than a language: the tool learns no ecosystem, and the repository that
+// needs ~/.cargo says so once.
+func writableConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "writable"), nil
+}
+
+func extraWritable() []string {
+	path, err := writableConfigPath()
+	if err != nil {
+		return nil
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil // absent is the normal case
+	}
+	var out []string
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				line = filepath.Join(home, line[2:])
+			}
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+// sandboxBriefing tells the session what it is inside, so a refusal comes back as an
+// explanation with a fix rather than as a puzzle. Kept to a few lines: it is paid for on
+// every request in a context this small.
+func sandboxBriefing(cwd string) string {
+	cfg, err := writableConfigPath()
+	if err != nil {
+		cfg = "~/.config/localcode/writable"
+	}
+	return "You are running in a sandbox that confines writes to " + cwd +
+		", temp directories and cache roots. Reading anywhere is allowed. " +
+		"If a command fails with `operation not permitted` on a path outside those, " +
+		"do not work around it: report the path, and tell the user it is allowed by " +
+		"adding that path to " + cfg + "."
 }

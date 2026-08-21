@@ -107,7 +107,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
       `HANDOFF.md` still at the checkout root when working on localcode itself
 - [x] the agent runs under a seatbelt profile that confines writes to the working
       directory, temp and the cache roots, with reads unrestricted
-- [ ] a write denied outside that set names the path and the line that would allow it, and
+- [x] a write denied outside that set names the path and the line that would allow it, and
       `~/.config/localcode/writable` widens it
 - [ ] the network is loopback-only by default and `--net` opens it for one session, both
       asserted against a real endpoint
@@ -132,3 +132,8 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
 - **The hook's prose was part of the mechanism.** Relocating the state was not enough: the
   SessionStart text told the model to create the handoff "at the root of the checkout", so
   it did, in the repository being visited. The instruction now names the path it wants.
+- **The refusal is explained by the session, not by the launcher.** A watcher on the child's
+  stderr was written first and never fired: claude gives a tool's stderr to the model rather
+  than passing it through, so the process that could print a hint is the one process that
+  never learns the write was refused. The sandbox is described in the system prompt instead,
+  and the model reports the path and the line that allows it.
