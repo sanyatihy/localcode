@@ -34,7 +34,7 @@ because a fixed-sampling toggle sweep voided 114 rows.
 - **Not stricter Go linting.** Measured: enabling `revive`, `gocritic`, `prealloc` and nine
   others yields 33 findings, 29 of which are revive demanding doc comments on exported types.
   Adding them would contradict this repo's own comment rule and spend the local tier's context
-  on what the code already says. The three real ones are fixed by hand instead.
+  on what the code already says. The four that are not revive are fixed by hand instead.
 - **Not raising coverage as a number.** The target is the exit-code contract and the refusals,
   which are what other programs depend on. A percentage is not a goal.
 - **No new dependency in the Go build.** `go.mod` has no third-party requires and no `go.sum`;
@@ -71,7 +71,7 @@ code — not the sweep behind them, which needs a server.
 - [x] `make check` fails on a broken relative link or anchor in any tracked markdown file
 - [x] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
 - [x] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
-- [ ] The three real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
+- [x] The real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
 - [ ] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
 
 ## Open questions
@@ -87,6 +87,12 @@ None.
 - 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
   gate added red is not added. What is left of box 2 is the shell-options consistency, which
   `shellcheck` does not flag.
+- 2026-08-21 — the trial found **four** non-revive findings, not the three the design said.
+  One is real: `hermes_test.go` located `context_length:` with `strings.Index` and sliced on
+  the result, while the loop above reports a missing key with `Errorf` and carries on — so an
+  absent marker panicked where it should have failed. Verified by removing the marker and
+  watching it fail cleanly. The other three are preallocation, cosmetic and taken anyway so
+  the trial's result is reproducible at zero.
 - 2026-08-21 — `cmd/prefixlog`'s tests take their server-log fixture from
   `internal/prefix`'s own rather than inventing one. A hand-written log passed the parser's
   shape check and produced no rows, which would have made the test assert that the command
