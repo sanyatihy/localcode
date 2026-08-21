@@ -25,6 +25,11 @@ actually works in, and none of them is this one.
   they were measured; this changes where they can be invoked from, not what they cost.
 - **Not a second home for the serving config.** `config/*.env` stays the record of how a
   server was launched, and the launcher reads one rather than carrying flags.
+- **The sandbox is not a defence against a hostile model.** It is a blast radius for a
+  mistaken one. Seatbelt is what macOS offers without a VM, and a determined escape is out
+  of scope; `docs/VISION.md` has one developer on one machine, not an adversary.
+- **No per-language knowledge.** The profile names no toolchain. An ecosystem that needs a
+  path outside the default set is a line in the user's config, never a case in the tool.
 
 ## Design
 
@@ -61,6 +66,34 @@ baked in, which is the same reason the path is stamped at build time.
 same four tools `--tools` exposes, so no permission is recorded there either. That property
 is the point of the feature and is asserted in a test rather than described here.
 
+**The agent runs under a seatbelt sandbox, and that is what makes broad tool access safe.**
+`--allowedTools Bash` is unrestricted shell, and a pattern allowlist cannot be both complete
+and generic — every ecosystem builds differently, and a denylist of dangerous strings is not
+a boundary, since `sh -c` defeats string matching. `sandbox-exec` is a kernel boundary and
+needs to know nothing about the language. It wraps `claude` itself, so every child process
+inherits it.
+
+**Writes are confined; reads are not.** The writable set is the working directory, the
+resolved `TMPDIR`, `/private/tmp`, and the two standard cache roots — `~/Library/Caches` and
+`~/.cache`. Reading stays unrestricted, because an agent that cannot read a toolchain cannot
+use one. Measured under that profile: Go, Python, Node, `make` and `git` all complete, and
+`rm -rf` outside it is refused by the kernel.
+
+**Paths are resolved before they reach the profile.** `/var`, `/tmp` and `/etc` are symlinks
+into `/private`, and seatbelt matches the resolved path — an unresolved `TMPDIR` denies every
+compiler that uses one while appearing to allow it.
+
+**A denied write fails loudly and is widened in one line.** The kernel names the path;
+`~/.config/localcode/writable` is a list of extra subpaths, and the launcher prints the line
+to add. That is what keeps the tool generic: it learns no ecosystem, and the developer
+records the one their repository needs.
+
+**The network is loopback-only by default.** The agent reaches the server on 127.0.0.1 and
+nothing else, so a repository's source cannot leave the machine and `curl | sh` fetches
+nothing. This is `docs/VISION.md`'s offline property enforced rather than configured.
+`--net` allows outbound for one session and says so at startup; dependency installs and
+`git push` are what it is for.
+
 ## Tasks
 
 - [ ] `cmd/localcode` runs the agent in the working directory against a server that is
@@ -72,6 +105,12 @@ is the point of the feature and is asserted in a test rather than described here
 - [ ] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
 - [ ] handoff works in any repository, with state under `~/.local/state/localcode/` and
       `HANDOFF.md` still at the checkout root when working on localcode itself
+- [ ] the agent runs under a seatbelt profile that confines writes to the working
+      directory, temp and the cache roots, with reads unrestricted
+- [ ] a write denied outside that set names the path and the line that would allow it, and
+      `~/.config/localcode/writable` widens it
+- [ ] the network is loopback-only by default and `--net` opens it for one session, both
+      asserted against a real endpoint
 - [ ] the README's manual is the installed command, and `harness/claude-code/README.md`
       says which of the two flows a reader wants
 
@@ -82,3 +121,11 @@ is the point of the feature and is asserted in a test rather than described here
   can run and does not settle who owns them.
 
 ## Log
+
+- **The tool scope grew a sandbox before any code was written.** The design had
+  `--allowedTools Bash,Edit,Read,Write` and called the permission question settled, which is
+  unrestricted shell on the developer's own machine. Three boxes were added rather than
+  changing the four that existed, since the launcher is the same launcher either way.
+- **A pattern allowlist and a denylist were both rejected before seatbelt was tried.** An
+  allowlist of commands cannot be generic across ecosystems, and a denylist of dangerous
+  strings is defeated by `sh -c`. Neither is a boundary; the kernel is.
