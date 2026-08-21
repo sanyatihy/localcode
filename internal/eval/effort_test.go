@@ -45,7 +45,7 @@ func TestReasoningEffortReachesTheWire(t *testing.T) {
 		var got map[string]any
 		srv := captureRequest(t, &got)
 		c := NewClient(srv.URL, 0)
-		if _, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, tc.effort, nil); err != nil {
+		if _, err := c.Run(context.Background(), toolTask(), Sampling{}, nil, tc.effort, qwenProfile(t)); err != nil {
 			t.Fatalf("effort %q: %v", tc.effort, err)
 		}
 		v, present := got["reasoning_effort"]
@@ -65,7 +65,7 @@ func TestEffortAndThinkingAreIndependent(t *testing.T) {
 	srv := captureRequest(t, &got)
 	c := NewClient(srv.URL, 0)
 	on := true
-	if _, err := c.Run(context.Background(), toolTask(), Sampling{}, &on, "low", nil); err != nil {
+	if _, err := c.Run(context.Background(), toolTask(), Sampling{}, &on, "low", qwenProfile(t)); err != nil {
 		t.Fatal(err)
 	}
 	if got["reasoning_effort"] != "low" {
@@ -121,7 +121,7 @@ func TestOverBudgetIsScoredAndDoesNotAbort(t *testing.T) {
 
 	task := toolTask()
 	task.TimeoutSeconds = 1
-	res, err := NewClient(srv.URL, 0).Run(context.Background(), task, Sampling{}, nil, "", nil)
+	res, err := NewClient(srv.URL, 0).Run(context.Background(), task, Sampling{}, nil, "", qwenProfile(t))
 	if err != nil {
 		t.Fatalf("the budget aborted the suite instead of scoring the task: %v", err)
 	}

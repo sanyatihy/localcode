@@ -130,7 +130,7 @@ func TestRunWillNotStreamATaskCarryingTools(t *testing.T) {
 	withTools := &Task{ID: "t", Kind: "toolcall", MaxTokens: 8,
 		Messages: []Message{{Role: "user", Content: "hi"}},
 		Tools:    []Tool{{Type: "function", Function: ToolFunction{Name: "f"}}}}
-	if _, err := c.Run(context.Background(), withTools, Sampling{}, nil, "", nil); err != nil {
+	if _, err := c.Run(context.Background(), withTools, Sampling{}, nil, "", qwenProfile(t)); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if len(streamed) != 1 || streamed[0] {
