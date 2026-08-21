@@ -68,7 +68,7 @@ code — not the sweep behind them, which needs a server.
 
 - [x] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
 - [x] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
-- [ ] `make check` fails on a broken relative link or anchor in any tracked markdown file
+- [x] `make check` fails on a broken relative link or anchor in any tracked markdown file
 - [ ] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
 - [ ] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
 - [ ] The three real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
@@ -87,6 +87,9 @@ None.
 - 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
   gate added red is not added. What is left of box 2 is the shell-options consistency, which
   `shellcheck` does not flag.
+- 2026-08-21 — the link check also catches an anchor on a non-markdown target, which the
+  design did not ask for and which is the same defect: a heading cannot exist in a file that
+  has no headings.
 - 2026-08-21 — the file mode turned out to be the rule box 2 needed. Every executable script
   must `set -euo pipefail`; `scripts/lib.sh` is the one non-executable, is sourced, and must
   set nothing, since options set there leak into the caller. `make check` holds both halves,

@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint shell test smoke verify serve eval report
+.PHONY: help build check fmt vet lint shell docs test smoke verify serve eval report
 
 ## help: list these targets
 help:
@@ -25,11 +25,11 @@ help:
 build:
 	@go build ./...
 
-## check: the offline gate — gofmt, vet, lint, shellcheck, tests under the race detector
+## check: the offline gate — gofmt, vet, lint, shellcheck, doc links, race tests
 # What CI runs, so it must need no server and no model weights. Go is half this repo by
-# line count; `shell` covers most of the rest, because a bug there does not crash, it
-# produces a wrong measurement.
-check: fmt vet lint shell test
+# line count; `shell` and `docs` cover most of the rest, because a bug in either does not
+# crash — it produces a wrong measurement, or points a reader at a file that moved.
+check: fmt vet lint shell docs test
 
 fmt:
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
@@ -68,6 +68,11 @@ shell:
 			echo "$$f: sourced, so its shell options would leak into the caller"; fail=1; \
 		fi; \
 	done; exit $$fail
+
+## docs: every relative link and heading anchor in tracked markdown resolves
+# Offline by construction — external URLs are not fetched. See scripts/doclinks.py.
+docs:
+	@python3 scripts/doclinks.py
 
 test:
 	@go test -race ./...
