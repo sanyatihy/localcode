@@ -118,134 +118,70 @@ swap grew is void per the vision, and 0015's preflight applies unchanged.
 
 ## Log
 
-- 2026-08-20 — **the verdict splits four ways, and one of them is undecided.** Adopt for the
-  grind profile at 32,768. Record and do not adopt for long prompts, where the curve reaches
-  1.26x. Refused at 49,152, where the allocator will not carry it. Attended is undecided:
-  every screen here ran unattended, and that half of the rule needs 0014's desktop verdict
-  against a config peaking 0.19 GB under where that desktop died. The rejections are recorded
-  with their numbers beside the winner, since a rule that only records winners is not a rule.
-- 2026-08-20 — the correction box was itself half wrong, and is corrected rather than applied.
-  "Multi-token prediction is not reachable here" was true of `mlx_lm` and false of the project:
-  the head ships inside the GGUF this repo already serves. The draft also had the two runtimes
-  the wrong way round. It expected a net loss on llama.cpp and the better mechanism on MLX.
-  llama.cpp is where it runs, and the MLX runtime that implements it cannot hold a context
-  on 32 GB.
-
-- 2026-08-20 — **the curve is the finding, and it crosses the rule's own bands.** 1.57x on the
-  ranking suite's short prompts, 1.40x at 8k, 1.34x at 16k, **1.26x at 32k** — adopt, then
-  record-and-do-not-adopt, without the mechanism changing. Acceptance holds at 3.94-3.97 at
-  every depth, so what decays is not the drafting but the cost of a verification step: both
-  sides slow with depth, 0.105 to 0.170 s/token on the baseline, and speculation cannot make
-  attention over a longer cache cheaper. This is why the box asked for a curve. A point at
-  either end would have been a different verdict, and the point everyone quotes is the
-  shallow one.
-- 2026-08-20 — the depth fixtures could not carry the measurement and three were added.
-  `retrieval-*.json` answers in 12 tokens, which is too few to divide into a per-token figure;
-  `decode-*.json` asks for the key and then 120 numbers, and returns 384. The first validation
-  run also showed why wall is the wrong clock: 279 seconds, of which 247 were prefill.
-
-- 2026-08-20 — **candidate C measures 1.57x on decode at 32k, and it is lossless by
-  measurement rather than by argument**: 0.1050 against 0.0669 s/token over 12 accepted pairs,
-  acceptance length 3.94, and the greedy probes hash identically on both sides. That clears
-  the 1.5x bar the rule set before any run, for the unattended profile.
-  Three things the number does not say, all on the row. Quality is 23/27 against the
-  baseline's 25/27, failing the same two tasks 0013 built to discriminate — at 0.7 that is
-  sampling, and the identical greedy hash is what rules out a distribution change. Three
-  candidate runs and two baseline runs swapped and are void. And **one run in 27 returned no
-  token at all in 240 seconds** before hitting its budget. That is a hang rather than a slow
-  decode. One occurrence cannot characterise it, and the ratio never saw it: a run with no
-  tokens has no decode figure.
-- 2026-08-20 — the reporter was scoring the fidelity probe as a task, which handed every
-  config that ran one a free pass and moved the denominator. Instrument rows are skipped now.
-
-- 2026-08-20 — box 4 no longer names candidate A: it is inadmissible here, and the box's
-  subject is whichever candidate cleared the screen, which is C. Rewritten rather than
-  quietly pointed at a different config, since the box is what a later session reads.
-
-- 2026-08-20 — **both voids are in, and the fidelity one is what earns the word lossless.**
-  Throttling is read from `pmset -g therm`, which needs no privileges — a gate that wants a
-  password is a gate that gets skipped — and is cumulative like swap, so it is sampled either
-  side of a run and the worse reading decides. Fidelity is checked directly rather than
-  argued: fixed prompts at temperature zero, hashed on each side, and a mismatch takes the
-  ratio away instead of appearing beside it. Two thresholds beyond the box: a sample past four
-  times its own side's median is a stall rather than a slow decode, and a side with fewer than
-  three accepted samples reports no ratio at all.
-
-- 2026-08-20 — **decode is isolated by streaming, because the client is the only side that
-  can see where prefill ended.** The rule against trusting a server's own rate and the demand
-  for a decode-isolated one leave no other instrument: a non-streamed reply reports one clock
-  covering both halves. So `-stream` measures the gap to the first token, `-session` marks the
-  rows that may be divided, and the reporter takes the ratio of seconds per token. Tasks
-  carrying tools stay unstreamed and say so on the row — streamed tool calls arrive as
-  fragments, and a speed number is not worth a scoring bug. Acceptance length is derived from
-  the server's draft counters and recorded as unavailable when it drafted nothing, which is
-  not an acceptance of zero.
-
-- 2026-08-20 — **candidate C is admissible at the grind profile and not at the editor one,
-  which is the first split this feature has produced.** At 32k it ingests 29,491 tokens and
-  answers, peaking at 22.10 GB against the baseline's 21.67 — 0.43 GB for a drafter that loads
-  no second model. At 49k the same allocator error fires on the first prefill batch, one
-  second in, where the baseline finishes the fill at 22.02 GB. Two conditions on the 32k
-  result, both discovered by getting them wrong: it needs `--parallel 1`, since llama.cpp's
-  default of four slots OOMs on its own, and `--n-gpu-layers 999` blocks the build's memory
-  fitter, which is a lever left unpulled rather than one that failed. So boxes 2, 4 and 6 have
-  a candidate at 32k, and the editor profile has none.
-
-- 2026-08-20 — **a third candidate, found in the target's own weights, and a box added for
-  it.** The GGUF this project already serves carries Qwen3.8's MTP head, and stock llama.cpp
-  logs those tensors as unused and drops them. PR #27342's build makes an MTP draft context
-  against the same weights instead of loading a second model. That is the no-extra-memory
-  property the design credited to candidate A, on the runtime this project already runs. It loads at
-  the settled config and generates with no allocator error, so it goes above the scorer box:
-  boxes 2, 4 and 6 were waiting on an admissible candidate and this may be one.
-
-- 2026-08-20 — **the feature waits for a release rather than a run, and `check:` says when to
-  look.** Both candidates are out on memory, so boxes 2, 4 and 6 have nothing admissible to
-  measure. Two things would change that: `Bare-Speed-FP16`, the same mechanism at 16.29 GB
-  against the recommended build's 20.68, which is not screened; or a release that cuts the
-  resident footprint. The boxes stay as written rather than being rewritten around a
-  constraint a smaller build would remove.
-- 2026-08-20 — **candidate A is inadmissible too, and this box's own method is what nearly
-  missed it.** "A load plus 90 s" inherits 0014's finding, and 0014 measured a runtime that
-  reserves its KV against `--ctx-size`. MTPLX allocates per request: its 32k and 49k loads
-  both peak at 22.21 GB, so a load-only screen scored each admissible. Under a prompt sized to
-  the profile it reaches **23.31 GB** and fails with the same allocator error as B — with the
-  KV quantised to q4 as well, which saves 0.17 GB of a 1.1 GB overshoot. So the screen sends a
-  prompt sized to the context, and the baseline survives that identical fill at 21.67 GB:
-  what fails is the configuration, not the instrument.
-- 2026-08-20 — box 5 is ticked out of order because its work was box 1's prerequisite: the
-  build exists, the Homebrew one is untouched, and the commit is named in
-  `config/dflash2-32k.env` beside the flags it serves. Kept over the 150-line alarm for the
-  same reason 0014 was — a rule fixed before the runs, and two rejections that have to stay
-  falsifiable.
-
+- 2026-08-20 — **rescoped from "measure DFlash2".** Naming one vendor made the doc argue for a
+  candidate rather than decide a question, and that candidate turned out second-best: it needs
+  a 1.1 GB drafter against 0.54 GB of admissible headroom, where native MTP needs none. Two
+  numbers the draft rested on were wrong. "MTP is a net throughput loss on Metal" was true of
+  llama.cpp's implementation and false on MLX. And the **3.4×** it quoted came from an M4 Max
+  write-up of a different model at 8-bit and bf16, where a slower target flatters speculation;
+  the matched row is **1.81×**.
+- 2026-08-20 — the measurement method is imported rather than invented, from `mlx.fast`'s
+  ranked harness: paired same-session baseline, decode-isolated ratio, thermal gate,
+  token-fidelity gate. The harness itself wants an M5 Max runner and ~36 GiB, so only its
+  gates transfer — and two of them close holes this repo already had.
+- 2026-08-20 — the screen now asks for one token. Its first build scored two cells admissible
+  on a 200 from `/health` while the server could not generate a word, so health is not
+  admissibility and every row carries that request's status beside the verdict.
+- 2026-08-20 — **box 5 takes its second branch: candidate B is inadmissible, so no suite pass
+  is owed to it.** At both contexts the fork loads, answers `/health`, then fails every Metal
+  command buffer out of memory; quantising the drafter's KV, its only memory lever, does not
+  change that. The design's headroom arithmetic stops being an assumption — the allocator
+  refused at 22.16 GB wired.
 - 2026-08-20 — the editor-path question moves into the non-goal that already owned it. What
-  MTPLX serves is a property of the candidate rather than something this feature decides, and
-  a claimed feature carrying a question nobody here can answer reads as work that is waiting.
-
-- 2026-08-20 — **candidate B is inadmissible here, measured rather than inferred, so box 5
-  takes its second branch and no suite pass is owed to it.** At both contexts the fork loads,
-  answers `/health` with 200, then fails every Metal command buffer with
-  `kIOGPUCommandBufferCallbackErrorOutOfMemory` and returns 500 on the first token; quantising
-  the drafter's KV, the only memory lever this build has, does not change that. The drafter
-  costs 0.71 GB of wired memory over the same config without it. The design's headroom
-  arithmetic is also no longer an assumption: the allocator refused at **22.16 GB wired**,
-  against the 24 GB `iogpu.wired_limit_mb` implies and the 22.29 GB where 0014's desktop died.
-- 2026-08-20 — **the screen asks for one token, because health is not admissibility.** Its
-  first build scored both of B's cells admissible on a 200 from `/health` while the server
-  could not generate a word. A config that cannot produce a token is now inadmissible whatever
-  its memory says, and every row carries that request's status beside the verdict.
-
-- 2026-08-20 — **rescoped from "measure DFlash2" after research on `mlx.fast`, MTPLX and
-  practitioner benchmarks.** Naming one vendor in the title made the doc argue for a candidate
-  rather than decide a question, and the candidate turned out to be second-best here: DFlash2
-  needs a 1.1 GB drafter against 0.54 GB of admissible headroom, while native MTP needs none.
-  Two other corrections. The earlier draft called MTP "a net throughput loss on Metal" — true of
-  llama.cpp's implementation, and false on MLX, where loading the checkpoint's own MTP head is
-  reported at +145% over a server that ignores it. And the research this doc first rested on
-  quoted **3.4×** from an M4 Max MLX write-up of a *different model at 8-bit and bf16*, where a
-  slower target flatters speculation; the matched row is **1.81×**.
-- 2026-08-20 — the measurement method is imported rather than invented, from `mlx.fast`'s ranked
-  harness: paired same-session baseline, decode-isolated ratio, thermal gate, token-fidelity
-  gate. The harness itself cannot be reused — it targets an M5 Max runner and wants ~36 GiB —
-  but its gates are the part that transfers, and two of them close holes this repo already has.
+  MTPLX serves is the candidate's property, not this feature's to decide.
+- 2026-08-20 — box 5 is ticked out of order, because its work was box 1's prerequisite. Kept
+  over the 150-line alarm for the reason 0014 was: a rule fixed before the runs, and
+  rejections that have to stay falsifiable.
+- 2026-08-20 — **the screen's own method was nearly wrong, and box 1 changed because of it.**
+  "A load plus 90 s" inherits 0014, which measured a runtime reserving its KV at load. MTPLX
+  allocates per request, so a load-only screen scored both its cells admissible; under a
+  prompt sized to the profile it reaches 23.31 GB and fails. The screen sends that prompt now,
+  and the baseline survives the identical fill.
+- 2026-08-20 — the feature waits on a release rather than a run, which is what `check:` is set
+  for. Both candidates are out on memory, so boxes 2, 4 and 6 have nothing admissible to
+  measure. A smaller build would change that, and the boxes stay as written rather than being
+  rewritten around a constraint it would remove.
+- 2026-08-20 — **a third candidate, found in the target's own weights, and a box added above
+  the scorer for it.** The GGUF already served carries Qwen3.8's MTP head, which stock
+  llama.cpp drops as unused. That is the no-extra-memory property the design credited to
+  candidate A, on the runtime this project already runs.
+- 2026-08-20 — **the first split this feature produced: candidate C is admissible at the grind
+  profile and not at the editor one.** Boxes 2, 4 and 6 have a candidate at 32k and the editor
+  profile has none. Two conditions on the 32k result, both found by getting them wrong — it
+  needs `--parallel 1`, and `--n-gpu-layers 999` blocks the build's own memory fitter, a lever
+  left unpulled rather than one that failed.
+- 2026-08-20 — decode is isolated by streaming, because the client is the only side that sees
+  where prefill ended: a non-streamed reply reports one clock covering both halves. Tasks
+  carrying tools stay unstreamed and say so on the row, since streamed tool calls arrive as
+  fragments and a speed number is not worth a scoring bug.
+- 2026-08-20 — both voids are in, and the fidelity one is what earns the word lossless. Two
+  thresholds beyond the box: a sample past four times its own side's median is a stall rather
+  than a slow decode, and a side with fewer than three accepted samples reports no ratio.
+- 2026-08-20 — box 4 no longer names candidate A. It is inadmissible, and the box's subject is
+  whichever candidate cleared the screen.
+- 2026-08-20 — the reporter was handing every config that ran a fidelity probe a free pass and
+  moving the denominator the pass rate is read against. Instrument rows are skipped.
+- 2026-08-20 — three depth fixtures were added because the existing ones could not carry the
+  measurement: `retrieval-*.json` answers in 12 tokens, too few to divide into a per-token
+  figure, where `decode-*.json` returns 384.
+- 2026-08-20 — **the box asked for a curve, and the curve is why the verdict splits.** The
+  ratio crosses the rule's own bands between the ranking suite's short prompts and 32k without
+  the mechanism changing. A point at either end would have been a different verdict, and the
+  point everyone quotes is the shallow one.
+- 2026-08-20 — the correction box is corrected rather than applied: it had the two runtimes the
+  wrong way round, expecting a net loss on llama.cpp and the better mechanism on MLX.
+- 2026-08-20 — **the verdict splits four ways and one quarter is undecided.** Attended has no
+  answer: every screen here ran unattended, and that half of 0014's rule needs a desktop
+  verdict against a config peaking 0.19 GB under where that desktop died. The rejections are
+  recorded with their numbers beside the winner, since a rule that only records winners is not
+  a rule.

@@ -140,77 +140,62 @@ Three conditions on the run, all of which void it if missed:
   a measurable state is worse than one that reports it.
 
 ## Log
-- 2026-08-19 — **the apparatus figure this feature reported was the wrong metric, and the
-  coexistence arithmetic that rested on it is restated in `docs/TECH.md`.** Apparatus was a sum
-  of per-process RSS, which counts every shared page once per resident process — about 1.5x
-  overstated on a state measured both ways — and it was then added to the model's RSS, which
-  counts the model twice, since Metal wires the same pages the process reports as resident.
-  Measured properly, the model is 20.89 GB of wired memory and an editor is 6.61 GB of
-  anonymous, so 27.50 GB of 32 is in use with nothing else running. The conclusion that a
-  browser does not fit alongside survives; the margin was overstated. **The wired ceiling
-  measurements in this doc are unaffected** — they were read from `vm_stat` directly and never
-  went through the apparatus figure.
-- 2026-08-18 — raised from a user report, not the instrument: at 64k the desktop stops
-  rendering and the editor freezes, while 0003 scored that cell `ok` because it measured
-  whether the model finished. Nothing it recorded could have caught it — the failure does
-  not touch swap, and RSS does not distinguish wired GPU memory from the rest.
-- 2026-08-18 — the ladder now samples wired memory and its limit every two seconds *during*
-  the fill, not just around it, and reports peak wired and minimum headroom per cell. The
-  limit is recorded with provenance: `iogpu.wired_limit_mb` reads 0 here, so the 24 GB
-  figure is `default-assumed` from the documented 75% of installed RAM, not a reading, and
-  headroom inherits that uncertainty. Idle wired measures 2.58 GB, which puts the 64k cell
-  at roughly 22.9 GB against that assumed 24 GB — consistent with the reported failure, and
-  the first number in this repo that could have predicted it.
+
+- 2026-08-18 — raised from a user report rather than from the instrument: at 64k the desktop
+  stops rendering while 0003 scored that cell `ok`, because it measured whether the model
+  finished. Nothing it recorded could have caught it — the failure does not touch swap, and
+  RSS does not distinguish wired GPU memory from the rest.
+- 2026-08-18 — the ladder samples wired memory and its limit *during* the fill rather than
+  around it, and reports peak wired and minimum headroom per cell. The limit is recorded with
+  provenance: `iogpu.wired_limit_mb` reads 0 here, so the figure is `default-assumed` from the
+  documented 75% of installed RAM and headroom inherits that uncertainty.
 - 2026-08-18 — `memprobe.sh` assumed a 4 KB page where this machine uses 16 KB, so every
-  `vm_stat` figure recorded before today is understated 4×. Gotcha in `docs/TECH.md`,
-  erratum against the affected data file; no conclusion in 0003 reverses.
+  `vm_stat` figure recorded before today is understated 4×. Gotcha in `docs/TECH.md`, erratum
+  against the affected data file; no conclusion in 0003 reverses.
 - 2026-08-18 — the desktop check is WindowServer CPU, sampled from outside the model process
-  and reported as `desktop_verdict` beside the model's `outcome`, because collapsing those
-  two columns is the mistake that produced this feature. Cumulative CPU *time* is recorded
-  and rates derived by the caller: `ps %cpu` is a decayed average over a window macOS does
-  not document, and a threshold set against an undocumented decay is not reproducible.
-  Thresholds are two-sided and provisional — the direction of the signal at the failure is
-  the one thing the re-walk still has to establish.
-- 2026-08-18 — the re-walk band is 32k/40k/48k/56k/64k, and the ladder takes a `CELLS`
-  selection so a band can be walked without paying for cells that are not in question.
-  Two harness bugs surfaced from one accidental full-ladder run and are fixed: the health
-  check could conclude a server had died before `serve.sh` had `exec`ed it, recording
-  `load_failed` for a server that then loaded fine and collided with the next cell; and
-  `CELLS` used `:-`, so an explicitly empty value walked every cell instead of none. The
-  first had hidden through every earlier run and appeared only under a 20 GB apparatus —
-  the condition this feature exists to measure.
-- 2026-08-18 — the band was walked attended at the default wired limit: 32k, 40k, 48k and
-  56k pass; **64k fails**. Every cell returned `ok` from the model, so the ladder recorded
-  five successes and one unusable machine — the split this feature was opened to expose.
-  The attended ceiling is therefore **56k**, and it is a measurement rather than the
-  extrapolation 0004 was gated on.
-- 2026-08-18 — the direction of the signal is **stall, not saturation**, which answers the
-  question the thresholds had to be two-sided about. WindowServer held 0.16-0.18 cores
-  through 40k/48k/56k and sat at 0.02 for the whole of 64k; the failing cell's *peak* is
-  below every passing cell's *minimum*, so the two populations do not overlap. The stall
-  bound earned its place and the saturation bound has never fired.
-- 2026-08-18 — **the wired-ceiling explanation did not survive its own measurement**, so
-  the mechanism this doc's Problem states is unconfirmed: what is confirmed is the failure
-  and where it starts. The `default-assumed` label on the 24 GB limit carries the whole
-  disagreement, which is why it was recorded with provenance rather than as a reading.
-- 2026-08-18 — the freeze is confirmed to begin at load, from two independent directions: the
-  compositor trace is flat from its first sample, and the operator reports the desktop going
-  unusable as the cell began rather than partway through its 13-minute fill. This is the
-  cheapest finding here — verdicts no longer need a full fill, so the grid 0004 has to filter
-  costs minutes rather than hours.
-- 2026-08-18 — **the 56k ceiling is conditional on a cleared desk, and the condition matters
-  more than the number** — the apparatus and working-set figures are in `docs/TECH.md`. The
-  consequence for this repo's labels: `attended-worked-in` has been covering two very
-  different machines, and this band measured the generous one.
-- 2026-08-18 — **box 4 dropped and the feature shipped at five of six.** Raising
+  and reported beside the model's own outcome, because collapsing those two columns is the
+  mistake that produced this feature. Cumulative CPU *time* is recorded and rates derived by
+  the caller: `ps %cpu` is a decayed average over an undocumented window, and a threshold set
+  against that is not reproducible. Thresholds are two-sided and provisional, since the
+  direction of the signal is what the re-walk still has to establish.
+- 2026-08-18 — the ladder takes a `CELLS` selection, so a band can be walked without paying
+  for cells that are not in question. Two harness bugs surfaced and are fixed: the health
+  check could conclude a server had died before `serve.sh` had `exec`ed it, and `CELLS` used
+  `:-`, so an explicitly empty value walked every cell instead of none. The first had hidden
+  through every earlier run and appeared only under a 20 GB apparatus — the condition this
+  feature exists to measure.
+- 2026-08-18 — **the attended ceiling is a measurement rather than the extrapolation 0004 was
+  gated on.** Every cell returned `ok` from the model, so the ladder recorded five successes
+  and one unusable machine, which is the split this feature was opened to expose.
+- 2026-08-18 — the direction of the signal is **stall, not saturation**, which is what the
+  thresholds had to be two-sided about. The failing cell's peak sits below every passing
+  cell's minimum, so the populations do not overlap: the stall bound earned its place and the
+  saturation bound has never fired.
+- 2026-08-18 — **the wired-ceiling explanation did not survive its own measurement**, so the
+  mechanism this doc's `## Problem` states is unconfirmed. What is confirmed is the failure
+  and where it starts. The `default-assumed` label carries the whole disagreement, which is
+  why the limit was recorded with provenance rather than as a reading.
+- 2026-08-18 — the freeze begins at load, confirmed from two directions: the compositor trace
+  is flat from its first sample, and the operator reports the desktop going as the cell began
+  rather than partway through its fill. That is the cheapest finding here — a verdict no
+  longer needs a full fill, so a grid costs minutes rather than hours to filter.
+- 2026-08-18 — **the ceiling is conditional on a cleared desk, and the condition matters more
+  than the number.** The consequence for this repo's labels: `attended-worked-in` has been
+  covering two very different machines, and this band measured the generous one.
+- 2026-08-18 — **box 4 dropped and the feature ships at five of six.** Raising
   `iogpu.wired_limit_mb` would separate "the cap binds lower than assumed" from "the cap is
-  not what binds", and nothing here turns on which. The admissible range is measured either
-  way; the remedy is a cleared desk either way; and Hermes is out for attended work either
-  way. The lever passes to 0004, where it is a real question for the *unattended* profile —
-  whether the cap is what stops a larger quant loading at all. The mechanism stays
-  unresolved in the open questions rather than being quietly resolved by assumption, and
-  `sudo sysctl iogpu.wired_limit_mb=0` remains the revert if anyone raises it later.
-- 2026-08-18 — kept over the 150-line alarm deliberately: what is long here is a design whose
+  not what binds", and nothing here turns on which: the admissible range, the remedy and
+  Hermes' exclusion are the same either way. The lever passes to 0004 as an unattended-profile
+  question. The mechanism stays in `## Open questions` rather than being quietly resolved by
+  assumption, and `sudo sysctl iogpu.wired_limit_mb=0` remains the revert.
+- 2026-08-19 — **the apparatus figure this feature reported was the wrong metric**, and the
+  coexistence arithmetic resting on it is restated in `docs/TECH.md`. It summed per-process
+  RSS, which counts a shared page once per process, then added that to the model's own RSS,
+  which counts the model twice because Metal wires the pages the process reports as resident.
+  The conclusion that a browser does not fit alongside survives; the margin was overstated.
+  **The wired-ceiling measurements here are unaffected** — they were read from `vm_stat`
+  directly and never went through that figure.
+- 2026-08-19 — kept over the 150-line alarm deliberately: what is long here is a design whose
   thresholds had to be fixed before any run, a campaign that changed the plan eleven times,
-  and a mechanism left open on purpose. The instrument's durable half — the verdict rule, the
-  band, the conditions on the ceiling — is in `docs/TECH.md`, and what stays is why.
+  and a mechanism left open on purpose. The durable half is in `docs/TECH.md`; what stays
+  is why.
