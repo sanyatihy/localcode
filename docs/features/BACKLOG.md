@@ -13,9 +13,6 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   a grammar nothing to fix. Promote when: a model or harness appears whose failures are format
   rather than choice. Note the template asks for an XML call form, so a JSON-schema constraint
   is the wrong tool even then.
-- ~~**Speculative decoding with a draft model**~~ — **settled by 0017**, and against it: an
-  external drafter is 1.1 GB this machine does not have, and the target's own MTP head costs
-  nothing and gives 1.26-1.57x. A separate draft model is the wrong shape here.
 - **The attended desktop verdict for the MTP config** — 0017 measured it `unattended` only,
   and it peaks at 22.10 GB where 0014's desktop died at 22.29. One 90-second screen with
   somebody driving the machine settles whether it is usable at 32k while you work. Promote
@@ -30,7 +27,7 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
 - **Quantising the model ourselves** — build custom quants rather than taking bartowski's.
   Promote when: a quant ladder actually runs — which needs the bigger machine, see above —
   and shows a gap in the published quants worth filling.
-- **Hermes' persistent memory over a real week** — 0010 scores both harnesses cold,
+- **Hermes' persistent memory over a real week** — 0010 scores all four harnesses cold,
   which is the only reproducible comparison but deliberately blind to Hermes' main bet.
   Promote when: a harness is in daily use and the question is whether it improved on
   this repo specifically.
@@ -51,8 +48,8 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   which would be `--tools` by another route. Untested. Promote when: the editor flow is
   something somebody wants to use daily rather than prove works.
 - **Harder tier-1 tasks that this model actually fails** — 0013 added seven traps and
-  Qwen3.8-27B took only one of them: eleven of fourteen tasks score 3/3 at every setting
-  measured. The traps are proven to trap (fixture self-tests fail the tempting answers), so
+  Qwen3.8-27B took only one of them: twelve of the fourteen tasks show no quality failure at
+  any setting measured. The traps are proven to trap (fixture self-tests fail the tempting answers), so
   this is about the model being good at these shapes rather than the fixtures being soft.
   Promote when: a comparison actually needs tier-1 to *rank* rather than to floor-check —
   a quant sweep or a model comparison that cannot separate two candidates would do it, and
@@ -62,12 +59,12 @@ Keep each entry to a few lines: what it is, and what would make it worth doing.
   3/3 at every setting, so their repeats measure nothing and cost most of a sweep's runtime.
   Promote when: sweep runtime is what blocks a feature. No sweep run so far has been large
   enough for it to; a quant grid on the bigger machine would be the first.
-- **`--tools` is variadic, so the instruction can be swallowed** — the claude-code adapter
-  passes `--tools Read,Edit,Write --permission-mode acceptEdits <instruction>`, and it works
-  only because `--permission-mode` terminates the tool list. Drop that flag and the
-  instruction joins the tools, the run dies asking for input, and nothing says why. Promote
-  when: the adapter is edited for any other reason — a `--` separator or the instruction on
-  stdin costs one line. Found driving the same CLI by hand for 0011.
+- **`--tools` is variadic, so the instruction can be swallowed** — `internal/harness/claudecode.go`
+  and `cmd/handoff` both pass `--tools <list> --permission-mode <mode> <instruction>`, and both
+  work only because `--permission-mode` terminates the tool list. Drop that flag from either and
+  the instruction joins the tools, the run dies asking for input, and nothing says why. Promote
+  when: either is edited for any other reason — a `--` separator or the instruction on stdin
+  costs one line each. Found driving the same CLI by hand for 0011.
 - **The handoff, reconciled with `kit`** — 0016 puts `HANDOFF.md`, three hooks and a box
   parser in localcode, but `kit` owns the work protocol: it writes AGENTS.md, and
   `kit next --json` already publishes the topmost box the driver re-derives. Handing off

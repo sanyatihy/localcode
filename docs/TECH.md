@@ -385,7 +385,7 @@ three below that moved.
 |---|---|
 | `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
 | `toolcall-constraint-readonly` | **weakly discriminates, in the opposite direction** — off 2/3, every reasoning level 3/3. Its earlier failures were a fixture flaw (the model refusing to patch a file it had not been shown), fixed by supplying the source in the prompt and re-measured |
-| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
+| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — no quality failure at any setting measured; `patch-off-by-one` non-terminated once at `xhigh`, which is a budget outcome and not a wrong answer. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
 
 A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
 the discriminating subset, and keep the rest as the floor check they are.
