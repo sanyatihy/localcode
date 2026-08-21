@@ -1,8 +1,9 @@
 ## Work protocol
 
-Run `kit next` at the start of every session: it names the feature and the task. `kit audit`
-says what has drifted. `kit help` explains the model; `kit help template` prints the doc
-format. Every rule below is a rule some agent got wrong; none is style.
+Run `kit next` at the start of every session: it names the feature and the task. `--json` is
+that board machine-readable, and anything automating this reads it rather than parsing docs.
+`kit audit` says what has drifted. `kit help` explains the model; `kit help template` prints
+the doc format. Every rule below is a rule some agent got wrong; none is style.
 
 ### Picking and finishing work
 
@@ -47,7 +48,7 @@ format. Every rule below is a rule some agent got wrong; none is style.
    starting point in a checkout that already holds one — what is free is still listed, under
    **free, but not in this checkout**. A second feature started where you stand shares one
    branch with the first and they ship as one.
-4. **Read the feature doc for the design.** Never restate or re-derive design anywhere else.
+4. **Read the feature doc for the design**, and nowhere else — it is the one home for it.
 5. **Do the topmost unticked `## Tasks` box, and only that one.** List order is the order of
    work. Tick it in the commit that implements it — nobody re-reads the branch to check, so
    the commit is the unit that has to be honest.
@@ -58,12 +59,11 @@ format. Every rule below is a rule some agent got wrong; none is style.
    `## Log`. What you may not do is silently drop one you could not finish. A whole feature
    that should not be built is `kit drop <id> "<why>"`: a doc on the default branch stays on
    the board until it is retired.
-8. **Stopping mid-feature? Release the claim.** Delete the branch locally *and* on the remote
-   (`git push origin --delete <branch>`), and say why in `## Log`. The pushed branch is the
-   claim, so deleting only your copy leaves the feature taken for good.
-9. **Blocked on a decision only a human can make?** `kit block <id> "<question, with your
-   leaning>"`, then move to another feature — `--fyi` for what work continues without. Do not
-   guess, and do not treat this as licence to take work that is not yours.
+8. **Stopping mid-feature? `kit release <id>`.** It refuses while the branch carries work:
+   that case is a pause, so push it and open the pull request unfinished, saying why there.
+9. **Blocked on a decision only a human can make?** Ask the one in the session and record
+   the answer. Nobody there: `kit block <id> "<question, with your leaning>"`, then move to
+   another feature — `--fyi` for what work continues without. Never guess.
 10. **Never put a real secret in a doc.** Docs are committed and a pushed commit cannot be
     unpublished. Name the variable and where the value lives, never the value.
     `secret-in-doc` is a backstop, not the rule: a password in prose matches nothing.
@@ -111,13 +111,13 @@ These govern *how*. Bias toward caution on anything non-trivial; use judgement o
 - **Enforce, do not instruct.** Before adding a rule here, ask what would remove the need for
   it — a refusal in `kit`, or protection on the remote. Prose is the weakest tier and is
   honest only for judgement and taste.
-- **Write about the system, not the session.** A sentence about *the work* — which session
-  it happened in, what the previous attempt did, who got a rule wrong — stops being true the
-  moment it is fixed. State what holds, then the evidence for it, and only the rule is
-  compulsory: evidence earns a trailing clause where it stops the rule being reversed — the
-  constraint or the measurement, never how it was found or the order the attempts came in.
-- **Every fact has one home, and you choose it as you write the sentence.** True after this
-  ships → `docs/TECH.md`, one line. What changed this doc's plan → one `## Log` entry that
-  *names the change*: a box rewritten, a premise falsified, a number something downstream
-  reads. Neither → the pull request. An entry naming no change is not an entry, however much
-  the run taught you, and nothing is written twice.
+- **A sentence earns its place by deciding, constraining or measuring something.** Anything
+  else is padding, however true. One claim per sentence; evidence earns one trailing clause
+  where it stops the rule being reversed, and never a second.
+- **Write about the system, not the session.** A sentence about *the work* — which session it
+  happened in, what an earlier attempt did, who got a rule wrong — stops being true the moment
+  it is fixed. State what holds.
+- **Every fact has one home, chosen as you write the sentence.** True after this ships →
+  `docs/TECH.md`, one line. What changed this doc's plan → one `## Log` entry *naming the
+  change*: a box rewritten, a premise falsified, a number something downstream reads. Neither
+  → the pull request; an entry naming no change is not an entry, and nothing is written twice.
