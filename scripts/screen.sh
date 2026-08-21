@@ -20,16 +20,22 @@
 # at two contexts is what separates the two — a reservation moves the peak, a per-request
 # cache does not — so read a candidate's two rows together rather than either alone.
 set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=scripts/lib.sh
+. scripts/lib.sh
 
 LABEL="${LABEL:?LABEL names this candidate in the results file}"
 CTX="${CTX:?CTX is the context the config claims to serve}"
 CONDITION="${CONDITION:-unlabelled}"
 PORT="${PORT:-8081}"
+ENDPOINT="http://127.0.0.1:$PORT"
 PROC="${PROC:-llama-server}"          # pgrep pattern for sweeping a leftover server away
-# A runtime that sets its own process title cannot be found by pattern — MTPLX's command line
-# is just the Python binary — so the server this run launched is tracked by its pid, and a
-# runtime with a stop command of its own is given the chance to use it.
 STOP_CMD="${STOP_CMD:-}"
+
+# A runtime that sets its own process title cannot be found by pattern — MTPLX's command line
+# is just the Python binary — so this screen tracks the server it launched by pid rather than
+# by the library's pgrep. STOP_CMD is the same allowance for stopping it.
+server_alive() { kill -0 "${server_pid:-0}" 2>/dev/null; }
 SECONDS_TO_SAMPLE="${SECONDS_TO_SAMPLE:-90}"
 # How big the request that precedes the window is. A runtime that reserves its KV at load is
 # judged by the load; one that allocates per request is not judged at all until a prompt
@@ -40,53 +46,13 @@ OUT="${OUT:-results/screen.jsonl}"
 [ $# -ge 1 ] || { echo "usage: LABEL=... CTX=... $0 <serve command...>" >&2; exit 2; }
 mkdir -p "$(dirname "$OUT")"
 
-# Same shape as the ladder's, and for the same reason: an 18 GB process does not exit on a
-# fixed sleep, and the next server binding while the old one lives measures the wrong one.
-stop_server() {
-  if [ -n "$STOP_CMD" ]; then eval "$STOP_CMD" >/dev/null 2>&1 || true; fi
-  pkill -f "$PROC" 2>/dev/null || true
-  local deadline=$((SECONDS + 90))
-  while pgrep -f "$PROC" >/dev/null; do
-    [ $SECONDS -ge $deadline ] && { pkill -9 -f "$PROC" 2>/dev/null || true; sleep 3; break; }
-    sleep 1
-  done
-  sleep 2
-}
-
-# The grace period is the ladder's: a serve script validates its config before it execs the
-# server, so for the first instants there is no process to find and "it died" would be wrong.
-wait_healthy() {
-  local deadline=$((SECONDS + LOAD_TIMEOUT)) grace=$((SECONDS + 20))
-  while [ $SECONDS -lt $deadline ]; do
-    [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health" 2>/dev/null)" = "200" ] && return 0
-    if [ $SECONDS -ge $grace ] && ! kill -0 "$server_pid" 2>/dev/null; then return 1; fi
-    sleep 3
-  done
-  return 1
-}
-
-# Ask the server what it is serving. llama.cpp answers on /props; a server that does not is
-# recorded as null rather than assumed to agree, which is the guard, not a formality.
-served_ctx() {
-  curl -s -m 5 "http://127.0.0.1:$PORT/props" 2>/dev/null \
-    | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null \
-    || echo null
-}
-
 server_rss_gb() {
   ps -o rss= -p "$server_pid" 2>/dev/null | awk '{printf "%.3f", $1/1048576}'
 }
 
 stop_server
 before=$(./scripts/memprobe.sh)
-# The compositor's rate before the model loads. Per row, because the machine's baseline is
-# not a constant and a verdict has to carry the basis it was judged against.
-DESK_A=$(./scripts/deskprobe.sh); sleep 6; DESK_B=$(./scripts/deskprobe.sh)
-baseline=$(python3 -c "
-import json
-a=json.loads('''$DESK_A'''); b=json.loads('''$DESK_B''')
-span=b['t']-a['t']
-print(round((b['windowserver_cpu_seconds']-a['windowserver_cpu_seconds'])/span, 3) if span>0 else 0)")
+baseline=$(desk_baseline)
 
 echo "=== screening $LABEL  ctx=$CTX  condition=$CONDITION ===" >&2
 echo "    $*" >&2
@@ -103,7 +69,7 @@ trap 'kill "$sampler" 2>/dev/null || true' EXIT
 load_start=$SECONDS
 nohup "$@" > "/tmp/screen-$LABEL.log" 2>&1 &
 server_pid=$!
-if wait_healthy; then
+if wait_healthy "$LOAD_TIMEOUT"; then
   outcome=ok
   load_seconds=$((SECONDS - load_start))
   loaded=$(./scripts/memprobe.sh)
@@ -127,7 +93,7 @@ if os.environ.get('SMOKE_MODEL'): body['model']=os.environ['SMOKE_MODEL']
 json.dump(body, sys.stdout)" > /tmp/screen-smoke-req.json
   smoke_start=$SECONDS
   smoke_http=$(curl -s -m 600 -o /tmp/screen-smoke-$LABEL.json -w '%{http_code}' \
-      "http://127.0.0.1:$PORT/v1/chat/completions" \
+      "$ENDPOINT/v1/chat/completions" \
       -H 'Content-Type: application/json' -d @/tmp/screen-smoke-req.json || echo 000)
   smoke_seconds=$((SECONDS - smoke_start))
   smoke=$(python3 -c "
