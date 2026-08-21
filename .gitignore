@@ -4,7 +4,6 @@ results/
 
 # MLX and MTPLX each run from their own venv; the pins are committed, the wheels are not.
 runtimes/mlx/.venv/
-runtimes/mtplx/.venv/
 
 # Working state inside a task box, not history.
 HANDOFF.md

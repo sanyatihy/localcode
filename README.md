@@ -68,7 +68,7 @@ config/     one .env per serving config, plus machine.json — every limit this 
 scripts/    the shell around a measurement: serve, ladder, screen, pair, probe
 tasks/      the fixtures the model is scored on; tasks/depth/ is the deep floor check
 harness/    how each coding agent is pointed at the local endpoint
-runtimes/   the runtimes that lost to llama.cpp, kept because a comparison must be re-runnable
+runtimes/   MLX, which lost to llama.cpp and is kept because a comparison must be re-runnable
 docs/       vision, as-built facts, feature history, and the raw data
 results/    live scratch, gitignored; snapshots land in docs/data/ when a feature ships
 ```
