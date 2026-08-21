@@ -35,8 +35,9 @@ Restricted to four coding tools it is the cheapest harness measured; on its defa
 the most expensive. The `CLAUDE_CODE_DISABLE_*` variables move the total by 7% and remove
 no tool from the request. See the table in [../README.md](../README.md).
 
-[`editor-session.md`](editor-session.md) is the primary record: three sessions asking one
-question, where the extension takes **462 s** and the same harness in a terminal takes 45.
+Measured on one question, one model and one server: **462 s in the extension against 45 s in
+a terminal.** The extension has no equivalent of `--tools`, so that gap is not closable from
+the client side.
 
 ## Driving it from the editor
 
