@@ -79,71 +79,15 @@ status live in the frontmatter, and a second copy would drift.
 - **`results/` holds 11 untracked scratch files, 288 KB.** Nine are contained row-for-row in
   a `docs/data/` snapshot. The other two are intermediates nothing cites: a 5-row MLX depth
   smoke, and 2 truncated rows from a 0013 re-run. Leaning: delete, once a human agrees.
-- **Nineteen sentences in `docs/TECH.md` run past 45 words**, which `kit audit` reports at
-  LOW. Leaning: leave them. Each is a claim plus the one clause of evidence the protocol
-  allows, and splitting them mechanically would cost the scoping the claims depend on.
 
 ## Log
 
-- 2026-08-21 — the doc is written after the work, which inverts the protocol and is
-  recorded rather than disguised. The request was a direct audit of an empty board, not a
-  feature planned from the vision, so the branch is not a `kit claim` and does not carry
-  this id.
-- 2026-08-21 — **the MLX serving config was the configuration 0006 measured as unusable.**
-  `mlx/config/mlx-4bit.env` shipped `PROMPT_CACHE_SIZE="16"`.
-  `docs/data/2026-08-19-m2max-32gb-0006-mlx-16-slots.jsonl` has all 15 depth rows at
-  `fail_over_budget`; `...-0006-runtime.jsonl`, the scored comparison at 2 slots, has all 15
-  at `pass`. The raise landed in commit `003f7b7` at 08:27 UTC and the failing run is
-  08:25–09:14 UTC, so the value was committed as the evidence against it was being taken and
-  never corrected. Every MLX number in `docs/TECH.md` came from 2 slots. Set to 2.
-- 2026-08-21 — **`cmd/report` printed one void run as three.** `accepted()` incremented a
-  field on the aggregate, and `reportPaired` reads the baseline's set once per candidate.
-  Reproduced: one stalled baseline run printed `(3 void: stalled past 4x the median)`. It is
-  pure now and returns what it dropped. No published figure moves — the 0017 rows carry no
-  stalls — but a void count is evidence here.
-- 2026-08-21 — **a claim rested on rows that were not committed.** "Unbounded is not an
-  option" was evidenced only by `results/0006-mlx-unbounded-cache.jsonl`, which
-  `.gitignore` says is deleted with the worktree: 37 rows, free memory at 0.00, swap flat,
-  9 runs over budget. Snapshotted. The section counts three misconfigurations and had
-  evidence for two.
-- 2026-08-21 — **`newestTranscript` could dereference a nil `FileInfo`.** It sorted glob
-  results by `os.Stat` while discarding the error, so a transcript removed between the glob
-  and the stat panics the driver. It scans for the newest and skips what it cannot stat.
-- 2026-08-21 — **`cmd/handoff` wrote its rows through a second, unsynced appender**, where
-  every other results writer syncs through `eval.AppendJSON`. A session is bounded at 30
-  minutes, so a lost row is a lost half-hour.
-- 2026-08-21 — **three documents said Claude Code cannot be offline.** 0010 falsified it: a
-  fixture completed with the network denied in the kernel, and 0008 measured a real task
-  contacting no host. A heading said it, `claude-code.env` deferred to "a later task" that
-  had already run, and `docs/VISION.md` asserted it as a constraint. All three now state the
-  measurement, scoped to token authentication.
-- 2026-08-21 — **`docs/VISION.md` carried two figures its own features took away.** "Roughly
-  a third of the machine unused" came from summed per-process RSS, which counts every shared
-  page once per resident process; against anonymous-plus-wired the model wires 20.89 GB and
-  an editor takes 6.61. Latency was named as the axis separating the profiles, before 0014
-  found the GPU-wired one that sets the attended ceiling at 57,344.
-- 2026-08-21 — **`Retrieval.Question` and `Patch.Package` were read by nothing**, while
-  being declared, JSON-tagged and present in all fourteen fixtures. Removed from both.
-  `TestHaystackUnchangedForPreDistractorFixtures` still passes, which is the proof no prompt
-  moved.
-- 2026-08-21 — **`make eval THINKING=off` could never have worked.** `cmd/eval` refuses the
-  toggle without sampling and the Makefile had no variable to pass it. `SAMPLING` sits beside
-  `THINKING` now, and `make help` renders the `##` comments already written for a target that
-  did not exist.
-- 2026-08-21 — **the checks that found nothing are recorded too.** `cmd/report` reproduces
-  TECH.md's harness table cell for cell from the committed rows — 14/15, 12/15, 13/15, 15/15
-  and ×0.21, ×0.55, ×4.02 — and the 0017 ratios 1.57×, 1.40×, 1.34×, 1.26× at acceptance
-  3.94–3.97. No config label in `docs/data/` reports two served contexts, so the
-  mislabelling guard held. Every link and anchor in all 33 markdown files resolves.
-- 2026-08-21 — comments fell from 20.3% of the Go to 18.9%, 151 lines, by deleting
-  restatement of `harness/README.md` and `docs/TECH.md` rather than by shortening anything.
-  `internal/harness/hermes.go`, the case `docs/INBOX.md` named, went 35% to 22%. The INBOX
-  question stands, and its evidence is updated: the ratio is the consequence, the
-  duplication was the defect.
-- 2026-08-21 — `docs/TECH.md`'s reorder is verified rather than reviewed: the multiset of
-  non-blank lines differs by exactly the index and three cross-references. Two said "above"
-  about a section that is below.
-- 2026-08-21 — `kit audit` reported two MEDIUM findings and both are cleared: the work
-  protocol was older than the installed kit's (`kit init`), and 0009 named 0004 in `needs:`,
-  which is Dropped and will never ship. Three LOW `doc-bloat` findings are on Shipped docs
-  and are left alone.
+- 2026-08-21 — written after the work, which inverts the protocol: a direct audit of an empty
+  board rather than a feature planned from the vision. The branch is not a `kit claim` and
+  does not carry this id.
+- 2026-08-21 — the `results/` premise was wrong as first written. "All snapshotted" became
+  nine of eleven once each file was matched row-for-row against `docs/data/`; the leaning is
+  unchanged because neither remaining file is cited anywhere.
+- 2026-08-21 — the open question about long sentences is settled the other way, in 0020. The
+  claim that splitting them costs the scoping did not survive doing it: all nineteen split
+  without losing a clause, and `kit audit` now reports none in the repo.
