@@ -59,31 +59,36 @@ pager, not the model.
 
 ## Coding against the local model
 
-1.  **Serve, in this checkout.** `agent.env`, never `tuned.env`: it serves the sampling,
-    thinking toggle and chat-template override Claude Code never sends itself.
+`make install` puts `localcode` on your `PATH` with this checkout's location compiled in.
+Then, in any repository:
 
-    ```sh
-    make serve CONFIG=config/agent.env   # first run downloads ~17 GB; make smoke checks it
-    ```
+```sh
+localcode                          # start a server if none is running, and work here
+localcode "fix the failing test"   # or answer one prompt and exit
+localcode status                   # what is being served, at what context
+localcode stop                     # stop it, waiting for the memory back
+```
 
-2.  **Add this to `~/.zshrc`.** Use the absolute path to this checkout.
+Nothing is written to the repository you work in. Session state and the handoff live under
+`~/.local/state/localcode/`, keyed by the repository's path, so two checkouts of one project
+are two boxes of work.
 
-    ```sh
-    localclaude() (               # parens make it a subshell, so nothing leaks into yours
-      set -a; . ~/src/localcode/harness/claude-code/claude-code.env; set +a
-      exec claude --tools Bash,Edit,Read,Write --allowedTools Bash,Edit,Read,Write "$@"
-    )
-    ```
+**The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
+Writes reach the working directory, temp and the cache roots; everything else the kernel
+refuses. Reads are unrestricted, because an agent that cannot read a toolchain cannot use
+one. The network is loopback-only, so a repository's source cannot leave the machine —
+`localcode -net` opens it for one session when something has to be installed. A refused
+write names the path and the line that allows it:
 
-3.  **Run `localclaude` in any repository.** Nothing is written to it, to your shell, or to
-    `~/.claude`.
+```sh
+echo ~/.cargo >> ~/.config/localcode/writable
+```
 
-4.  **Stop with `make stop`.** It waits for the memory back rather than only killing.
+**`agent.env`, never `tuned.env`:** it serves the sampling, thinking toggle and
+chat-template override Claude Code never sends itself. `localcode` serves it by default.
 
-`--tools` cuts the preamble from 18,388 tokens to 3,711 and `--allowedTools` pre-approves that
-same set, which is what runs it unprompted — `--permission-mode auto` calls home for its Bash
-check and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` blocks it, while `dontAsk` denies rather
-than allows.
+Moving this checkout means running `make install` again — the path is compiled in, not
+searched for.
 
 ## How the repo is laid out
 

@@ -111,7 +111,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
       `~/.config/localcode/writable` widens it
 - [x] the network is loopback-only by default and `--net` opens it for one session, both
       asserted against a real endpoint
-- [ ] the README's manual is the installed command, and `harness/claude-code/README.md`
+- [x] the README's manual is the installed command, and `harness/claude-code/README.md`
       says which of the two flows a reader wants
 
 ## Open questions
