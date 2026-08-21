@@ -102,7 +102,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
       `localcode status` reports what is served
 - [x] the bare command starts a server when none is running, prints the cost first, and
       `--no-serve` refuses instead
-- [ ] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
+- [x] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
 - [ ] handoff works in any repository, with state under `~/.local/state/localcode/` and
       `HANDOFF.md` still at the checkout root when working on localcode itself
 - [ ] the agent runs under a seatbelt profile that confines writes to the working

@@ -43,6 +43,8 @@ const usage = `localcode — drive the local model in this repository
 
 usage:
   localcode [flags] [prompt]   run the agent here
+  localcode serve              start the server here, in the foreground
+  localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
   localcode --help
 
@@ -69,9 +71,14 @@ func main() {
 		code int
 		err  error
 	)
-	if len(args) > 0 && args[0] == "status" {
+	switch {
+	case len(args) > 0 && args[0] == "status":
 		code, err = status(*endpoint)
-	} else {
+	case len(args) > 0 && args[0] == "serve":
+		code, err = script(*checkoutFlag, "serve.sh", *config)
+	case len(args) > 0 && args[0] == "stop":
+		code, err = script(*checkoutFlag, "stop.sh")
+	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,
 			endpoint: *endpoint,
@@ -267,4 +274,25 @@ func stateDir() (string, error) {
 		return "", fmt.Errorf("no home directory: %w", err)
 	}
 	return filepath.Join(home, ".local", "state", "localcode"), nil
+}
+
+// script runs one of the checkout's own scripts and passes its exit code through. serve
+// and stop are the same two `make serve` and `make stop` reach: the wait for the memory
+// back is a fact with one home, and a launcher that re-solved it would be the fifth.
+func script(checkoutFlag, name string, args ...string) (int, error) {
+	root, err := resolveCheckout(checkoutFlag)
+	if err != nil {
+		return 2, err
+	}
+	cmd := exec.Command(filepath.Join(root, "scripts", name), args...)
+	cmd.Dir = root // serve.sh resolves a relative chat-template path against its own $PWD
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode(), nil
+		}
+		return 2, fmt.Errorf("could not run %s: %w", name, err)
+	}
+	return 0, nil
 }
