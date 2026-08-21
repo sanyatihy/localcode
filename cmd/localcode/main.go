@@ -14,6 +14,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -115,7 +117,24 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 
-	argv := []string{"--tools", agentTools, "--allowedTools", agentTools}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return 2, fmt.Errorf("no working directory: %w", err)
+	}
+
+	// The handoff hooks are addressed absolutely and given a state directory of their
+	// own, which is what lets 0016 run outside this checkout at all.
+	state, err := repoState(cwd)
+	if err != nil {
+		return 2, err
+	}
+	settings, err := writeSettings(root, state)
+	if err != nil {
+		return 2, err
+	}
+	env = append(env, "LOCALCODE_HANDOFF_DIR="+state)
+
+	argv := []string{"--tools", agentTools, "--allowedTools", agentTools, "--settings", settings}
 	// The instruction goes last and only when there is one: with no prompt this is an
 	// interactive session, which is the common case for a developer in their own repo.
 	if len(o.args) > 0 {
@@ -295,4 +314,46 @@ func script(checkoutFlag, name string, args ...string) (int, error) {
 		return 2, fmt.Errorf("could not run %s: %w", name, err)
 	}
 	return 0, nil
+}
+
+// repoState is where one repository's session state lives — the handoff above all. Keyed
+// by the repository's path rather than its name, since two checkouts of one project are
+// the normal case here and they are not the same box of work.
+func repoState(repo string) (string, error) {
+	base, err := stateDir()
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(repo))
+	slug := filepath.Base(repo) + "-" + hex.EncodeToString(sum[:4])
+	dir := filepath.Join(base, "repos", slug)
+	return dir, os.MkdirAll(dir, 0o755)
+}
+
+// writeSettings renders the hooks with absolute paths. harness/claude-code/hooks.json
+// addresses them through $CLAUDE_PROJECT_DIR, which is the repository being visited — so
+// in anybody else's the hooks resolve to scripts that are not there and the session dies
+// saying so. Generated rather than committed, because the path is only known once
+// installed.
+func writeSettings(root, state string) (string, error) {
+	hook := func(name string) any {
+		return []any{map[string]any{"hooks": []any{map[string]string{
+			"type":    "command",
+			"command": filepath.Join(root, "harness", "claude-code", "hooks", name),
+		}}}}
+	}
+	doc := map[string]any{"hooks": map[string]any{
+		"SessionStart": hook("session-start.sh"),
+		"PreCompact":   hook("pre-compact.sh"),
+		"SessionEnd":   hook("session-end.sh"),
+	}}
+	body, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(state, "settings.json")
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		return "", fmt.Errorf("could not write %s: %w", path, err)
+	}
+	return path, nil
 }
