@@ -6,9 +6,9 @@
 # Port differs from llama.cpp's by default so both can be up at once — but they must not
 # be *loaded* at once on 32 GB, where either alone is most of the machine.
 set -euo pipefail
-CONFIG="${1:-mlx/config/mlx-4bit.env}"
+CONFIG="${1:-runtimes/mlx/config/mlx-4bit.env}"
 [ -f "$CONFIG" ] || { echo "no such config: $CONFIG" >&2; exit 2; }
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # shellcheck source=/dev/null
 set -a; . "$CONFIG"; set +a
@@ -17,7 +17,7 @@ for var in MODEL_HF HOST PORT MAX_TOKENS PROMPT_CACHE_BYTES PROMPT_CACHE_SIZE PR
 done
 
 echo "serving $CONFIG: $MODEL_HF on $HOST:$PORT" >&2
-exec ./mlx/.venv/bin/python -m mlx_lm server \
+exec ./runtimes/mlx/.venv/bin/python -m mlx_lm server \
   --model "$MODEL_HF" --host "$HOST" --port "$PORT" --max-tokens "$MAX_TOKENS" \
   --prompt-cache-bytes "$PROMPT_CACHE_BYTES" --prompt-cache-size "$PROMPT_CACHE_SIZE" \
   --prefill-step-size "$PREFILL_STEP_SIZE"

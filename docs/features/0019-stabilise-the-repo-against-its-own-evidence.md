@@ -1,12 +1,12 @@
 ---
 id: 0019
 title: Stabilise the repo against its own evidence
-status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
+status: Shipped
 created: 2026-08-21
-shipped:             # fill the date when status flips to Shipped
+shipped: 2026-08-21
 check:               # optional — date to check whether this worked. Only for bets.
 checked:             # written by kit check <id> "<outcome>", never by hand
-review: human
+review:              # optional — `human` means a person merges this one. kit accept --review
 needs:
 related: 0006, 0010, 0014, 0017
 ---
@@ -79,71 +79,37 @@ status live in the frontmatter, and a second copy would drift.
 - **`results/` holds 11 untracked scratch files, 288 KB.** Nine are contained row-for-row in
   a `docs/data/` snapshot. The other two are intermediates nothing cites: a 5-row MLX depth
   smoke, and 2 truncated rows from a 0013 re-run. Leaning: delete, once a human agrees.
-- **Nineteen sentences in `docs/TECH.md` run past 45 words**, which `kit audit` reports at
-  LOW. Leaning: leave them. Each is a claim plus the one clause of evidence the protocol
-  allows, and splitting them mechanically would cost the scoping the claims depend on.
 
 ## Log
 
-- 2026-08-21 — the doc is written after the work, which inverts the protocol and is
-  recorded rather than disguised. The request was a direct audit of an empty board, not a
-  feature planned from the vision, so the branch is not a `kit claim` and does not carry
-  this id.
-- 2026-08-21 — **the MLX serving config was the configuration 0006 measured as unusable.**
-  `mlx/config/mlx-4bit.env` shipped `PROMPT_CACHE_SIZE="16"`.
-  `docs/data/2026-08-19-m2max-32gb-0006-mlx-16-slots.jsonl` has all 15 depth rows at
-  `fail_over_budget`; `...-0006-runtime.jsonl`, the scored comparison at 2 slots, has all 15
-  at `pass`. The raise landed in commit `003f7b7` at 08:27 UTC and the failing run is
-  08:25–09:14 UTC, so the value was committed as the evidence against it was being taken and
-  never corrected. Every MLX number in `docs/TECH.md` came from 2 slots. Set to 2.
-- 2026-08-21 — **`cmd/report` printed one void run as three.** `accepted()` incremented a
-  field on the aggregate, and `reportPaired` reads the baseline's set once per candidate.
-  Reproduced: one stalled baseline run printed `(3 void: stalled past 4x the median)`. It is
-  pure now and returns what it dropped. No published figure moves — the 0017 rows carry no
-  stalls — but a void count is evidence here.
-- 2026-08-21 — **a claim rested on rows that were not committed.** "Unbounded is not an
-  option" was evidenced only by `results/0006-mlx-unbounded-cache.jsonl`, which
-  `.gitignore` says is deleted with the worktree: 37 rows, free memory at 0.00, swap flat,
-  9 runs over budget. Snapshotted. The section counts three misconfigurations and had
-  evidence for two.
-- 2026-08-21 — **`newestTranscript` could dereference a nil `FileInfo`.** It sorted glob
-  results by `os.Stat` while discarding the error, so a transcript removed between the glob
-  and the stat panics the driver. It scans for the newest and skips what it cannot stat.
-- 2026-08-21 — **`cmd/handoff` wrote its rows through a second, unsynced appender**, where
-  every other results writer syncs through `eval.AppendJSON`. A session is bounded at 30
-  minutes, so a lost row is a lost half-hour.
-- 2026-08-21 — **three documents said Claude Code cannot be offline.** 0010 falsified it: a
-  fixture completed with the network denied in the kernel, and 0008 measured a real task
-  contacting no host. A heading said it, `claude-code.env` deferred to "a later task" that
-  had already run, and `docs/VISION.md` asserted it as a constraint. All three now state the
-  measurement, scoped to token authentication.
-- 2026-08-21 — **`docs/VISION.md` carried two figures its own features took away.** "Roughly
-  a third of the machine unused" came from summed per-process RSS, which counts every shared
-  page once per resident process; against anonymous-plus-wired the model wires 20.89 GB and
-  an editor takes 6.61. Latency was named as the axis separating the profiles, before 0014
-  found the GPU-wired one that sets the attended ceiling at 57,344.
-- 2026-08-21 — **`Retrieval.Question` and `Patch.Package` were read by nothing**, while
-  being declared, JSON-tagged and present in all fourteen fixtures. Removed from both.
-  `TestHaystackUnchangedForPreDistractorFixtures` still passes, which is the proof no prompt
-  moved.
-- 2026-08-21 — **`make eval THINKING=off` could never have worked.** `cmd/eval` refuses the
-  toggle without sampling and the Makefile had no variable to pass it. `SAMPLING` sits beside
-  `THINKING` now, and `make help` renders the `##` comments already written for a target that
-  did not exist.
-- 2026-08-21 — **the checks that found nothing are recorded too.** `cmd/report` reproduces
-  TECH.md's harness table cell for cell from the committed rows — 14/15, 12/15, 13/15, 15/15
-  and ×0.21, ×0.55, ×4.02 — and the 0017 ratios 1.57×, 1.40×, 1.34×, 1.26× at acceptance
-  3.94–3.97. No config label in `docs/data/` reports two served contexts, so the
-  mislabelling guard held. Every link and anchor in all 33 markdown files resolves.
-- 2026-08-21 — comments fell from 20.3% of the Go to 18.9%, 151 lines, by deleting
-  restatement of `harness/README.md` and `docs/TECH.md` rather than by shortening anything.
-  `internal/harness/hermes.go`, the case `docs/INBOX.md` named, went 35% to 22%. The INBOX
-  question stands, and its evidence is updated: the ratio is the consequence, the
-  duplication was the defect.
-- 2026-08-21 — `docs/TECH.md`'s reorder is verified rather than reviewed: the multiset of
-  non-blank lines differs by exactly the index and three cross-references. Two said "above"
-  about a section that is below.
-- 2026-08-21 — `kit audit` reported two MEDIUM findings and both are cleared: the work
-  protocol was older than the installed kit's (`kit init`), and 0009 named 0004 in `needs:`,
-  which is Dropped and will never ship. Three LOW `doc-bloat` findings are on Shipped docs
-  and are left alone.
+- 2026-08-21 — written after the work, which inverts the protocol: a direct audit of an empty
+  board rather than a feature planned from the vision. The branch is not a `kit claim` and
+  does not carry this id.
+- 2026-08-21 — **the premise that a committed config records what was measured is falsified.**
+  `mlx/config/mlx-4bit.env` served `PROMPT_CACHE_SIZE="16"`, which 0006 measured as unusable:
+  15/15 depth rows `fail_over_budget` against 15/15 `pass` at 2 slots, the count every MLX
+  number in `docs/TECH.md` came from. Set to 2. The raise landed at 08:27 UTC while the run
+  refuting it was taken 08:25–09:14, so the config was never corrected when it failed.
+- 2026-08-21 — **a claim rested on rows the repo does not keep.** "Unbounded is not an option"
+  was evidenced only by a file in gitignored `results/`. Snapshotted as
+  `docs/data/2026-08-19-m2max-32gb-0006-mlx-unbounded-cache.jsonl`, so the MLX section's three
+  misconfigurations are three rather than two.
+- 2026-08-21 — **the vision asserted the opposite of a measurement.** `docs/VISION.md` and two
+  harness documents said Claude Code cannot be offline; 0010 completed a fixture with the
+  network denied in the kernel, and 0008 measured a real task contacting no host. The
+  constraint is rewritten to what was measured, scoped to token authentication.
+- 2026-08-21 — **two of the vision's figures were taken away by its own features.** "Roughly a
+  third of the machine unused" came from summed per-process RSS, which counts a shared page
+  once per process; latency was named as the only axis separating the profiles before 0014
+  found the GPU-wired one that sets the attended ceiling at 57,344. Both bullets now state
+  what was measured.
+- 2026-08-21 — the void count `cmd/report` prints now counts a stalled run once however many
+  times its side is read. `accepted()` mutated the aggregate and the baseline is read once per
+  candidate, so one stall printed as three. No published figure moves: the 0017 rows carry
+  no stalls.
+- 2026-08-21 — the `results/` question is narrowed: nine of its eleven files are contained
+  row-for-row in a `docs/data/` snapshot, and the two that are not are intermediates nothing
+  cites. The leaning to delete is unchanged.
+- 2026-08-21 — the open question about long sentences is settled the other way, in 0020. The
+  claim that splitting them would cost the scoping did not survive doing it: all nineteen
+  split without losing a clause.

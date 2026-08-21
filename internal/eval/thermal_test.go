@@ -56,16 +56,16 @@ func TestFidelityHashesRepliesAndRefusesErrors(t *testing.T) {
 	defer srv.Close()
 	c := NewClient(srv.URL, 5*time.Second)
 
-	first, err := Fidelity(context.Background(), c, 64)
+	first, err := Fidelity(context.Background(), c, qwenProfile(t), 64)
 	if err != nil {
 		t.Fatalf("fidelity: %v", err)
 	}
-	same, err := Fidelity(context.Background(), c, 64)
+	same, err := Fidelity(context.Background(), c, qwenProfile(t), 64)
 	if err != nil || same.Hash != first.Hash {
 		t.Fatalf("identical replies must hash alike: %v %v", same.Hash, err)
 	}
 	reply = "two"
-	differs, err := Fidelity(context.Background(), c, 64)
+	differs, err := Fidelity(context.Background(), c, qwenProfile(t), 64)
 	if err != nil {
 		t.Fatalf("fidelity: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestFidelityHashesRepliesAndRefusesErrors(t *testing.T) {
 		_, _ = fmt.Fprint(w, `{"error":{"message":"boom"}}`)
 	}))
 	defer bad.Close()
-	if _, err := Fidelity(context.Background(), NewClient(bad.URL, 5*time.Second), 64); err == nil {
+	if _, err := Fidelity(context.Background(), NewClient(bad.URL, 5*time.Second), qwenProfile(t), 64); err == nil {
 		t.Fatal("a server error must not be hashed as fidelity")
 	}
 }

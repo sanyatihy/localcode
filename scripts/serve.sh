@@ -3,7 +3,7 @@
 # source of truth for how a measurement was produced; this script adds no flags.
 set -euo pipefail
 
-CONFIG="${1:-config/baseline.env}"
+CONFIG="${1:-config/tuned.env}"
 [ -f "$CONFIG" ] || { echo "no such config: $CONFIG" >&2; exit 2; }
 
 # shellcheck source=/dev/null

@@ -59,6 +59,11 @@ ships, which is the point at which numbers stop changing and start being cited.
 
 ## Reading them
 
+Every table in [../TECH.md](../TECH.md) that one of these files backs can be regenerated:
+`go run ./cmd/report -results <file> -baseline <label>` reproduces the harness comparison and
+the decode ratios cell for cell. A table that no longer regenerates is a defect in one of the
+two, and which one is the question it raises.
+
 Rows are JSON Lines. Both files carry `condition`, so never aggregate without grouping by
 it. Ladder rows also carry an `apparatus` record naming what else was resident, since a
 condition label is a claim and that row is the evidence for it.

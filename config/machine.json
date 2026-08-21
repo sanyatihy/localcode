@@ -1,4 +1,19 @@
 {
-  "note": "What this project knows about the machine it runs on, measured rather than assumed. See docs/TECH.md.",
-  "min_headroom_gb": 4.0
+  "note": "Every limit this machine imposes, measured rather than assumed. Nothing in Go or in a script may carry one of these numbers: the 128 GB machine moves all of them at once, and docs/VISION.md calls a hardcoded machine limit a defect to fix rather than a value to update. docs/TECH.md says how each was measured.",
+  "machine": "m2max-32gb",
+
+  "min_headroom_gb": 4.0,
+
+  "desk_profiles": [
+    {
+      "name": "attended",
+      "ceiling_tokens": 57344,
+      "why": "the largest context that left the compositor drawing; 65536 stalled it for a whole run while every request still succeeded"
+    },
+    {
+      "name": "unattended",
+      "ceiling_tokens": 65536,
+      "why": "the largest context measured to serve at all — nobody is watching, so the desktop cannot be lost"
+    }
+  ]
 }

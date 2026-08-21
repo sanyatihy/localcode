@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Create the isolated environment MTPLX runs in, mirroring mlx/setup.sh: the vision confines
-# Python to its own environment and calls it, and this one cannot share mlx/'s — MTPLX pins
+# Create the isolated environment MTPLX runs in, mirroring runtimes/mlx/setup.sh: the vision confines
+# Python to its own environment and calls it, and this one cannot share runtimes/mlx/'s — MTPLX pins
 # transformers below the version 0006's comparison was measured on, and a shared venv would
 # silently move that comparison's runtime.
 #

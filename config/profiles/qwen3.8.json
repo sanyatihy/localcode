@@ -1,16 +1,22 @@
 {
   "name": "qwen3.8",
-  "note": "Everything here was measured, not read off a card: see docs/TECH.md.",
+  "note": "The model's own properties, every one of them read by cmd/eval. Measured, not read off a card: see docs/TECH.md.",
   "thinking": {
     "mechanism": "chat_template_kwarg",
-    "key": "enable_thinking",
-    "effort_field": "reasoning_effort",
-    "effort_levels": ["low", "medium", "xhigh"],
-    "effort_default": "xhigh"
+    "key": "enable_thinking"
   },
   "sampling": {
-    "thinking":    { "temperature": 1.0, "top_p": 0.95, "top_k": 20 },
-    "nonthinking": { "temperature": 0.7, "top_p": 0.80, "top_k": 20, "presence_penalty": 1.5 }
+    "thinking": {
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 20
+    },
+    "nonthinking": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "presence_penalty": 1.5
+    }
   },
   "reasoning": {
     "response_field": "reasoning_content",

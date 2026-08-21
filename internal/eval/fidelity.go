@@ -37,7 +37,13 @@ type FidelityResult struct {
 // Fidelity runs the probes greedily and hashes what came back. Any transport failure is
 // returned rather than hashed: a check that silently hashes an error message would match
 // itself across two builds and report fidelity where there was none.
-func Fidelity(ctx context.Context, c *Client, maxTokens int) (FidelityResult, error) {
+func Fidelity(ctx context.Context, c *Client, prof *Profile, maxTokens int) (FidelityResult, error) {
+	// Thinking off through the model's own mechanism: a probe that reasoned would compare
+	// two reasoning traces rather than two decoders.
+	off, err := prof.ThinkingKwargs(false)
+	if err != nil {
+		return FidelityResult{}, err
+	}
 	zero, one := 0.0, 1
 	greedy := Sampling{Temperature: &zero, TopK: &one}
 	sum := sha256.New()
@@ -45,7 +51,7 @@ func Fidelity(ctx context.Context, c *Client, maxTokens int) (FidelityResult, er
 	for i, msgs := range FidelityProbes() {
 		resp, err := c.Complete(ctx, chatRequest{
 			Messages: msgs, MaxTokens: maxTokens, Sampling: greedy,
-			ChatTemplateKwargs: map[string]any{"enable_thinking": false},
+			ChatTemplateKwargs: off,
 		})
 		if err != nil {
 			return FidelityResult{}, fmt.Errorf("fidelity probe %d: %w", i, err)
