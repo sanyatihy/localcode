@@ -14,6 +14,9 @@
 # away rather than appearing beside it. `scripts/screen.sh` decides whether a config may
 # run at all; this decides whether it is worth running.
 set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=scripts/lib.sh
+. scripts/lib.sh
 
 BASELINE="${BASELINE:-config/tuned.env}"
 CANDIDATE="${CANDIDATE:?CANDIDATE is the serving config under test}"
@@ -25,28 +28,9 @@ TASK="${TASK:-}"
 REPEATS="${REPEATS:-3}"
 RESULTS="${RESULTS:-results/pair.jsonl}"
 PORT="${PORT:-8081}"
+ENDPOINT="http://127.0.0.1:$PORT"
 THINKING="${THINKING:-off}"
 SAMPLING="${SAMPLING:-nonthinking}"
-
-stop_server() {
-  pkill -f llama-server 2>/dev/null || true
-  local deadline=$((SECONDS + 90))
-  while pgrep -f llama-server >/dev/null; do
-    [ $SECONDS -ge $deadline ] && { pkill -9 -f llama-server 2>/dev/null || true; sleep 3; break; }
-    sleep 1
-  done
-  sleep 2
-}
-
-wait_healthy() {
-  local deadline=$((SECONDS + 600)) grace=$((SECONDS + 20))
-  while [ $SECONDS -lt $deadline ]; do
-    [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/health" 2>/dev/null)" = "200" ] && return 0
-    if [ $SECONDS -ge $grace ] && ! pgrep -f llama-server >/dev/null; then return 1; fi
-    sleep 3
-  done
-  return 1
-}
 
 # The side with the mechanism off runs first, so a candidate never benefits from a
 # machine the baseline warmed and the caches it left behind.
@@ -55,7 +39,7 @@ for side in "$BASELINE" "$CANDIDATE"; do
   echo "=== $label ===" >&2
   stop_server
   nohup ./scripts/serve.sh "$side" > "/tmp/pair-$label.log" 2>&1 &
-  if ! wait_healthy; then
+  if ! wait_healthy 600; then
     echo "  LOAD FAILED — see /tmp/pair-$label.log" >&2
     exit 2
   fi
