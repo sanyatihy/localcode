@@ -125,23 +125,17 @@ tokeniser instead of guessing. Claude Code points at this server with
 `golangci-lint`, `shellcheck`, a documentation link check and `go test -race`. It needs no
 server and no model weights, because CI has neither.
 
-**It covers the repo and not just the Go**, which is 49.6% of it by line count. A shell bug
+**It covers the repo and not just the Go**, which is half of it by line count. A shell bug
 here does not crash — it produces a wrong measurement, and two of the [gotchas](#gotchas)
-below are shell bugs that already cost wrong numbers. `shellcheck` runs at `-S style` with one
-rule disabled in `.shellcheckrc`: SC1090, sourcing a config path chosen at runtime, which is
-the design of every script here. Alongside it the gate holds shell options to the file mode —
-**an executable script must `set -euo pipefail`, and a sourced one must set nothing**, because
-options set in a library leak into whatever sourced it.
-
-`scripts/doclinks.py` checks every relative link and heading anchor in tracked markdown, which
-is 27% of the repo and cites itself by path and by anchor. External URLs are deliberately not
-fetched: a gate that needs the network fails on the machine this project exists to work
-offline on.
+below are shell bugs that already cost wrong numbers. So `shellcheck` runs over every tracked
+script, `scripts/doclinks.py` checks every relative link and heading anchor in the markdown
+without fetching anything, and the gate holds shell options to the file mode: **an executable
+script must `set -euo pipefail`, and a sourced one must set nothing**, since options set in a
+library leak into whatever sourced it.
 
 **`shellcheck` and `golangci-lint` are skipped loudly when absent** and installed in CI, so
-the gate is absolute where it has to be. The skip is never total — `bash -n` runs in
-`shellcheck`'s place. Both are written as an `if` rather than `cmd && run || echo`, for the
-reason in the gotchas below.
+the gate is absolute where it has to be. The skip is never total: `bash -n` runs in
+`shellcheck`'s place.
 
 `make smoke` runs `scripts/smoke.sh` against a *running* endpoint: health, a chat
 completion that must return non-empty content, and a tool call that must return valid

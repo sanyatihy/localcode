@@ -10,24 +10,12 @@ in it comes from Claude Code's own documentation read against 2.1.233.
 
 ## It needs the server configured for it
 
-llama-server serves `/v1/messages` and `/v1/messages/count_tokens` and converts to its
-chat-completions path internally, so there is nothing in the request path. Two things on
-the server side are not optional:
-
-- **`config/agent.env`, not `config/tuned.env`.** Sampling and the thinking toggle are
-  per-request for the scorer and Claude Code sends neither, so they have to be served as
-  defaults. Without that this model thinks at `xhigh`.
-- **A one-line chat-template override.** Claude Code sends a `role: "system"` message
-  *after* the user turn — the `mid-conversation-system-2026-04-07` capability — on every
-  request, with 21 tools defined or with none, and no documented variable stops it.
-  Qwen3.8's own template raises on a non-leading system message; llama.cpp returns that as
-  a 500 and Claude Code retries ten times and dies.
-  `config/templates/qwen3.8-system-anywhere.jinja` renders it as its own ChatML block
-  instead.
-
-Anthropic documents an automatic retry that disables the capability after such a
-rejection, but it matches on the upstream's error wording — a Jinja exception carries
-none, so the recovery path never fires.
+Serve **[`config/agent.env`](../../config/agent.env), not `config/tuned.env`**. Two things it
+does are not optional: it serves sampling and the thinking toggle as defaults, because this
+client sends neither; and it names the chat-template override, because Qwen3.8's own template
+raises on the mid-conversation system message this client sends on every request.
+[Claude Code against the local endpoint](../../docs/TECH.md#claude-code-against-the-local-endpoint)
+has the measurements and the failure modes.
 
 ## `--tools` is the whole story
 
@@ -85,17 +73,12 @@ Under 40 lines, because every line is read again at every session start.
 injects it. With no handoff to print it prints the shape above instead; either way it
 prints the standing instruction to keep the file current.
 
-[`hooks/pre-compact.sh`](hooks/pre-compact.sh) refuses every compaction and appends what
-fired to `results/precompact.jsonl`. Exit 2 is the only code that blocks one; neither
-stream reaches the model, so the record is a file. Both triggers are refused, because a
-manual `/compact` re-ingests the conversation exactly as an automatic one does.
-
-**A refused compaction does not end the session**, measured at 2.1.233. The turn
-completes normally and `PreCompact` fires again on the next one, once per turn for as
-long as the conversation stays over the threshold. What ends a session here is the
-declared window: `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refuses a send that would exceed it,
-and refusal is what stops the client spending generation on a summary in the meantime,
-not what bounds the session.
+[`hooks/pre-compact.sh`](hooks/pre-compact.sh) refuses every compaction and appends what fired
+to `results/precompact.jsonl`. Exit 2 is the only code that blocks one; neither stream reaches
+the model, so the record is a file. Both triggers are refused, because a manual `/compact`
+re-ingests the conversation exactly as an automatic one does — and what a refusal does and does
+not buy is in
+[Sessions hand off instead of compacting](../../docs/TECH.md#sessions-hand-off-instead-of-compacting).
 
 [`hooks/session-end.sh`](hooks/session-end.sh) writes a handoff when the session wrote
 none, and leaves one that exists alone. It calls no model: it reads the transcript for what
@@ -129,28 +112,15 @@ largest single turn, since a session refused a compaction keeps growing — its 
 wall clock, and how many compactions were refused during it.
 
 Verified in both readers at 2.1.233: a marker written into `HANDOFF.md` came back out of a
-fresh `claude -p` session, through `--settings` and through the project-scoped file. The
-refusal was verified on both triggers — `/compact` in a print session, and an automatic one
-forced by `--autocompact 100000` against a conversation deliberately grown past it. All
-three events fire in a print session, which is the form the driver runs.
+fresh `claude -p` session, through `--settings` and through the project-scoped file.
 
-## It is offline as configured here, and that was measured rather than argued
+## It is offline, and the env file is what makes it so
 
-`ANTHROPIC_BASE_URL` routes every model call, so no prompt reaches a hosted model. It does
-not route the rest — OAuth refresh, feature-flag fetches, the fast-mode availability check
-and WebFetch's domain-safety preflight address Anthropic hosts regardless — which is why
-[`claude-code.env`](claude-code.env) sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
+`ANTHROPIC_BASE_URL` routes every model call, so no prompt reaches a hosted model. It does not
+route OAuth refresh, feature-flag fetches, the fast-mode check or WebFetch's domain-safety
+preflight, which is why [`claude-code.env`](claude-code.env) sets
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
 
-With it set, a session doing a real task **contacts nothing**, measured through a CONNECT
-proxy that records hosts and tunnels TLS untouched; unset, the same task makes 9
-connections to `api.anthropic.com` and reaches no other host. It then completed a fixture
-with the network denied **in the kernel** and only the loopback left open. So this harness
-is offline in the strong sense, not merely local.
-
-Two scopes on that claim. It holds under **token authentication** — no claude.ai login is
-stored on this machine, so the OAuth refresh path is untested — and it is a property of
-this configuration, not of the binary. See
-[0008](../../docs/features/0008-wire-the-winning-config-into-the-coding-agent.md) for the
-host measurement and
-[0010](../../docs/features/0010-a-b-pi-hermes-and-opencode-against-claude-code.md) for the
-kernel-denied run.
+With that set the flow is offline in the strong sense, measured rather than argued, and scoped
+to token authentication — see
+[Nothing displaces Claude Code](../../docs/TECH.md#nothing-displaces-claude-code-and-the-two-axes-disagree).

@@ -29,17 +29,7 @@ Two of them take the machine's own answer rather than a list somebody typed:
     CELLS="40960:q8_0 57344:q8_0" ./scripts/ladder.sh     # one band, when that is the question
     BASE=config/agent.env ./scripts/ladder.sh             # ladder a different serving config
 
-## Rules with one home, and no second
-
-- **Killing an 18 GB server is not instant.** A fixed `sleep` lets the next server fail to
-  bind while the health check passes against the *old* one, silently measuring the previous
-  config under the next config's name.
-- **A health check must not conclude "dead" before the process exists.** `serve.sh` validates
-  its config and only then `exec`s, so the first poll finds nothing.
-- Both live in [`lib.sh`](lib.sh), and the desktop verdict in
-  [`deskverdict.py`](deskverdict.py). They were copied into four scripts once and had already
-  drifted into four different answers to the same two questions, which is the failure a second
-  home for a rule produces. Neither may be re-solved locally.
-
-The reasons behind each are in [`docs/TECH.md`](../docs/TECH.md#gotchas); each has already
-cost this repo a wrong number.
+Two traps neither may re-solve locally — stopping an 18 GB server, and not calling a server
+dead before it exists — live in [`lib.sh`](lib.sh), and the desktop verdict in
+[`deskverdict.py`](deskverdict.py). `make check` holds the shell-options half of that, and
+[docs/TECH.md](../docs/TECH.md#gotchas) says what each already cost.
