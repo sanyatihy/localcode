@@ -50,5 +50,7 @@ trigger nobody watches is not an idea, it is a hedge.
   output, so `seq 1 100000` costs a session. 0023 makes a full context survivable rather
   than fatal, and does not slow down how fast one fills. Promote when: a session hands over
   more than once on work that should have fitted, or when the cap is cheap enough to try —
-  head-limiting Bash output is a hook, not a feature.
+  head-limiting Bash output is a hook, not a feature. **Pi already does this**: 50 KB or 2,000
+  lines per tool result, with the remainder spilled to a file the model may read, so the
+  shape is settled prior art rather than a design problem.
 

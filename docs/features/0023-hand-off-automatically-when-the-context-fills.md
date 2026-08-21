@@ -23,10 +23,18 @@ designed for the driven flow, where `cmd/handoff` starts the next session; inter
 - **Not compaction.** Measured against this session: resuming from a handoff cost **4,265
   tokens and 54 s**, where compacting would have re-read 37,837 tokens — 452 s of ingest
   before generating a summary. Allowing compaction would trade a dead end for a recurring
-  twelve-minute pause.
+  twelve-minute pause. Pi, which compacts by design, is not obviously better off here: its
+  defaults reserve 16,384 tokens and keep 20,000 recent ones, so against the 32,768 its
+  provider block declares it would trigger at 16,384 and try to keep more than it had.
+  That reading is from the source and its defaults, not from a run, and it stays a
+  hypothesis until one — but it is enough that compaction is not the obviously-correct
+  answer somebody else already found.
 - **Not a bound on what fills the context.** 74.6% of that session was tool results and
   another 23.6% tool calls, so the fastest way to spend a window is unbounded command output.
-  Capping it is a different decision and a `BACKLOG.md` line.
+  Pi caps a tool result at 50 KB or 2,000 lines and spills the rest to a file the model may
+  read, which treats the cause where this feature treats the consequence. It is the better
+  fix and it is a `BACKLOG.md` line rather than a box here, because it is one hook and this
+  feature is already large.
 - **Not a driver for unattended work.** `cmd/handoff` already runs a task box across sessions
   on a budget. This is the interactive case, and it continues one instruction rather than
   working a list.
@@ -89,6 +97,12 @@ first.
 sits under `~/.claude/projects/`. A session that ends says how to continue it, in the shape
 `claude` uses, because the developer reading that line has just been told the other one.
 
+**The flags are named after the ones that already exist.** Pi ships `--continue`, `--resume`,
+`--session`, `--name` and `--fork`, and `claude` ships the first three; a developer moving
+between them should not have to learn a third spelling. `-fork <id>` is taken from Pi and
+earns its place: a chain that reached a decision worth trying twice is branched rather than
+continued, and without it the only way to keep the earlier state is not to touch it.
+
 **`localcode sessions` lists the chains in this repository** — id, when it last ran, and its
 `Next`. A `-resume` that requires an id nobody recorded is a resume nobody uses.
 
@@ -105,7 +119,8 @@ handoff to read.
 
 - [ ] a repository carries several chains, each with its own handoff and archive, and
       `localcode` starts a new one rather than inheriting
-- [ ] `-continue` resumes the most recent chain and `-resume <id>` a named one
+- [ ] `-continue` resumes the most recent chain, `-resume <id>` a named one, and
+      `-fork <id>` branches one into a new chain
 - [ ] `localcode sessions` lists the chains, and a session that ends says how to continue it
 - [ ] a session's handoff is its own: the supervisor archives the inherited one, and
       `session-end.sh` writes for every session in a chain
@@ -137,3 +152,7 @@ handoff to read.
   have resumed the first and then overwritten its handoff. Chains are per invocation, the
   default is clean, and continuing is a choice with an id — which is what `claude` does and
   therefore what needs no explaining.
+- **Pi was read before this was settled, and moved two things.** Its session model is the one
+  being built here, so the flags take its spelling and `-fork` is taken outright. Its
+  compaction defaults, read against the context this project serves, are evidence that
+  compacting is not the answer somebody else already got right.
