@@ -35,18 +35,12 @@ comparison must put **all three at 64k**, which is the expensive end of the rang
 every one of them — so the harness comparison inherits a context cost that is Hermes'
 requirement rather than anyone's choice.
 
-## What the wrong path cost, and why it looked like a network fault
+## Trap: it reports a configuration refusal as a connection error
 
-The `providers.<name>` map in `~/.hermes/config.yaml` is real — the source normalises it,
-and an unknown provider name is rejected differently from a configured one — but it is
-**not** how a local endpoint is configured. Going down it produced
-`API call failed after 3 retries: Connection error`, which reads as a transport problem
-and is not one: an instrumented listener confirmed Hermes never opened a connection at
-all, and the only hit was curl's own probe.
-
-The lesson is that Hermes reports a configuration refusal as a connection error. Reading
-the source was what suggested `providers.*`; reading the *documentation* gave the `model:`
-block in one step.
+`API call failed after 3 retries: Connection error` is what a misconfigured Hermes says, and
+an instrumented listener confirmed it never opens a connection at all. It means check the
+config, not the network. The `providers.<name>` map in the config is real and is **not** how a
+local endpoint is configured; the `model:` block above is.
 
 ## How it ranked
 

@@ -4,8 +4,7 @@ One file per way the server has actually been launched. **The config is the reco
 measurement was produced** — [`scripts/serve.sh`](../scripts/serve.sh) reads one and adds no
 flags of its own, so a row in `docs/data/` traces back to a file here.
 
-A variant is a new file, never an edit to an existing one: editing one silently changes what
-an already-recorded number was measured on.
+A variant is a new file, never an edit to an existing one.
 
 | file | context | what it is for |
 |---|---|---|
@@ -41,7 +40,8 @@ only ever disagree with it.
   comments.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
-  back. Here so a toggle cannot be swept at one fixed temperature by accident.
+  back. All three are read; a profile naming a mechanism the scorer cannot perform is refused
+  at load.
 - [`templates/`](templates/) — the one-line chat-template override that lets a
   mid-conversation system message render instead of raising.
 
