@@ -738,6 +738,23 @@ that changed the answer would be measuring something else.
 **One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
 Once is not a characterisation, and it is recorded rather than explained.
 
+**The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
+builds a second `llama_context` over the same weights — no second copy — but its cache is
+sized at the context the target serves, so its cost grows with `--ctx-size` like any other.
+Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
+40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
+49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
+and not to the editor.
+
+`--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
+params to free device memory: n_gpu_layers already set by user to 999, abort`, so the build's
+own fitter was being blocked by this project's pinned value — but unpinned at 49,152 it
+reaches 22.255 GB and still refuses. The lever is measured and spent.
+
+A caveat that matters more than the ceiling: **38,912 peaks at 22.28 GB, and 0014's desktop
+died at 22.29.** Serving the ceiling and using the machine are not the same question, and
+nothing here answers the second.
+
 ## The suite is bounded on purpose
 
 Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
