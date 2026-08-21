@@ -48,15 +48,14 @@ The lesson is that Hermes reports a configuration refusal as a connection error.
 the source was what suggested `providers.*`; reading the *documentation* gave the `model:`
 block in one step.
 
-## Measured
+## How it ranked
 
-| harness | patch-nil-check | context served |
-|---|---|---|
-| Pi | 38.5 s | 32k |
-| OpenCode | 3 m 06 s | 32k |
-| Hermes | **4 m 45 s** | 64k |
+Single runs at mismatched contexts used to sit here; 0010 replaced them with 60 runs at one
+context, and that is the number to read — see
+[docs/TECH.md](../../docs/TECH.md#nothing-displaces-claude-code-and-the-two-axes-disagree).
+The short version: **Hermes is the most reliable harness measured and the dearest**, 15/15
+against the incumbent's 14/15, for 4.02× the tokens per task and 9.2 turns against 3.9.
 
-Hermes also took **3 m 13 s to answer "reply with ready"**, a trivial prompt, which points
-at a large fixed system prompt being ingested every turn. At 64k that is expensive, and it
-is exactly the per-turn context overhead 0010 exists to measure. These are single runs on
-different context sizes and are not a ranking.
+The early observation that suggested it survived the ranking: Hermes took **3 m 13 s to
+answer "reply with ready"**, which is a large fixed system prompt being ingested. Its
+preamble is 17,465 tokens over 17 tools, second only to Claude Code on defaults.

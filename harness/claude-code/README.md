@@ -35,6 +35,9 @@ Restricted to four coding tools it is the cheapest harness measured; on its defa
 the most expensive. The `CLAUDE_CODE_DISABLE_*` variables move the total by 7% and remove
 no tool from the request. See the table in [../README.md](../README.md).
 
+[`editor-session.md`](editor-session.md) is the primary record: three sessions asking one
+question, where the extension takes **462 s** and the same harness in a terminal takes 45.
+
 ## Driving it from the editor
 
 The extension does not read the env file — it spawns its own process. What it does read is
@@ -130,11 +133,23 @@ refusal was verified on both triggers — `/compact` in a print session, and an 
 forced by `--autocompact 100000` against a conversation deliberately grown past it. All
 three events fire in a print session, which is the form the driver runs.
 
-## It cannot be offline
+## It is offline as configured here, and that was measured rather than argued
 
 `ANTHROPIC_BASE_URL` routes every model call, so no prompt reaches a hosted model. It does
-not route the rest: OAuth refresh, feature-flag fetches, the fast-mode availability check
-and WebFetch's domain-safety preflight go to Anthropic hosts regardless.
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` covers some of that and the observed hosts
-are measured rather than assumed — see
-[0008](../../docs/features/0008-wire-the-winning-config-into-the-coding-agent.md).
+not route the rest — OAuth refresh, feature-flag fetches, the fast-mode availability check
+and WebFetch's domain-safety preflight address Anthropic hosts regardless — which is why
+[`claude-code.env`](claude-code.env) sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
+
+With it set, a session doing a real task **contacts nothing**, measured through a CONNECT
+proxy that records hosts and tunnels TLS untouched; unset, the same task makes 9
+connections to `api.anthropic.com` and reaches no other host. It then completed a fixture
+with the network denied **in the kernel** and only the loopback left open. So this harness
+is offline in the strong sense, not merely local.
+
+Two scopes on that claim. It holds under **token authentication** — no claude.ai login is
+stored on this machine, so the OAuth refresh path is untested — and it is a property of
+this configuration, not of the binary. See
+[0008](../../docs/features/0008-wire-the-winning-config-into-the-coding-agent.md) for the
+host measurement and
+[0010](../../docs/features/0010-a-b-pi-hermes-and-opencode-against-claude-code.md) for the
+kernel-denied run.

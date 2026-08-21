@@ -18,8 +18,8 @@ Run `kit next` to be told which feature and task to pick up.
   On ship, durable facts move to the as-built doc and this file freezes as history.
 - **Each `## Log` entry names a change to the plan.** What the work did before it
   converged lives in the PR; what is still true after ship lives in the as-built doc.
-- **As much as necessary and no more.** Cut restatement and hedging; never cut a
-  decision, a constraint, or the evidence for it. Each section states its own budget.
+- **A sentence earns its place by deciding, constraining or measuring something.** The
+  work protocol holds the rule and the one-clause limit for evidence.
 - **IDs are stable** (`0007`). Cite them in commits and branch names; files never move.
 - **`check:` is optional.** Set it only when the feature is a bet worth revisiting —
   a pricing change, a growth experiment. Most features do not need one.
