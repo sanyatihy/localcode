@@ -148,11 +148,9 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	ctx := context.Background()
 
-	// The endpoint is asked what it serves rather than told: the profile a run declares
-	// is a human's claim, and a harness driven against a server below its floor fails in
-	// a way that reads as the model answering badly. A backend that cannot be asked is
-	// still scoreable — that is MLX, which serves completions without llama.cpp's /props
-	// — so the guard switches off loudly rather than stopping the run.
+	// Asked rather than told: the profile a run declares is a human's claim, and a harness
+	// driven below its floor fails in a way that reads as the model answering badly. A
+	// backend that cannot be asked is still scoreable, so the guard switches off loudly.
 	client := eval.NewClient(cfg.endpoint, propsTimeout)
 	props, err := client.Props(ctx)
 	if err != nil {
@@ -177,14 +175,9 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 
 	failures, runs := 0, 0
-	// Sequential, and driver-major within a pass: the server runs one slot, so concurrent
-	// harnesses would queue and every duration would measure the queue. Whole harnesses
-	// rather than whole tasks because a comparison reads as one harness against another.
-	//
-	// Repeats are the outer loop rather than the inner one. Three runs of one fixture back
-	// to back would leave the second and third reading a prefix the first warmed, so the
-	// harness that happened to go first would pay the ingest for the other two. A pass is
-	// the whole set, and passes are what repeat.
+	// Sequential and driver-major: the server runs one slot, so concurrent harnesses would
+	// measure the queue. Repeats are the outer loop — three runs of one fixture back to
+	// back would leave the later two reading a prefix the first paid for.
 	for rep := range cfg.repeats {
 		for _, d := range ds {
 			for _, task := range tasks {
@@ -312,13 +305,9 @@ func tier2Task(path string) (eval.Tier2Task, error) {
 	return eval.Tier2From(t)
 }
 
-// validate checks the run can be carried out and resolves every path to absolute.
-//
-// The absolute-path step is load-bearing rather than tidiness: adapters run their CLI
-// with the working directory set to the scratch checkout, so a relative config path
-// resolves against that temporary directory instead of the repo. Left relative, pi looks
-// for its extension inside /tmp and fails with a message about the extension rather than
-// about the path.
+// validate checks the run can be carried out and resolves every path to absolute. The
+// absolute step is load-bearing: adapters run with the working directory set to the
+// scratch checkout, so a relative config path resolves against /tmp instead of the repo.
 func (c *config) validate() error {
 	if (c.fixture == "") == (c.fixtures == "") {
 		return errors.New("give exactly one of -fixture or -fixtures")

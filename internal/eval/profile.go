@@ -89,10 +89,10 @@ func (p *Profile) ExtractReasoning(field, content string) (reasoning, rest strin
 	if tag == "" {
 		return field, content
 	}
-	open, close := "<"+tag+">", "</"+tag+">"
-	i, j := strings.Index(content, open), strings.Index(content, close)
+	open, shut := "<"+tag+">", "</"+tag+">"
+	i, j := strings.Index(content, open), strings.Index(content, shut)
 	if i < 0 || j < i {
 		return field, content
 	}
-	return content[i+len(open) : j], strings.TrimSpace(content[:i] + content[j+len(close):])
+	return content[i+len(open) : j], strings.TrimSpace(content[:i] + content[j+len(shut):])
 }

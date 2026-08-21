@@ -25,21 +25,18 @@ type Task struct {
 	Tools     []Tool    `json:"tools,omitempty"`
 	MaxTokens int       `json:"max_tokens"`
 
-	// TimeoutSeconds bounds one attempt. A task with no ceiling is not a measurement,
-	// it is a hostage: this suite has produced 15-minute single runs that ended in no
-	// answer at all. Over-budget is scored as its own outcome so it is never mistaken
-	// for a wrong answer, and the number lives in the fixture because how long a task
-	// may reasonably take is a property of the task.
+	// TimeoutSeconds bounds one attempt; this suite has produced 15-minute runs that
+	// ended in no answer. It lives in the fixture because how long a task may reasonably
+	// take is a property of the task.
 	TimeoutSeconds int `json:"timeout_seconds"`
 
 	Expect    Expect     `json:"expect"`
 	Patch     *Patch     `json:"patch,omitempty"`
 	Retrieval *Retrieval `json:"retrieval,omitempty"`
 
-	// Tier2 marks a fixture as drivable by a harness as well as answerable in one
-	// request, and carries the one thing tier 2 needs and tier 1 does not: the name the
-	// broken file takes in a scratch checkout. What the bug is stays in Messages, so a
-	// fixture cannot pose one problem to a harness and a different one to the model.
+	// Tier2 marks a fixture as drivable by a harness, and carries the one thing tier 2
+	// needs and tier 1 does not: the name the broken file takes in a scratch checkout.
+	// What the bug is stays in Messages, so both tiers pose one problem.
 	Tier2 *Tier2Spec `json:"tier2,omitempty"`
 }
 
@@ -96,9 +93,8 @@ type Result struct {
 	Outcome Outcome `json:"outcome"`
 	Detail  string  `json:"detail,omitempty"`
 
-	// Memory around the run. A run whose swap grew was measuring the pager, and the
-	// vision calls that void rather than slow — so it is recorded per row and the
-	// reporter flags it rather than averaging it in.
+	// A run whose swap grew was measuring the pager, which is void rather than slow, so
+	// it is recorded per row and flagged by the reporter rather than averaged in.
 	FreeGB      float64 `json:"free_gb"`
 	SwapDeltaMB float64 `json:"swap_delta_mb"`
 	MemMeasured bool    `json:"mem_measured"`
@@ -111,11 +107,9 @@ type Result struct {
 	GenPerSecond     float64 `json:"gen_per_second"`
 	WallSeconds      float64 `json:"wall_seconds"`
 
-	// Decode, separated from prefill by the client rather than by the server. A
-	// speculative decoder moves decode and cannot move prefill, so wall hides the whole
-	// effect on any run whose prompt is deep — the editor profile is 96.7% prefill.
-	// DecodeMeasured is false when the run was not streamed, and the rate is then absent
-	// rather than zero.
+	// Decode, separated from prefill by the client. Wall hides the whole effect on a deep
+	// prompt — the editor profile is 96.7% prefill. DecodeMeasured is false when the run
+	// was not streamed, and the rate is then absent rather than zero.
 	TTFTSeconds     float64 `json:"ttft_seconds,omitempty"`
 	DecodeSeconds   float64 `json:"decode_seconds,omitempty"`
 	DecodePerSecond float64 `json:"decode_per_second,omitempty"`
@@ -258,9 +252,9 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 
 	after := sampleMemory()
 	thermAfter := sampleThermal()
-	// Wall is measured here, client side, on purpose: it is the only speed number every
-	// backend can produce. Server-reported tok/s exists on llama.cpp and may not exist
-	// elsewhere, so it is recorded where available and never used to compare backends.
+	// Wall is client-side on purpose: it is the only speed number every backend can
+	// produce. Server-reported tok/s is recorded where available and never compared
+	// across backends.
 	res := Result{
 		TaskID:           t.ID,
 		FreeGB:           after.FreeGB,
@@ -306,8 +300,8 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	msg.Content = content
 	res.ReasoningChars = len(reasoning)
 
-	// Checked before the per-kind check: a truncated reply can fail any of them for a
-	// reason that is not the model's, and attributing it to quality would be wrong.
+	// Before the per-kind check: a truncated reply fails those for a reason that is not
+	// the model's.
 	if resp.Choices[0].FinishReason == "length" {
 		res.Outcome = FailTruncated
 		res.Detail = fmt.Sprintf("hit max_tokens=%d after %d reasoning chars",

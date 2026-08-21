@@ -51,21 +51,16 @@ type chatRequest struct {
 	ToolChoice string    `json:"tool_choice,omitempty"`
 	MaxTokens  int       `json:"max_tokens"`
 
-	// ReasoningEffort is xhigh, medium or low, and it is a separate axis from
-	// enable_thinking rather than a finer version of it: thinking off is off, and
-	// with thinking on this decides how much of it there is. Qwen3.8 defaults to
-	// xhigh, which its own release notes describe as being for "complex tasks
-	// demanding thorough analysis" and which does not terminate on some of ours.
-	// Empty omits the field and leaves that default in force — recorded per run,
-	// because a thinking number without it does not say what was measured.
+	// ReasoningEffort is a separate axis from enable_thinking, not a finer version of
+	// it. Empty leaves the model's own default in force, which for Qwen3.8 is xhigh —
+	// so it is recorded per run rather than inferred from a blank field.
 	ReasoningEffort    string         `json:"reasoning_effort,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 	Sampling
 
-	// Streaming is how decode gets isolated from prefill. The gap to the first token is
-	// prefill; everything after it is decode, and only the client can see that boundary
-	// — a non-streamed reply reports one wall clock covering both. StreamOptions asks
-	// for the usage and timings block on the final chunk, which a stream otherwise omits.
+	// Streaming is what isolates decode from prefill: only the client sees the gap to the
+	// first token. StreamOptions asks for the usage and timings block on the final chunk,
+	// which a stream otherwise omits.
 	Stream        bool           `json:"stream,omitempty"`
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 }
@@ -81,15 +76,19 @@ type ToolCall struct {
 	} `json:"function"`
 }
 
+// Choice is one completion as the chat path returns it. The Messages path is mapped onto
+// this shape too, so the scorer reads one reply regardless of which dialect produced it.
+type Choice struct {
+	FinishReason string `json:"finish_reason"`
+	Message      struct {
+		Content          string     `json:"content"`
+		ReasoningContent string     `json:"reasoning_content"`
+		ToolCalls        []ToolCall `json:"tool_calls"`
+	} `json:"message"`
+}
+
 type Response struct {
-	Choices []struct {
-		FinishReason string `json:"finish_reason"`
-		Message      struct {
-			Content          string     `json:"content"`
-			ReasoningContent string     `json:"reasoning_content"`
-			ToolCalls        []ToolCall `json:"tool_calls"`
-		} `json:"message"`
-	} `json:"choices"`
+	Choices []Choice `json:"choices"`
 	Timings struct {
 		PromptN            int     `json:"prompt_n"`
 		PromptPerSecond    float64 `json:"prompt_per_second"`
@@ -195,11 +194,10 @@ func (c *Client) Complete(ctx context.Context, req chatRequest) (*Response, erro
 	return &out, nil
 }
 
-// completeStream sends the same request as a stream and reassembles it, for the one
-// thing a stream measures that a reply cannot: where prefill ends. The reassembled
-// Response is the same shape, so a caller that does not care about the boundary sees
-// no difference — except tool calls, which arrive as fragments and are not reassembled
-// here. A request carrying tools must not be streamed; Run enforces that.
+// completeStream sends the same request as a stream and reassembles it into the same
+// Response shape, for the one thing a stream measures that a reply cannot: where prefill
+// ends. Tool calls arrive as fragments and are *not* reassembled, so a request carrying
+// tools must not be streamed — Run enforces that.
 func (c *Client) completeStream(ctx context.Context, req chatRequest) (*Response, error) {
 	req.StreamOptions = &streamOptions{IncludeUsage: true}
 	body, err := json.Marshal(req)
@@ -221,15 +219,7 @@ func (c *Client) completeStream(ctx context.Context, req chatRequest) (*Response
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	out := &Response{Streamed: true}
-	out.Choices = make([]struct {
-		FinishReason string `json:"finish_reason"`
-		Message      struct {
-			Content          string     `json:"content"`
-			ReasoningContent string     `json:"reasoning_content"`
-			ToolCalls        []ToolCall `json:"tool_calls"`
-		} `json:"message"`
-	}, 1)
+	out := &Response{Streamed: true, Choices: make([]Choice, 1)}
 
 	var content, reasoning strings.Builder
 	sawToken := false
@@ -314,14 +304,10 @@ func (c *Client) Converse(ctx context.Context, msgs []Message, maxTokens int) (*
 	return c.Complete(ctx, chatRequest{Messages: msgs, MaxTokens: maxTokens})
 }
 
-// ServerProps is what the endpoint reports about itself. Recording it beside every
-// result is a guard against the sweep's most damaging silent failure: mislabelling.
-// When a run varies server-level flags, a config label is a human's claim about what
-// was launched, and a row that carries the served n_ctx cannot quietly attribute one
-// config's numbers to another.
-// ServerProps is what a backend says it is serving. Not every backend says: llama.cpp
-// exposes /props, an MLX server may expose nothing, and a row must be able to record
-// "unavailable" rather than a confident zero that reads as "0 context".
+// ServerProps is what a backend says it is serving, recorded beside every result so a
+// mislabelled config is detectable. Not every backend says: llama.cpp exposes /props, an
+// MLX server may expose nothing, and a row must be able to record "unavailable" rather
+// than a confident zero that reads as "0 context".
 type ServerProps struct {
 	NCtx      int    `json:"n_ctx"`
 	ModelPath string `json:"model_path"`
@@ -332,15 +318,12 @@ type ServerProps struct {
 	Available bool `json:"available"`
 }
 
-// ServerMetrics is what the endpoint has counted since it started. A harness builds its
-// own requests and none of the four accounts for them in the same units, so what a run
-// cost is only comparable at the server: sampled either side of a run, the difference is
-// that run's.
+// ServerMetrics is what the endpoint has counted since it started. Each harness accounts
+// for its work in units of its own, so what a run cost is only comparable at the server:
+// sampled either side of a run, the difference is that run's.
 //
-// Prompt tokens are split the way llama.cpp splits them. Processed tokens were ingested;
-// cached ones were reused from a prefix the server still held. A harness that keeps a
-// stable prefix across turns pays the second, and one that rewrites its history pays the
-// first — at this depth that is minutes, and it is the difference the comparison is for.
+// PromptTokens were ingested; CachedTokens were reused from a prefix the server still
+// held. The split is llama.cpp's, and at this depth the difference is minutes.
 type ServerMetrics struct {
 	PromptTokens    int // processed, not served from cache
 	CachedTokens    int
@@ -424,15 +407,12 @@ func parseMetrics(body string) (ServerMetrics, error) {
 	return out, nil
 }
 
-// TurnCounter counts a harness's turns while it works, by watching which task the
-// server's slot is busy with. Each chat completion occupies the slot under a task id of
-// its own, so the number of distinct ids seen busy is the number of requests the harness
-// made — the same instrument for every harness, where each harness's own accounting is
-// in units of its own.
+// TurnCounter counts a harness's turns by watching which task the server's slot is busy
+// with: each completion occupies it under a task id of its own, so distinct ids seen busy
+// is requests made — one instrument for every harness.
 //
-// It samples rather than intercepts, so a request that starts and finishes inside one
-// interval is missed. At the depths this project serves, a turn costs seconds of ingest
-// alone; the interval is recorded with the count so the assumption is visible.
+// It samples rather than intercepts, so a request that begins and ends inside one interval
+// is missed. At these depths a turn costs seconds of ingest alone.
 type TurnCounter struct {
 	mu    sync.Mutex
 	seen  map[int]bool

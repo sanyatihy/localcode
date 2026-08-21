@@ -3,6 +3,50 @@
 Durable facts about what this repo actually does, moved here as features ship.
 Design arguments stay in the feature docs; this is the state of the machine.
 
+## What is in here
+
+**How it is served and checked**
+
+- [Serving](#serving)
+- [Dependencies](#dependencies)
+- [Checks](#checks)
+
+**What this machine can carry**
+
+- [The measured envelope](#the-measured-envelope)
+- [A conversation is ingested once, and traffic beside it changes nothing](#a-conversation-is-ingested-once-and-traffic-beside-it-changes-nothing)
+
+**How anything here is measured**
+
+- [The harness](#the-harness)
+- [The suite is bounded on purpose](#the-suite-is-bounded-on-purpose)
+- [Which tier-1 tasks carry signal](#which-tier-1-tasks-carry-signal)
+
+**What the measurements settled**
+
+- [Sampling and thinking, settled](#sampling-and-thinking-settled)
+- [Reasoning effort is a four-point axis, and its default is the bad end](#reasoning-effort-is-a-four-point-axis-and-its-default-is-the-bad-end)
+- [Tool-call adherence is not a formatting problem](#tool-call-adherence-is-not-a-formatting-problem)
+- [llama.cpp against MLX](#llamacpp-against-mlx)
+- [Speculative decoding: adoptable at the top of the context, not the bottom](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom)
+- [Nothing displaces Claude Code, and the two axes disagree](#nothing-displaces-claude-code-and-the-two-axes-disagree)
+
+**Driving it**
+
+- [Claude Code against the local endpoint](#claude-code-against-the-local-endpoint)
+- [Sessions hand off instead of compacting](#sessions-hand-off-instead-of-compacting)
+
+**Splitting the work across two tiers**
+
+- [The split works, and it is not free](#the-split-works-and-it-is-not-free)
+- [What the split costs, and what it saves](#what-the-split-costs-and-what-it-saves)
+- [What the local tier finishes unattended](#what-the-local-tier-finishes-unattended)
+- [What the frontier tier is shown](#what-the-frontier-tier-is-shown)
+
+**Traps**
+
+- [Gotchas](#gotchas)
+
 ## Serving
 
 `scripts/serve.sh <config>` starts `llama-server` from a config file and adds no
@@ -121,11 +165,11 @@ Re-walked against the desktop instead, with WindowServer sampled through each fi
 | 57 344 | ok | **pass** | 22.18 GB | 0.15–0.32 |
 | 65 536 | ok | **fail** | 22.29 GB | 0.01–0.09 |
 
-The desktop verdict is fixed in advance rather than read off each run: `fail_saturated` at
-a sustained ≥ 0.90 cores over any 30 s window, `fail_stalled` at ≤ 0.02, `pass` at neither
-over a run of at least 30 s, and `not_applicable` when nothing is attending the machine. An
-attended baseline with no model loaded measures 0.17–0.47 cores, so both bounds sit clear
-of normal operation.
+The desktop verdict is fixed in advance rather than read off each run. `fail_saturated` is
+a sustained ≥ 0.90 cores over any 30 s window and `fail_stalled` is ≤ 0.02; `pass` is
+neither, over a run of at least 30 s. `not_applicable` is what an unattended run gets,
+since nothing was there to lose. Both bounds sit clear of normal operation: an attended
+baseline with no model loaded measures 0.17–0.47 cores.
 
 **The two ranges are different, and both are real.** The model serves 8k–64k. A machine
 someone is using is admissible to **56k**; 64k is unattended-only. Every cell above
@@ -202,6 +246,185 @@ That is worth stating plainly: **more RAM does not buy more context for this mod
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
 does not care how much memory is spare.
 
+## A conversation is ingested once, and traffic beside it changes nothing
+
+Measured two ways on `config/agent.env`: a scripted conversation whose every prompt is known
+to the token, and two real `claude -p` sessions accounted from the server's own log.
+
+| | prompt tokens | ingested | reused |
+|---|---|---|---|
+| scripted, 5 turns to 28,126 | 90,400 | 28,121 | 68.9% |
+| the same, with a 5,531-token call between every turn | 90,400 | **28,121** | 68.9% |
+| the same, that call opening with the conversation's system prompt | 90,400 | **28,121** | 68.9% |
+| scripted, 8 turns to 43,195 | 204,916 | 43,188 | 78.9% |
+| two real sessions, 22 requests, deepest 21,813 | 286,148 | 34,386 | 88.0% |
+
+**A conversation ingests each token once.** 28,121 is the final prompt of that 28,126-token
+conversation, and the per-turn figures are 8,034, then 5,027, then 5,020 a turn — what each
+turn adds. Interleaving calls moves none of them.
+
+**The server's host-RAM prompt cache is why.** llama-server keeps a prefix it evicts from a
+slot and restores it for the next request that wants it, bounded by `--cache-ram`: 8192 MiB
+by default, set in no config here. This model's q8_0 KV costs **138.1 KiB a token** — 65
+layers, 4 KV heads, 256 wide for K and V — so that budget holds ~60,700 tokens, more than
+this config's whole 49,152 window and a call beside it. **It is bought from the same 32 GB
+the weights and the KV reservation sit in**, which 0014's ceiling was walked without.
+
+**`selected slot by LRU` does not mean a lost prefix.** All 15 requests of one run logged it
+and reused 161,735 tokens between them. It says how a slot was chosen, not what the server
+still held.
+
+**Only a prefix the server has never seen ingests from zero**, and across two whole sessions
+that is one request. A fresh session is not one: the second session's first request sent the
+same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516
+tokens of Claude Code's preamble differ between two otherwise identical runs**, at its tail.
+
+**What traffic beside the conversation costs is its own ingest** — 215.9 s over four calls at
+28k, 375.9 s over seven at 43k. That is charged to the session's wall clock, and no slot
+count or second endpoint removes it.
+
+### Reading it yourself
+
+`cmd/prefixprobe` replays a fixed conversation and records what each turn was charged;
+`scripts/prefixrun.sh` walks one config through the conditions, restarting the server between
+them so the second is not served the first's leftovers. `cmd/prefixlog` does the same for
+traffic nobody scripted, off the server's log. Its one derived figure — the prompt, which the
+server does not print — is checked against the endpoint's own rows with `-check`, and agrees
+on every request and every field of the ceiling run.
+
+## The harness
+
+`cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
+into `docs/data/`.
+
+- **Client-measured wall time is the only speed metric that crosses backends.** It is
+  recorded on every row, including a run that failed or exceeded its budget. Server-reported
+  `gen tok/s` and `prompt tok/s` come from llama.cpp and may not exist elsewhere, so they are
+  recorded where available and never used to compare one runtime against another.
+- **Every row records free memory and the swap delta across the run**, and the reporter names
+  runs that swapped instead of averaging them into the timings — a run that swapped measured
+  the pager. Rows that could not measure are reported as unverified rather than as clean;
+  `mem_measured: false` is not the same as a swap delta of zero.
+- **A backend that cannot introspect is still scoreable.** llama.cpp exposes `/props`; a
+  backend that does not is run anyway, with the served config recorded as unavailable and the
+  guard that checks it against the typed label switched off and said so.
+- **Model-specific behaviour lives in a profile, not in the scorer** — `config/profiles/`.
+  The thinking mechanism, each mode's sampling pair, and where reasoning arrives are all
+  properties of the model. The pair especially: it is in the profile so that a toggle cannot
+  be swept at one fixed temperature by accident, which has already cost 114 rows.
+- **A row records what the server reported serving** — `n_ctx`, model file, and the
+  `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
+  did not take would otherwise attribute one config's numbers to another.
+- **Spread is min–max over three passes, never a standard deviation**, which would claim
+  precision three samples do not have. Runs are sequential: the server has one slot.
+- **A tier-1 task must have exactly one defensible action.** A task that scores a style
+  preference — reading a file before editing it — fails every config identically and ranks
+  nothing.
+- **The suite is split by what a task can detect.** `tasks/` ranks — nine patch and
+  tool-call fixtures, ~95 s a pass. `tasks/depth/` floor-checks recall at 2k–16k and is run
+  only when the KV cache type, the backend or the model changes, because that is what could
+  damage it. It was 71% of a pass's runtime (227 s of 321 s) while returning 3/3 at every
+  setting ever measured, which is most of the clock for no ranking.
+- **A fixture is proved against answers that are merely different, not just against wrong
+  ones.** `patch-off-by-one` failed a correct fix that returned `nil` rather than `[]int{}`
+  for the empty cases — a distinction `reflect.DeepEqual` draws and the spec does not. That
+  is the same defect as scoring a style preference, and it costs a config marks for being
+  right, so the fixture self-tests now assert that equally-defensible answers pass.
+- **Patch fixtures are proved to discriminate before any model time is spent on them.**
+  `TestPatchFixturesDiscriminate` runs a correct answer and the tempting wrong one through
+  the real patch runner and requires the first to pass and the second to fail. Both halves
+  are asserted: a fixture whose unseen test rejects a correct fix scores the model down for
+  being right, which is the more expensive of the two failure modes.
+- **A retrieval answer naming a decoy fails even when the wanted key is also present**, so
+  reciting every key in the dump is a failure to discriminate rather than a hedge that earns
+  a pass. The three pre-distractor retrieval prompts are pinned by hash: their numbers are
+  already recorded in `docs/data` and a moved prompt would break comparability silently.
+- **Tier 2 refuses a fixture that passes before the harness runs**, and refuses it without
+  calling the driver.
+- **Harness configuration is repo-local and different for each**: Pi an extension
+  registering a provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`,
+  Hermes a top-level `model:` block with `provider: custom`.
+- **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
+  and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
+  at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
+
+## The suite is bounded on purpose
+
+Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
+separately from any quality outcome. The default is 120 s; the fixtures that legitimately
+cost more say so, up to 300 s for the 16k retrieval. No run has yet hit one on real work — the guard is covered by a unit test, not by a live
+firing, and the `xhigh` cell that used to run unbounded now finishes at 95 s against its 120 s
+budget. This is not a safety net that should ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
+reasoning and produced no answer.
+
+Budgets are set from the fast end (`reasoning off`) plus headroom, so a task hitting its
+budget means something changed, not that the number was tight. One pass over the 14 tasks
+costs **5.4 minutes** with reasoning off; the same pass at `xhigh` cost 16.8 and did not
+finish six of its runs.
+
+**`reasoning_effort` is passed to the server verbatim rather than checked against a list.**
+Qwen3.8 takes `low`/`medium`/`xhigh` and the next model will take something else; a harness
+that hardcodes one vendor's vocabulary has to be edited before it can measure anything new.
+What is guaranteed instead is that whatever was sent appears on every row.
+
+## Which tier-1 tasks carry signal
+
+Measured at `off` and `xhigh` across the full 14-task suite, and at all four levels for the
+three below that moved.
+
+| tasks | verdict |
+|---|---|
+| `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
+| `toolcall-constraint-readonly` | **weakly discriminates, in the opposite direction** — off 2/3, every reasoning level 3/3. Its earlier failures were a fixture flaw (the model refusing to patch a file it had not been shown), fixed by supplying the source in the prompt and re-measured |
+| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
+
+A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
+the discriminating subset, and keep the rest as the floor check they are.
+
+## Sampling and thinking, settled
+
+Each mode at its own model-card sampling; 9 ranking tasks, 3 passes, 32k/q8_0.
+
+| setting | pass | tool-call valid | wall |
+|---|---|---|---|
+| **off · `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5`** | **25/27** | 12/12 | **5.0 min** |
+| off · greedy | 21/27 | 12/12 | 4.4 min |
+| off · temp 0.3 | 23/27 | 12/12 | 4.3 min |
+| off · temp 1.0 | 24/27 | 12/12 | 8.4 min |
+| off · top_p 0.95 | 25/27 | 12/12 | 4.4 min |
+| **on/low · `temp 1.0 / top_p 0.95 / top_k 20`** | **25/27** | **12/12** | 18.6 min |
+| on/low · greedy | 24/27 | 12/12 | 16.4 min |
+| on/low · temp 0.7 | 24/27 | 12/12 | 18.0 min |
+| on/medium | 24/27 | 12/12 | 22.4 min |
+
+**Nothing beats the model card, in either mode.** Colder is monotonically worse without
+thinking — 21, 23, 25 as temperature rises to 0.7 — and `top_p` does nothing at all. **Greedy
+is the worst setting measured**, which is worth knowing because it is the tempting choice for
+a reproducible sweep.
+
+**Tool-call validity is 12/12 in every cell of the sweep and ranks nothing.** It is the column
+0005 was built around, and no setting moves it: every call this model emitted was parseable and
+schema-conforming. Greedy's deficit is reasoning, not format. Where a tool-call task fails it
+is a *choice* — the right shape addressed to the wrong tool — which is the same conclusion the
+150-run classification reaches from the other direction.
+
+**Reasoning does not earn its cost at either profile.** It is 4× the wall clock for 25/27
+against 25/27, with tool-call validity identical at 12/12. Nothing measured here favours it.
+Eight of nine tasks are 3/3 in every cell, so the claim is *no gain detectable on this suite*,
+not *no gain exists*.
+
+So both profiles take the same setting, which is a result and not an assumption:
+
+| profile | thinking | sampling |
+|---|---|---|
+| attended | **off** | `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5` |
+| unattended | **off** | as above — nothing was found for the 4× to buy |
+
+The modes fail *differently* on the one task that moves, which the pass rate hides: off fails
+the plain-arithmetic cases both readings of a contradictory spec agree on, while thinking gets
+the arithmetic right and then resolves the contradiction case by case. Any later claim that a
+mode is better must say at what.
+
 ## Reasoning effort is a four-point axis, and its default is the bad end
 
 Qwen3.8 ships a `reasoning_effort` dial — `xhigh` (default), `medium`, `low` — separate from
@@ -216,10 +439,10 @@ replacing it, and is absent entirely when `enable_thinking` is false, so the two
 With nothing set the template injects the `xhigh` text, which puts the default beyond inference.
 
 **The default is `xhigh`, and it is not a sane default for agentic work.** Qwen's own notes
-scope it to "complex tasks demanding thorough analysis", and on this suite it does not
-terminate: three tier-1 tasks burned their entire budget on reasoning and never wrote an
-answer, one of them producing 27,234 characters of it at four times the original cap. Every
-thinking-mode number recorded before 2026-08-18 was taken at `xhigh` whether it says so or not.
+scope it to "complex tasks demanding thorough analysis". On this suite it does not
+terminate: three tier-1 tasks burned their whole budget on reasoning and never wrote an
+answer, one producing 27,234 characters of it. Every thinking-mode number recorded before
+2026-08-18 was taken at `xhigh` whether it says so or not.
 
 The four settings on the three tasks that move (three passes each, 32k/q8_0):
 
@@ -256,6 +479,206 @@ task, off passes every time and thinking fails 3 of 6 — always on the same ass
 resolving the contradiction case by case rather than picking one rule. `medium` beating `low`
 is within the noise of three runs and is not a ranking. What the data supports is that more
 reasoning is not a free upgrade here, which is the opposite of what 0005 was built to assume.
+
+## Tool-call adherence is not a formatting problem
+
+Across **150 recorded tool-call runs**: 136 pass, 10 wrong-but-valid, 2 from a fixture since
+fixed, 2 truncated at a cap. **Zero unparseable, zero schema-invalid.** The entire remaining
+deficit is choosing the wrong tool under a stated constraint.
+
+Constrained decoding is therefore not pursued: a grammar makes malformed calls impossible and
+we have none, while it cannot fix tool choice and would cost sampling speed. The template also
+asks for an XML call form — `<function=name>` with `<parameter=key>` — so a JSON-schema
+constraint would fight it rather than help.
+
+## llama.cpp against MLX
+
+Same model, matched by footprint — llama.cpp Q4_K_M at 17 GB against MLX 4bit at 16.1 GB —
+driven through the same scorer at 0005's settled config, 42 rows each.
+
+| | llama.cpp | MLX |
+|---|---|---|
+| pass | 40/42 | 39/42 |
+| tool-call validity | 12/12 | 12/12 |
+| wired, model serving | 20.89 GB | **18.02 GB** |
+| minimum free memory | 0.06 GB | **2.64 GB** |
+| runs that swapped | 7 | **0** |
+| cold depth prompts | **3–9% faster** | |
+| short prompts | | **faster** |
+| decode, client-side | 8.89 tok/s | **10.35 tok/s** |
+| warm reuse, identical request | 20s → 2s (10×) | **19.6s → 0.5s (39×)** |
+
+**They differ in where the KV cache comes from, and that is the whole story.** llama.cpp
+reserves its cache at load against `--ctx-size`, so reuse is free within that reservation and
+the cost is paid once. `mlx_lm` allocates cache capacity **eagerly per slot at startup**:
+`--prompt-cache-size 16` left 0.11 GB free on the first request, where 2 slots left 5.38 GB.
+Cache capacity is bought from the same wired pool the weights sit in, so on 32 GB reuse
+breadth and depth headroom trade directly against each other.
+
+**Unbounded is not an option.** `mlx_lm`'s LRU is unbounded by default, and one 16k prompt
+drove free memory to zero — with swap flat, because wired pages cannot be paged out. Every
+later request stalled rather than slowed. `--prompt-cache-bytes` and `--prompt-cache-size`
+are mandatory on this hardware, not tuning.
+
+**The decision is to stay on llama.cpp**, and it is closer than the table suggests. MLX wins
+on memory, which is the constraint 0014 showed binds here, and on warm reuse. It loses on
+three things that matter more today: it serves no Anthropic `/v1/messages`, which is what 0008
+needs for the editor flow; it reports no served config or timings, so a run cannot be checked
+against the label it was given; and its failure mode under memory pressure is a hard stall
+rather than degradation, which took three misconfigurations to diagnose.
+
+Decode is measured client-side because `mlx_lm` reports no server-side rate; llama.cpp's own
+figure for pure decode is 9.51 tok/s, so MLX's true decode is higher than the 10.35 shown,
+which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB of weights per
+token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
+configuration change reaches the figures quoted for speculative decoding.
+
+**Multi-token prediction is reachable, and not through this server.** `mlx_lm` 0.31.3 still
+rejects `mlx-community/Qwen3.8-27B-MTP-4bit` with `Model type qwen3_5_mtp not supported`, so
+the sentence this paragraph used to carry was true of MLX and false of the project: the lever
+exists on llama.cpp, where the served GGUF's own MTP head is dropped as unused until a build
+with PR #27342 picks it up. It is measured at 1.26–1.57× depending on prompt depth, and the
+figures are under [Speculative decoding](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). MTPLX, the MLX runtime that does implement
+native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
+
+**What would reverse it:** a 128 GB machine, where slot count stops competing with the model
+and MLX's reuse advantage runs unconstrained — and where MTPLX's 20.68 GB checkpoint would
+have room to hold a context, which is the only thing that stopped it here. `mlx_lm` gaining
+`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
+rather than a hypothetical. Or MLX gaining `/v1/messages`.
+
+**One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
+repeating any, which is what forced the slot-count problem. A real agent session is one
+conversation resending a growing prefix, needing one or two slots — the configuration that is
+memory-safe. So this comparison understates MLX for the workload the project actually cares
+about, and the honest reading is that neither runtime is disqualified.
+
+## Speculative decoding: adoptable at the top of the context, not the bottom
+
+Three candidates were screened against 0014's desktop rule before any suite ran, and two
+never generated a token on this machine. What survives is the model's own multi-token
+prediction head, which the served GGUF has carried all along: stock llama.cpp logs those
+tensors as unused and drops them, and the build from llama.cpp PR #27342 makes an MTP draft
+context against the same weights instead of loading a second model.
+
+| candidate | extra weights | verdict |
+|---|---|---|
+| **native MTP**, `--spec-type draft-mtp` | none — the target's own head | admissible at 32,768, refused at 49,152 |
+| DFlash2 drafter, PR #27342 | 1.1 GB | GPU out of memory at load, both contexts |
+| MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | loads, then out of memory under a real prompt |
+
+**The ratio is of decode and not of wall, measured client-side from the gap to the first
+token.** A speculative decoder moves decode and cannot move prefill, and prefill is most of
+the clock at depth: one validation run spent 279 seconds, 247 of them before the first token.
+Server-reported rates are not used for the comparison, per [the harness's own rule](#the-harness).
+
+| prompt depth | baseline | native MTP | ratio | acceptance |
+|---|---|---|---|---|
+| ~200 tokens (the ranking suite) | 0.1050 s/tok | 0.0669 | **1.57×** | 3.94 |
+| 8 000 | 0.1181 | 0.0844 | 1.40× | 3.96 |
+| 16 000 | 0.1348 | 0.1005 | 1.34× | 3.97 |
+| 32 000 | 0.1700 | 0.1346 | **1.26×** | 3.97 |
+
+**Acceptance does not decay; the cost of a verification step does.** Nearly four tokens are
+committed per step at every depth, while both sides slow — 0.105 to 0.170 s/token on the
+baseline — because attention over a longer cache is not something speculation can make
+cheaper. So the same config is adoptable against short prompts and, by the same rule, is
+not against long ones.
+
+**It is lossless by measurement.** Fixed prompts at temperature zero hash identically with
+the mechanism on and off. That is what licenses reading the speed number at all: a decoder
+that changed the answer would be measuring something else.
+
+**The verdict, per profile.**
+
+- **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
+  bar set before the runs, pass rate is 23/27 against 25/27 on the two tasks 0013 built to
+  discriminate — sampling at 0.7, which the identical greedy hash rules out as a
+  distribution change — and it costs 0.43 GB of wired memory.
+- **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
+  rule reserves for "measured, not taken", and an agent session's prompt is deep.
+- **Editor, 49,152**: refused. The allocator fails on the first prefill batch, where the
+  same config without speculation finishes the fill at 22.02 GB.
+- **Attended, any profile**: undecided, and deliberately not guessed. Every screen here ran
+  `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
+  has not been taken against this config. It peaks at 22.10 GB where the desktop died at
+  22.29, so the margin is 0.19 GB and the answer is not obvious.
+
+**One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
+Once is not a characterisation, and it is recorded rather than explained.
+
+**The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
+builds a second `llama_context` over the same weights — no second copy — but its cache is
+sized at the context the target serves, so its cost grows with `--ctx-size` like any other.
+Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
+40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
+49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
+and not to the editor.
+
+`--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
+params to free device memory: n_gpu_layers already set by user to 999, abort`, so the build's
+own fitter was being blocked by this project's pinned value — but unpinned at 49,152 it
+reaches 22.255 GB and still refuses. The lever is measured and spent.
+
+A caveat that matters more than the ceiling: **38,912 peaks at 22.28 GB, and 0014's desktop
+died at 22.29.** Serving the ceiling and using the machine are not the same question, and
+nothing here answers the second.
+
+## Nothing displaces Claude Code, and the two axes disagree
+
+Four harnesses over five patch fixtures, three passes each — 60 runs at one serving config
+(`config/harness.env`, 65,536), each from a cold state and bounded at ten minutes. Tokens
+and turns are the server's own counters read either side of every run, because each harness
+accounts for its work in units of its own.
+
+| harness | passed | turns | ingested/task | context/turn | wall, clean rows |
+|---|---|---|---|---|---|
+| **Claude Code** (baseline) | 14/15 | 3.9 | 3,514 | 3,336 | 127.5 s (5 of 15) |
+| Pi | 12/15 | 3.9 | **735** ×0.21 | 1,857 | 63.6 s (12 of 15) |
+| OpenCode | 13/15 | 6.8 | 1,942 ×0.55 | 6,909 | 96.8 s (8 of 15) |
+| Hermes | 15/15 | 9.2 | 14,119 ×4.02 | 12,429 | 299.4 s (12 of 15) |
+
+**No challenger wins on both axes, and the order inverts between them**: the cheapest is
+the least reliable and the most reliable is the dearest. Hermes' extra task is one run in
+fifteen. The bar for switching was a clear win on tokens per completed task without giving
+up quality, tokens being what this hardware actually rations; Pi's ×0.21 arrives with two
+more failures in fifteen, which is not that. The incumbent stays — the question was whether
+anything beats what is already in use, and nothing here does.
+
+**The six failures are two modes, and each tracks one of the axes.** Three sit on
+`patch-contradiction-rounding`, where the doc comment and the test that must keep passing
+disagree; it caught the two low-turn harnesses (Claude Code 2/3, Pi 1/3) and neither of the
+two that take more turns. Three sit on `patch-sibling-splitpath`, all the same compile
+error — an in-place edit that drops the `strings` import — and it caught the two harnesses
+that edit (Pi 2/3, OpenCode 1/3) and neither that rewrites the whole file. Frugality costs
+verification; editing costs imports. Three runs a cell, so this is a pattern rather than a
+rate.
+
+**Preamble size does not explain the token spread.** Pi's fixed preamble is *larger* than
+Claude Code's at the same three tools — 3,922 against 3,711 — yet Pi ingests a fifth as
+much per task, because Claude Code re-ingests roughly its whole preamble on every run while
+Pi's survives in the server's prefix cache. **What changes in that prefix between two runs is
+516 tokens at its tail**, measured since: a second session's first request reused 83.5% of a
+3,130-token preamble. A preamble re-ingested in full is therefore a server that has not seen
+it, rather than a prefix that differs.
+
+**Every harness completes a task offline**, with the network denied in the kernel and only
+the loopback the model is served on left open. Claude Code included: it holds under token
+authentication with nonessential traffic off, which is what
+[`harness/claude-code/claude-code.env`](../harness/claude-code/claude-code.env) sets. So the
+offline axis separates nothing, and the vision's "at least one path is genuinely offline"
+outcome is already met by the incumbent. The OAuth refresh path a claude.ai login would use
+stays untested, as in 0008.
+
+**Hermes is unattended-only on this machine and did not converge once.** Its 64,000-token
+floor sits above 0014's attended ceiling of 57,344 with no overlap, so it is admissible only
+when nobody is using the machine. One run before the budget existed spent 45 minutes and 90
+turns on a fixture the others finished in three; bounded at ten minutes it then passed all
+fifteen. A harness that does not converge is `fail_over_budget`, not a broken adapter.
+
+**Timings are the weakest column here.** At 65,536 with an editor resident the machine pages,
+and a run whose swap grew measured the pager — so wall is averaged over clean rows only and
+the count of them is printed beside it. Tokens and turns are indifferent to paging.
 
 ## Claude Code against the local endpoint
 
@@ -318,52 +741,6 @@ not. The extension hosting Claude Code has none of that, because the agent runs 
 Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
 other harnesses, not here.
 
-## A conversation is ingested once, and traffic beside it changes nothing
-
-Measured two ways on `config/agent.env`: a scripted conversation whose every prompt is known
-to the token, and two real `claude -p` sessions accounted from the server's own log.
-
-| | prompt tokens | ingested | reused |
-|---|---|---|---|
-| scripted, 5 turns to 28,126 | 90,400 | 28,121 | 68.9% |
-| the same, with a 5,531-token call between every turn | 90,400 | **28,121** | 68.9% |
-| the same, that call opening with the conversation's system prompt | 90,400 | **28,121** | 68.9% |
-| scripted, 8 turns to 43,195 | 204,916 | 43,188 | 78.9% |
-| two real sessions, 22 requests, deepest 21,813 | 286,148 | 34,386 | 88.0% |
-
-**A conversation ingests each token once.** 28,121 is the final prompt of that 28,126-token
-conversation, and the per-turn figures are 8,034, then 5,027, then 5,020 a turn — what each
-turn adds. Interleaving calls moves none of them.
-
-**The server's host-RAM prompt cache is why.** llama-server keeps a prefix it evicts from a
-slot and restores it for the next request that wants it, bounded by `--cache-ram`: 8192 MiB
-by default, set in no config here. This model's q8_0 KV costs **138.1 KiB a token** — 65
-layers, 4 KV heads, 256 wide for K and V — so that budget holds ~60,700 tokens, more than
-this config's whole 49,152 window and a call beside it. **It is bought from the same 32 GB
-the weights and the KV reservation sit in**, which 0014's ceiling was walked without.
-
-**`selected slot by LRU` does not mean a lost prefix.** All 15 requests of one run logged it
-and reused 161,735 tokens between them. It says how a slot was chosen, not what the server
-still held.
-
-**Only a prefix the server has never seen ingests from zero**, and across two whole sessions
-that is one request. A fresh session is not one: the second session's first request sent the
-same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516
-tokens of Claude Code's preamble differ between two otherwise identical runs**, at its tail.
-
-**What traffic beside the conversation costs is its own ingest** — 215.9 s over four calls at
-28k, 375.9 s over seven at 43k. That is charged to the session's wall clock, and no slot
-count or second endpoint removes it.
-
-### Reading it yourself
-
-`cmd/prefixprobe` replays a fixed conversation and records what each turn was charged;
-`scripts/prefixrun.sh` walks one config through the conditions, restarting the server between
-them so the second is not served the first's leftovers. `cmd/prefixlog` does the same for
-traffic nobody scripted, off the server's log. Its one derived figure — the prompt, which the
-server does not print — is checked against the endpoint's own rows with `-check`, and agrees
-on every request and every field of the ceiling run.
-
 ## Sessions hand off instead of compacting
 
 A session in this checkout writes `HANDOFF.md` — untracked working state inside one task
@@ -388,62 +765,6 @@ with the mechanism and without it, and
 [0011](features/0011-split-planning-and-grinding-across-frontier-and-local-models.md) is
 where boxes are driven locally, so it is where those runs happen. Until then this is
 apparatus, not a result.
-
-## The harness
-
-`cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
-into `docs/data/`.
-
-- **Client-measured wall time is the only speed metric that crosses backends.** It is
-  recorded on every row, including a run that failed or exceeded its budget. Server-reported
-  `gen tok/s` and `prompt tok/s` come from llama.cpp and may not exist elsewhere, so they are
-  recorded where available and never used to compare one runtime against another.
-- **Every row records free memory and the swap delta across the run**, and the reporter names
-  runs that swapped instead of averaging them into the timings — a run that swapped measured
-  the pager. Rows that could not measure are reported as unverified rather than as clean;
-  `mem_measured: false` is not the same as a swap delta of zero.
-- **A backend that cannot introspect is still scoreable.** llama.cpp exposes `/props`; a
-  backend that does not is run anyway, with the served config recorded as unavailable and the
-  guard that checks it against the typed label switched off and said so.
-- **Model-specific behaviour lives in a profile, not in the scorer** — `config/profiles/`.
-  The thinking mechanism, each mode's sampling pair, and where reasoning arrives are all
-  properties of the model. The pair especially: it is in the profile so that a toggle cannot
-  be swept at one fixed temperature by accident, which has already cost 114 rows.
-- **A row records what the server reported serving** — `n_ctx`, model file, and the
-  `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
-  did not take would otherwise attribute one config's numbers to another.
-- **Spread is min–max over three passes, never a standard deviation**, which would claim
-  precision three samples do not have. Runs are sequential: the server has one slot.
-- **A tier-1 task must have exactly one defensible action.** A task that scores a style
-  preference — reading a file before editing it — fails every config identically and ranks
-  nothing.
-- **The suite is split by what a task can detect.** `tasks/` ranks — nine patch and
-  tool-call fixtures, ~95 s a pass. `tasks/depth/` floor-checks recall at 2k–16k and is run
-  only when the KV cache type, the backend or the model changes, because that is what could
-  damage it. It was 71% of a pass's runtime (227 s of 321 s) while returning 3/3 at every
-  setting ever measured, which is most of the clock for no ranking.
-- **A fixture is proved against answers that are merely different, not just against wrong
-  ones.** `patch-off-by-one` failed a correct fix that returned `nil` rather than `[]int{}`
-  for the empty cases — a distinction `reflect.DeepEqual` draws and the spec does not. That
-  is the same defect as scoring a style preference, and it costs a config marks for being
-  right, so the fixture self-tests now assert that equally-defensible answers pass.
-- **Patch fixtures are proved to discriminate before any model time is spent on them.**
-  `TestPatchFixturesDiscriminate` runs a correct answer and the tempting wrong one through
-  the real patch runner and requires the first to pass and the second to fail. Both halves
-  are asserted: a fixture whose unseen test rejects a correct fix scores the model down for
-  being right, which is the more expensive of the two failure modes.
-- **A retrieval answer naming a decoy fails even when the wanted key is also present**, so
-  reciting every key in the dump is a failure to discriminate rather than a hedge that earns
-  a pass. The three pre-distractor retrieval prompts are pinned by hash: their numbers are
-  already recorded in `docs/data` and a moved prompt would break comparability silently.
-- **Tier 2 refuses a fixture that passes before the harness runs**, and refuses it without
-  calling the driver.
-- **Harness configuration is repo-local and different for each**: Pi an extension
-  registering a provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`,
-  Hermes a top-level `model:` block with `provider: custom`.
-- **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
-  and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
-  at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
 
 ## The split works, and it is not free
 
@@ -480,25 +801,6 @@ the doc had.** So the split pays where the specification is sound and the work i
 mechanical, and it inverts where the specification is the hard part — which is the same
 boundary the per-task record draws, arrived at from the other side.
 
-## What the frontier tier is shown
-
-**The whole repository: docs, code, git history.** Decided by the human this project is
-for, which is what `review: human` on 0011 was reserving.
-
-It costs little to permit because of what the repository already is. Secrets never enter a
-doc — a pushed commit cannot be unpublished, so the rule is to name the variable and where
-the value lives — and the measurement data is machine readings from one laptop. What is
-sensitive is not in here.
-
-**The boundary is the repository, and it is a boundary rather than a default.** Nothing
-outside the checkout is planning context: not the shell history, not other repositories on
-the machine, not credentials the environment happens to carry. A drafter that needs
-something from outside asks for it to be brought in and committed, which leaves a record of
-what was shown.
-
-That is the vision's named exception, used in full: planning leaves the machine, grinding
-does not. The local tier reads the same repository and sends nothing anywhere.
-
 ## What the split costs, and what it saves
 
 0010 was built end to end by the frontier tier; 0015's first box was drafted by it and built
@@ -528,7 +830,8 @@ writing to reading.
 cache reads, which is why 138 million of them accompany 539,000 generated. The local column
 is the same shape for a different reason: the conversation is resent whole every turn, which
 at 49,152 is time rather than money. **The re-ingest this first claimed does not happen** —
-measured since, a conversation ingests each token once; see the section above.
+measured since, a conversation ingests each token once — see
+[A conversation is ingested once](#a-conversation-is-ingested-once-and-traffic-beside-it-changes-nothing).
 
 ## What the local tier finishes unattended
 
@@ -566,282 +869,24 @@ one function, and the instruction is one sentence. Nothing here says what the lo
 does with a change spanning modules, or with a specification long enough to hold its own
 contradictions. That is what a feature tests, and it is measured rather than extrapolated.
 
-## Nothing displaces Claude Code, and the two axes disagree
+## What the frontier tier is shown
 
-Four harnesses over five patch fixtures, three passes each — 60 runs at one serving config
-(`config/harness.env`, 65,536), each from a cold state and bounded at ten minutes. Tokens
-and turns are the server's own counters read either side of every run, because each harness
-accounts for its work in units of its own.
+**The whole repository: docs, code, git history.** Decided by the human this project is
+for, which is what `review: human` on 0011 was reserving.
 
-| harness | passed | turns | ingested/task | context/turn | wall, clean rows |
-|---|---|---|---|---|---|
-| **Claude Code** (baseline) | 14/15 | 3.9 | 3,514 | 3,336 | 127.5 s (5 of 15) |
-| Pi | 12/15 | 3.9 | **735** ×0.21 | 1,857 | 63.6 s (12 of 15) |
-| OpenCode | 13/15 | 6.8 | 1,942 ×0.55 | 6,909 | 96.8 s (8 of 15) |
-| Hermes | 15/15 | 9.2 | 14,119 ×4.02 | 12,429 | 299.4 s (12 of 15) |
+It costs little to permit because of what the repository already is. Secrets never enter a
+doc — a pushed commit cannot be unpublished, so the rule is to name the variable and where
+the value lives — and the measurement data is machine readings from one laptop. What is
+sensitive is not in here.
 
-**No challenger wins on both axes, and the order inverts between them**: the cheapest is
-the least reliable and the most reliable is the dearest. Hermes' extra task is one run in
-fifteen. The bar for switching was a clear win on tokens per completed task without giving
-up quality, tokens being what this hardware actually rations; Pi's ×0.21 arrives with two
-more failures in fifteen, which is not that. The incumbent stays — the question was whether
-anything beats what is already in use, and nothing here does.
+**The boundary is the repository, and it is a boundary rather than a default.** Nothing
+outside the checkout is planning context: not the shell history, not other repositories on
+the machine, not credentials the environment happens to carry. A drafter that needs
+something from outside asks for it to be brought in and committed, which leaves a record of
+what was shown.
 
-**The six failures are two modes, and each tracks one of the axes.** Three sit on
-`patch-contradiction-rounding`, where the doc comment and the test that must keep passing
-disagree; it caught the two low-turn harnesses (Claude Code 2/3, Pi 1/3) and neither of the
-two that take more turns. Three sit on `patch-sibling-splitpath`, all the same compile
-error — an in-place edit that drops the `strings` import — and it caught the two harnesses
-that edit (Pi 2/3, OpenCode 1/3) and neither that rewrites the whole file. Frugality costs
-verification; editing costs imports. Three runs a cell, so this is a pattern rather than a
-rate.
-
-**Preamble size does not explain the token spread.** Pi's fixed preamble is *larger* than
-Claude Code's at the same three tools — 3,922 against 3,711 — yet Pi ingests a fifth as
-much per task, because Claude Code re-ingests roughly its whole preamble on every run while
-Pi's survives in the server's prefix cache. **What changes in that prefix between two runs is
-516 tokens at its tail**, measured since: a second session's first request reused 83.5% of a
-3,130-token preamble. A preamble re-ingested in full is therefore a server that has not seen
-it, rather than a prefix that differs.
-
-**Every harness completes a task offline**, with the network denied in the kernel and only
-the loopback the model is served on left open. Claude Code included: it holds under token
-authentication with nonessential traffic off, which is what
-[`harness/claude-code/claude-code.env`](../harness/claude-code/claude-code.env) sets. So the
-offline axis separates nothing, and the vision's "at least one path is genuinely offline"
-outcome is already met by the incumbent. The OAuth refresh path a claude.ai login would use
-stays untested, as in 0008.
-
-**Hermes is unattended-only on this machine and did not converge once.** Its 64,000-token
-floor sits above 0014's attended ceiling of 57,344 with no overlap, so it is admissible only
-when nobody is using the machine. One run before the budget existed spent 45 minutes and 90
-turns on a fixture the others finished in three; bounded at ten minutes it then passed all
-fifteen. A harness that does not converge is `fail_over_budget`, not a broken adapter.
-
-**Timings are the weakest column here.** At 65,536 with an editor resident the machine pages,
-and a run whose swap grew measured the pager — so wall is averaged over clean rows only and
-the count of them is printed beside it. Tokens and turns are indifferent to paging.
-
-## llama.cpp against MLX
-
-Same model, matched by footprint — llama.cpp Q4_K_M at 17 GB against MLX 4bit at 16.1 GB —
-driven through the same scorer at 0005's settled config, 42 rows each.
-
-| | llama.cpp | MLX |
-|---|---|---|
-| pass | 40/42 | 39/42 |
-| tool-call validity | 12/12 | 12/12 |
-| wired, model serving | 20.89 GB | **18.02 GB** |
-| minimum free memory | 0.06 GB | **2.64 GB** |
-| runs that swapped | 7 | **0** |
-| cold depth prompts | **3–9% faster** | |
-| short prompts | | **faster** |
-| decode, client-side | 8.89 tok/s | **10.35 tok/s** |
-| warm reuse, identical request | 20s → 2s (10×) | **19.6s → 0.5s (39×)** |
-
-**They differ in where the KV cache comes from, and that is the whole story.** llama.cpp
-reserves its cache at load against `--ctx-size`, so reuse is free within that reservation and
-the cost is paid once. `mlx_lm` allocates cache capacity **eagerly per slot at startup**:
-`--prompt-cache-size 16` left 0.11 GB free on the first request, where 2 slots left 5.38 GB.
-Cache capacity is bought from the same wired pool the weights sit in, so on 32 GB reuse
-breadth and depth headroom trade directly against each other.
-
-**Unbounded is not an option.** `mlx_lm`'s LRU is unbounded by default, and one 16k prompt
-drove free memory to zero — with swap flat, because wired pages cannot be paged out. Every
-later request stalled rather than slowed. `--prompt-cache-bytes` and `--prompt-cache-size`
-are mandatory on this hardware, not tuning.
-
-**The decision is to stay on llama.cpp**, and it is closer than the table suggests. MLX wins
-on memory, which is the constraint 0014 showed binds here, and on warm reuse. It loses on
-three things that matter more today: it serves no Anthropic `/v1/messages`, which is what 0008
-needs for the editor flow; it reports no served config or timings, so a run cannot be checked
-against the label it was given; and its failure mode under memory pressure is a hard stall
-rather than degradation, which took three misconfigurations to diagnose.
-
-Decode is measured client-side because `mlx_lm` reports no server-side rate; llama.cpp's own
-figure for pure decode is 9.51 tok/s, so MLX's true decode is higher than the 10.35 shown,
-which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB of weights per
-token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
-configuration change reaches the figures quoted for speculative decoding.
-
-**Multi-token prediction is reachable, and not through this server.** `mlx_lm` 0.31.3 still
-rejects `mlx-community/Qwen3.8-27B-MTP-4bit` with `Model type qwen3_5_mtp not supported`, so
-the sentence this paragraph used to carry was true of MLX and false of the project: the lever
-exists on llama.cpp, where the served GGUF's own MTP head is dropped as unused until a build
-with PR #27342 picks it up. It is measured at 1.26–1.57× depending on prompt depth, and the
-figures are under "Speculative decoding" above. MTPLX, the MLX runtime that does implement
-native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
-
-**What would reverse it:** a 128 GB machine, where slot count stops competing with the model
-and MLX's reuse advantage runs unconstrained — and where MTPLX's 20.68 GB checkpoint would
-have room to hold a context, which is the only thing that stopped it here. `mlx_lm` gaining
-`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
-rather than a hypothetical. Or MLX gaining `/v1/messages`.
-
-**One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
-repeating any, which is what forced the slot-count problem. A real agent session is one
-conversation resending a growing prefix, needing one or two slots — the configuration that is
-memory-safe. So this comparison understates MLX for the workload the project actually cares
-about, and the honest reading is that neither runtime is disqualified.
-
-## Speculative decoding: adoptable at the top of the context, not the bottom
-
-Three candidates were screened against 0014's desktop rule before any suite ran, and two
-never generated a token on this machine. What survives is the model's own multi-token
-prediction head, which the served GGUF has carried all along: stock llama.cpp logs those
-tensors as unused and drops them, and the build from llama.cpp PR #27342 makes an MTP draft
-context against the same weights instead of loading a second model.
-
-| candidate | extra weights | verdict |
-|---|---|---|
-| **native MTP**, `--spec-type draft-mtp` | none — the target's own head | admissible at 32,768, refused at 49,152 |
-| DFlash2 drafter, PR #27342 | 1.1 GB | GPU out of memory at load, both contexts |
-| MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | loads, then out of memory under a real prompt |
-
-**The ratio is of decode and not of wall, measured client-side from the gap to the first
-token.** A speculative decoder moves decode and cannot move prefill, and prefill is most of
-the clock at depth: one validation run spent 279 seconds, 247 of them before the first token.
-Server-reported rates are not used for the comparison, per the rule below.
-
-| prompt depth | baseline | native MTP | ratio | acceptance |
-|---|---|---|---|---|
-| ~200 tokens (the ranking suite) | 0.1050 s/tok | 0.0669 | **1.57×** | 3.94 |
-| 8 000 | 0.1181 | 0.0844 | 1.40× | 3.96 |
-| 16 000 | 0.1348 | 0.1005 | 1.34× | 3.97 |
-| 32 000 | 0.1700 | 0.1346 | **1.26×** | 3.97 |
-
-**Acceptance does not decay; the cost of a verification step does.** Nearly four tokens are
-committed per step at every depth, while both sides slow — 0.105 to 0.170 s/token on the
-baseline — because attention over a longer cache is not something speculation can make
-cheaper. So the same config is adoptable against short prompts and, by the same rule, is
-not against long ones.
-
-**It is lossless by measurement.** Fixed prompts at temperature zero hash identically with
-the mechanism on and off. That is what licenses reading the speed number at all: a decoder
-that changed the answer would be measuring something else.
-
-**The verdict, per profile.**
-
-- **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
-  bar set before the runs, pass rate is 23/27 against 25/27 on the two tasks 0013 built to
-  discriminate — sampling at 0.7, which the identical greedy hash rules out as a
-  distribution change — and it costs 0.43 GB of wired memory.
-- **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
-  rule reserves for "measured, not taken", and an agent session's prompt is deep.
-- **Editor, 49,152**: refused. The allocator fails on the first prefill batch, where the
-  same config without speculation finishes the fill at 22.02 GB.
-- **Attended, any profile**: undecided, and deliberately not guessed. Every screen here ran
-  `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
-  has not been taken against this config. It peaks at 22.10 GB where the desktop died at
-  22.29, so the margin is 0.19 GB and the answer is not obvious.
-
-**One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
-Once is not a characterisation, and it is recorded rather than explained.
-
-**The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
-builds a second `llama_context` over the same weights — no second copy — but its cache is
-sized at the context the target serves, so its cost grows with `--ctx-size` like any other.
-Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
-40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
-49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
-and not to the editor.
-
-`--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
-params to free device memory: n_gpu_layers already set by user to 999, abort`, so the build's
-own fitter was being blocked by this project's pinned value — but unpinned at 49,152 it
-reaches 22.255 GB and still refuses. The lever is measured and spent.
-
-A caveat that matters more than the ceiling: **38,912 peaks at 22.28 GB, and 0014's desktop
-died at 22.29.** Serving the ceiling and using the machine are not the same question, and
-nothing here answers the second.
-
-## The suite is bounded on purpose
-
-Every task carries `timeout_seconds` and over-budget is scored as `fail_over_budget`,
-separately from any quality outcome. The default is 120 s; the fixtures that legitimately
-cost more say so, up to 300 s for the 16k retrieval. No run has yet hit one on real work — the guard is covered by a unit test, not by a live
-firing, and the `xhigh` cell that used to run unbounded now finishes at 95 s against its 120 s
-budget. This is not a safety net that should ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
-reasoning and produced no answer.
-
-Budgets are set from the fast end (`reasoning off`) plus headroom, so a task hitting its
-budget means something changed, not that the number was tight. One pass over the 14 tasks
-costs **5.4 minutes** with reasoning off; the same pass at `xhigh` cost 16.8 and did not
-finish six of its runs.
-
-**`reasoning_effort` is passed to the server verbatim rather than checked against a list.**
-Qwen3.8 takes `low`/`medium`/`xhigh` and the next model will take something else; a harness
-that hardcodes one vendor's vocabulary has to be edited before it can measure anything new.
-What is guaranteed instead is that whatever was sent appears on every row.
-
-## Sampling and thinking, settled
-
-Each mode at its own model-card sampling; 9 ranking tasks, 3 passes, 32k/q8_0.
-
-| setting | pass | tool-call valid | wall |
-|---|---|---|---|
-| **off · `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5`** | **25/27** | 12/12 | **5.0 min** |
-| off · greedy | 21/27 | 12/12 | 4.4 min |
-| off · temp 0.3 | 23/27 | 12/12 | 4.3 min |
-| off · temp 1.0 | 24/27 | 12/12 | 8.4 min |
-| off · top_p 0.95 | 25/27 | 12/12 | 4.4 min |
-| **on/low · `temp 1.0 / top_p 0.95 / top_k 20`** | **25/27** | **12/12** | 18.6 min |
-| on/low · greedy | 24/27 | 12/12 | 16.4 min |
-| on/low · temp 0.7 | 24/27 | 12/12 | 18.0 min |
-| on/medium | 24/27 | 12/12 | 22.4 min |
-
-**Nothing beats the model card, in either mode.** Colder is monotonically worse without
-thinking — 21, 23, 25 as temperature rises to 0.7 — and `top_p` does nothing at all. **Greedy
-is the worst setting measured**, which is worth knowing because it is the tempting choice for
-a reproducible sweep.
-
-**Tool-call validity is 12/12 in every cell of the sweep and ranks nothing.** It is the column
-0005 was built around, and no setting moves it: every call this model emitted was parseable and
-schema-conforming. Greedy's deficit is reasoning, not format. Where a tool-call task fails it
-is a *choice* — the right shape addressed to the wrong tool — which is the same conclusion the
-150-run classification reaches from the other direction.
-
-**Reasoning does not earn its cost at either profile.** It is 4× the wall clock for 25/27
-against 25/27, with tool-call validity identical at 12/12. Nothing measured here favours it.
-Eight of nine tasks are 3/3 in every cell, so the claim is *no gain detectable on this suite*,
-not *no gain exists*.
-
-So both profiles take the same setting, which is a result and not an assumption:
-
-| profile | thinking | sampling |
-|---|---|---|
-| attended | **off** | `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5` |
-| unattended | **off** | as above — nothing was found for the 4× to buy |
-
-The modes fail *differently* on the one task that moves, which the pass rate hides: off fails
-the plain-arithmetic cases both readings of a contradictory spec agree on, while thinking gets
-the arithmetic right and then resolves the contradiction case by case. Any later claim that a
-mode is better must say at what.
-
-## Tool-call adherence is not a formatting problem
-
-Across **150 recorded tool-call runs**: 136 pass, 10 wrong-but-valid, 2 from a fixture since
-fixed, 2 truncated at a cap. **Zero unparseable, zero schema-invalid.** The entire remaining
-deficit is choosing the wrong tool under a stated constraint.
-
-Constrained decoding is therefore not pursued: a grammar makes malformed calls impossible and
-we have none, while it cannot fix tool choice and would cost sampling speed. The template also
-asks for an XML call form — `<function=name>` with `<parameter=key>` — so a JSON-schema
-constraint would fight it rather than help.
-
-## Which tier-1 tasks carry signal
-
-Measured at `off` and `xhigh` across the full 14-task suite, and at all four levels for the
-three below that moved.
-
-| tasks | verdict |
-|---|---|
-| `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
-| `toolcall-constraint-readonly` | **weakly discriminates, in the opposite direction** — off 2/3, every reasoning level 3/3. Its earlier failures were a fixture flaw (the model refusing to patch a file it had not been shown), fixed by supplying the source in the prompt and re-measured |
-| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
-
-A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
-the discriminating subset, and keep the rest as the floor check they are.
+That is the vision's named exception, used in full: planning leaves the machine, grinding
+does not. The local tier reads the same repository and sends nothing anywhere.
 
 ## Gotchas
 

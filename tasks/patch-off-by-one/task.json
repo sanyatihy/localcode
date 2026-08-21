@@ -5,8 +5,7 @@
   "timeout_seconds": 240,
   "patch": {
     "source": "broken.go.txt",
-    "test_file": "verify_test.go.txt",
-    "package": "main"
+    "test_file": "verify_test.go.txt"
   },
   "tier2": {
     "answer_name": "window.go"
