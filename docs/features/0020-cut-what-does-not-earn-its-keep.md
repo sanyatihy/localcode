@@ -1,9 +1,9 @@
 ---
 id: 0020
 title: Cut what does not earn its keep
-status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
+status: Shipped
 created: 2026-08-21
-shipped:             # fill the date when status flips to Shipped
+shipped: 2026-08-21
 check:               # optional — date to check whether this worked. Only for bets.
 checked:             # written by kit check <id> "<outcome>", never by hand
 review:              # optional — `human` means a person merges this one. kit accept --review
