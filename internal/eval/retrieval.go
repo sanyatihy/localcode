@@ -71,7 +71,8 @@ func buildHaystack(r Retrieval) string {
 		words = 100
 	}
 
-	all := []planted{{at: int(float64(words) * clamp01(r.Position)), text: note(r.Label, r.Sentinel)}}
+	all := make([]planted, 0, 1+len(r.Distractors))
+	all = append(all, planted{at: int(float64(words) * clamp01(r.Position)), text: note(r.Label, r.Sentinel)})
 	for _, d := range r.Distractors {
 		all = append(all, planted{at: int(float64(words) * clamp01(d.Position)), text: note(d.Label, d.Sentinel)})
 	}
