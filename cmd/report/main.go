@@ -13,8 +13,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/sanyatihy/localcode/internal/eval"
@@ -276,12 +277,16 @@ func versus(a, base *agg) string {
 	}
 	parts := []string{quality}
 	for _, m := range []struct {
-		name string
-		xs   []int
+		name    string
+		got     []int
+		against []int
 	}{
-		{"turns", a.turns}, {"prompt", a.prompt}, {"cached", a.cached}, {"out", a.completion},
+		{"turns", a.turns, base.turns},
+		{"prompt", a.prompt, base.prompt},
+		{"cached", a.cached, base.cached},
+		{"out", a.completion, base.completion},
 	} {
-		parts = append(parts, ratio(m.name, meanI(m.xs), meanI(baseOf(base, m.name))))
+		parts = append(parts, ratio(m.name, meanI(m.got), meanI(m.against)))
 	}
 	parts = append(parts, ratio("wall", meanF(a.wall), meanF(base.wall)))
 	return strings.Join(parts, "  ")
@@ -306,7 +311,6 @@ type pairAgg struct {
 	swapped     int
 	throttled   int
 	unmeasured  int
-	stalled     int
 }
 
 func (p *pairAgg) add(r eval.Row) {
@@ -331,24 +335,23 @@ func (p *pairAgg) add(r eval.Row) {
 	p.secPerToken = append(p.secPerToken, r.DecodeSeconds/float64(r.CompletionTokens))
 }
 
-// accepted drops stalls and reports what is left. Done at read time rather than at add
-// time because a sample can only be judged against the median of the samples beside it.
-func (p *pairAgg) accepted() []float64 {
+// accepted drops stalls and reports what is left beside how many it dropped. Judged at
+// read time, because a sample can only be called a stall against the ones beside it — and
+// pure, because a caller that reads twice must not be told the stalls happened twice.
+func (p *pairAgg) accepted() (kept []float64, stalled int) {
 	if len(p.secPerToken) < 2 {
-		return p.secPerToken
+		return p.secPerToken, 0
 	}
-	sorted := append([]float64(nil), p.secPerToken...)
-	sort.Float64s(sorted)
+	sorted := slices.Sorted(slices.Values(p.secPerToken))
 	median := sorted[len(sorted)/2]
-	var out []float64
 	for _, v := range p.secPerToken {
 		if median > 0 && v > stallFactor*median {
-			p.stalled++
+			stalled++
 			continue
 		}
-		out = append(out, v)
+		kept = append(kept, v)
 	}
-	return out
+	return kept, stalled
 }
 
 // reportPaired prints the decode ratio for each session, against the baseline named on
@@ -385,10 +388,11 @@ func reportPaired(stdout io.Writer, paired map[string]map[string]*pairAgg, basel
 			_, _ = fmt.Fprintf(stdout, "    no baseline: name one with -baseline, or measure one config without speculation\n")
 			continue
 		}
-		bm := meanF(configs[base].accepted())
+		baseSamples, _ := configs[base].accepted()
+		bm := meanF(baseSamples)
 		for _, name := range sortedKeys(configs) {
 			c := configs[name]
-			samples := c.accepted()
+			samples, stalled := c.accepted()
 			note := ""
 			if c.swapped > 0 {
 				note += fmt.Sprintf("  (%d void: swap grew)", c.swapped)
@@ -396,8 +400,8 @@ func reportPaired(stdout io.Writer, paired map[string]map[string]*pairAgg, basel
 			if c.throttled > 0 {
 				note += fmt.Sprintf("  (%d void: machine throttled)", c.throttled)
 			}
-			if c.stalled > 0 {
-				note += fmt.Sprintf("  (%d void: stalled past %.0fx the median)", c.stalled, stallFactor)
+			if stalled > 0 {
+				note += fmt.Sprintf("  (%d void: stalled past %.0fx the median)", stalled, stallFactor)
 			}
 			if c.unmeasured > 0 {
 				note += fmt.Sprintf("  (%d unmeasured)", c.unmeasured)
@@ -419,7 +423,7 @@ func reportPaired(stdout io.Writer, paired map[string]map[string]*pairAgg, basel
 			switch {
 			case mismatch:
 				r = "VOID: greedy output differs from the baseline — not lossless"
-			case len(samples) < minPairs || len(configs[base].accepted()) < minPairs:
+			case len(samples) < minPairs || len(baseSamples) < minPairs:
 				r = fmt.Sprintf("too few accepted pairs (need %d)", minPairs)
 			case m > 0 && bm > 0:
 				r = fmt.Sprintf("%.2fx", bm/m)
@@ -438,19 +442,6 @@ func rate(pass, total int) float64 {
 		return 0
 	}
 	return float64(pass) / float64(total)
-}
-
-func baseOf(base *agg, name string) []int {
-	switch name {
-	case "turns":
-		return base.turns
-	case "prompt":
-		return base.prompt
-	case "cached":
-		return base.cached
-	default:
-		return base.completion
-	}
 }
 
 // ratio says "half" as ×0.50 rather than −50%, which reads the same for a doubling and a
@@ -483,7 +474,7 @@ func meanF(xs []float64) float64 {
 
 func failSummary(m map[eval.Outcome]int) string {
 	var parts []string
-	for _, k := range sortedOutcomes(m) {
+	for _, k := range slices.Sorted(maps.Keys(m)) {
 		if k != eval.Pass {
 			parts = append(parts, fmt.Sprintf("%s×%d", k, m[k]))
 		}
@@ -523,20 +514,4 @@ func rangeI(xs []int) string {
 	return rangeF(f)
 }
 
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedOutcomes(m map[eval.Outcome]int) []eval.Outcome {
-	out := make([]eval.Outcome, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
+func sortedKeys[V any](m map[string]V) []string { return slices.Sorted(maps.Keys(m)) }

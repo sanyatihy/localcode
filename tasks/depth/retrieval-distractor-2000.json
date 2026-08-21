@@ -8,7 +8,6 @@
     "position": 0.55,
     "sentinel": "KEY-6C1D-STAGING",
     "label": "staging",
-    "question": "What is the staging deployment key?",
     "distractors": [
       {
         "label": "production",

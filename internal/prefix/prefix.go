@@ -1,12 +1,10 @@
-// Package prefix measures what a conversation re-ingests when it shares an endpoint
-// with traffic that is not part of it. On this hardware a turn's cost is its prompt,
-// not its answer, so what a session is worth turns on how much of each turn's prompt
-// the server still holds when the turn arrives.
+// Package prefix measures what a conversation re-ingests when it shares an endpoint with
+// traffic that is not part of it. On this hardware a turn costs its prompt and not its
+// answer, so what a session is worth turns on how much of each prompt the server still
+// holds when the turn arrives.
 //
-// It replays a fixed conversation rather than driving a harness. A harness decides what
-// to send and when, which is the thing under test here only insofar as it produces two
-// kinds of request on one endpoint; the server's answer to that pattern is what the rows
-// record, and a scripted conversation is the only version of it that repeats.
+// It replays a fixed conversation rather than driving a harness: only a scripted one
+// repeats. serverlog.go reads the same account for traffic nobody scripted.
 package prefix
 
 import (
@@ -42,11 +40,9 @@ const (
 	KindSmall        = "small"
 )
 
-// cannedReply stands in for what the model said. The prompt of turn n+1 must be
-// byte-identical between two conditions or their cache figures are not comparable, and
-// a generated reply is not. It costs nothing in reuse: the server holds the previous
-// prompt plus what it generated, so the common prefix ends where this reply begins and
-// everything before it is still a hit.
+// cannedReply stands in for what the model said: turn n+1's prompt must be byte-identical
+// across conditions or their cache figures are not comparable, and a generated reply is
+// not. It costs nothing in reuse — the common prefix ends where this reply begins.
 const cannedReply = "Understood."
 
 // Conversation is the traffic a probe replays. Sizes are in words because that is what
@@ -65,10 +61,9 @@ type Conversation struct {
 	SmallSharesSystem bool `json:"small_shares_system"`
 }
 
-// filler is code-shaped rather than prose for the same reason 0003's haystacks are: a
-// session carries repository text, and its tokenisation is not English's. The vocabulary
-// is this package's own — sharing the scorer's would mean a change here silently moved
-// the prompts behind every retrieval number already recorded.
+// filler is code-shaped rather than prose: a session carries repository text, and its
+// tokenisation is not English's. Deliberately not shared with the scorer's vocabulary — a
+// change here would otherwise move the prompts behind every recorded retrieval number.
 var filler = []string{
 	"session", "token", "refresh", "handler", "request", "context", "buffer",
 	"index", "commit", "parser", "value", "result", "config", "client", "server",
@@ -89,10 +84,9 @@ func words(seed, n int) string {
 	return b.String()
 }
 
-// Turn returns the messages the conversation sends on turn n, 1-based: everything it
-// has already sent, plus one more tool result. This is the shape a session actually
-// has — a growing prefix resent whole — and the reason a served prefix is worth
-// anything at all.
+// Turn returns the messages the conversation sends on turn n, 1-based: everything already
+// sent plus one more tool result — a growing prefix resent whole, which is the shape a
+// real session has.
 func (c Conversation) Turn(n int) []eval.Message {
 	msgs := []eval.Message{{
 		Role:    "system",
@@ -110,10 +104,9 @@ func (c Conversation) Turn(n int) []eval.Message {
 	return msgs
 }
 
-// Small returns the call interleaved after turn n. Its body differs per position the way
-// a harness's does — each such call carries the conversation as it stood — and its system
-// prompt is either its own, sharing nothing with the conversation, or the conversation's,
-// which is as much prefix as side traffic can share without being the conversation.
+// Small returns the call interleaved after turn n. Its body differs per position the way a
+// harness's does, and its system prompt is either its own — sharing nothing — or the
+// conversation's, which is as much prefix as side traffic can share.
 func (c Conversation) Small(n int) []eval.Message {
 	system := "Summarise the conversation in a few words."
 	if c.SmallSharesSystem {
@@ -164,10 +157,8 @@ type Options struct {
 	// this size would cost more wall clock than the thing being measured.
 	MaxTokens int
 
-	// Record is called with each row as it is measured. A condition is tens of minutes
-	// of machine time, so a row reaches its file when it is taken rather than when the
-	// run ends; returning an error stops the run rather than measuring on into a file
-	// nothing can be written to.
+	// Record is called with each row as it is measured: a condition is tens of minutes, so
+	// a row reaches its file when taken. Returning an error stops the run.
 	Record func(Row) error
 }
 
@@ -225,8 +216,8 @@ func send(ctx context.Context, c *eval.Client, msgs []eval.Message, conv Convers
 	if len(resp.Error) > 0 {
 		return Row{}, fmt.Errorf("%s %d: server: %s", kind, index, resp.Error)
 	}
-	// A request the server did not account for would go in as a turn that ingested
-	// nothing — the very reading this file exists to support — so it stops the run.
+	// A request the server did not account for would read as a turn that ingested
+	// nothing, which is the very finding this measures. It stops the run instead.
 	if resp.Usage.PromptTokens == 0 {
 		return Row{}, fmt.Errorf("%s %d: the server reported no prompt tokens", kind, index)
 	}

@@ -12,3 +12,7 @@ HANDOFF.md
 # Generated, and local: committed it would point every session anybody opens here at a
 # 27B model on loopback, and hook every one of them.
 .claude/settings.local.json
+
+# scripts/ladder.sh and scripts/screen.sh import deskverdict.py, so any real run writes
+# bytecode beside it.
+__pycache__/

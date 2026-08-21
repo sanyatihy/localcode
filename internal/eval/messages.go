@@ -11,15 +11,11 @@ import (
 	"time"
 )
 
-// This file adds one thing: the same tasks, scored by the same grader, sent down the
-// Anthropic Messages path instead of chat-completions. It exists because that path is a
-// conversion inside llama-server that nothing here had measured, and it is the path a
-// Claude Code session takes — so a tool-call number taken on /v1/chat/completions says
-// nothing about what the editor flow actually gets.
-//
-// It is deliberately not the backend seam 0012 owns. Everything below is one request
-// shape translated to another and back; the scoring, the outcomes and the row are
-// untouched, which is what makes the two sets of numbers comparable at all.
+// The same tasks and the same grader, sent down the Anthropic Messages path instead of
+// chat-completions — the path a Claude Code session takes, and a conversion inside
+// llama-server. Everything here is one request shape translated to another and back; the
+// scoring, the outcomes and the row are untouched, which is what makes the two sets of
+// numbers comparable.
 
 // APIChat and APIMessages name the dialect a Client speaks.
 const (
@@ -63,12 +59,10 @@ type messagesResponse struct {
 	Error json.RawMessage `json:"error"`
 }
 
-// errSamplingNotSendable is returned rather than silently dropping a flag. The Messages
-// API carries no presence_penalty and no chat_template_kwargs, so a run that asked for
-// 0005's settled pair would be measured at whatever the server defaults to while its row
-// claimed otherwise — the mislabelling this repo has already paid for twice. On this path
-// sampling and the thinking toggle are the server's, set in config/agent.env, which is
-// also exactly what a Claude Code session gets.
+// errSamplingNotSendable is returned rather than silently dropping a flag: the Messages
+// API carries no presence_penalty and no chat_template_kwargs, so a run asking for them
+// would be measured at the server's defaults while its row claimed otherwise. On this path
+// sampling and the toggle are served, which is what a Claude Code session gets too.
 var errSamplingNotSendable = errors.New(
 	"the messages path takes sampling and the thinking toggle from the server: serve config/agent.env and pass neither")
 
@@ -87,10 +81,8 @@ func (c *Client) completeMessages(ctx context.Context, req chatRequest) (*Respon
 	out.Model = "local"
 	for _, m := range req.Messages {
 		if m.Role == "system" {
-			// The Messages API carries the system prompt beside the conversation
-			// rather than in it. Joining is safe here because fixtures carry at most
-			// one; a mid-conversation system message is a different thing entirely and
-			// is the model's template problem, not this converter's.
+			// This API carries the system prompt beside the conversation rather than
+			// in it. Joining is safe because a fixture carries at most one.
 			out.System = strings.TrimSpace(out.System + "\n\n" + m.Content)
 			continue
 		}
@@ -157,14 +149,7 @@ func (r *messagesResponse) toResponse(wall time.Duration) *Response {
 		}
 	}
 
-	choice := struct {
-		FinishReason string `json:"finish_reason"`
-		Message      struct {
-			Content          string     `json:"content"`
-			ReasoningContent string     `json:"reasoning_content"`
-			ToolCalls        []ToolCall `json:"tool_calls"`
-		} `json:"message"`
-	}{}
+	var choice Choice
 	// "length" is the string Run checks for a truncated answer; stop_reason is the
 	// Messages API's name for the same thing.
 	if r.StopReason == "max_tokens" {

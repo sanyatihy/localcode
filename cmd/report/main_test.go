@@ -41,12 +41,30 @@ func TestPairedRatioRejectsAStall(t *testing.T) {
 	}
 	p.add(decodeRow(9, 10)) // 0.9 s/token, nine times the median
 
-	kept := p.accepted()
+	kept, stalled := p.accepted()
 	if len(kept) != 4 {
 		t.Fatalf("kept %d samples, want 4", len(kept))
 	}
-	if p.stalled != 1 {
-		t.Fatalf("stalled = %d, want 1", p.stalled)
+	if stalled != 1 {
+		t.Fatalf("stalled = %d, want 1", stalled)
+	}
+}
+
+// The stall count is a property of the samples, not of how often they were read. The
+// reporter reads the baseline's set once per candidate, and each read used to add the
+// same stalls again — printing one void run as three.
+func TestPairedStallCountSurvivesRepeatedReads(t *testing.T) {
+	base, cand := &pairAgg{}, &pairAgg{}
+	for range minPairs + 1 {
+		base.add(decodeRow(2, 10))
+		cand.add(decodeRow(1, 10))
+	}
+	base.add(decodeRow(40, 10)) // one stall, on the side every candidate is divided by
+
+	var buf bytes.Buffer
+	reportPaired(&buf, map[string]map[string]*pairAgg{"s": {"tuned": base, "candidate": cand}}, "tuned")
+	if got := buf.String(); !strings.Contains(got, "(1 void: stalled") {
+		t.Fatalf("one stall must be reported once, got:\n%s", got)
 	}
 }
 

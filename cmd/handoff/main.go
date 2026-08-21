@@ -10,17 +10,16 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/handoff"
 	"github.com/sanyatihy/localcode/internal/harness"
 )
@@ -29,11 +28,10 @@ var errUnticked = errors.New("the box is still unticked")
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "handoff: %v\n", err)
 		if errors.Is(err, errUnticked) {
-			fmt.Fprintf(os.Stderr, "handoff: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "handoff: %v\n", err)
 		os.Exit(2)
 	}
 }
@@ -267,37 +265,34 @@ func runSession(cfg config, session int, box string) (row, error) {
 }
 
 // newestTranscript finds the session's transcript. The state directory is fresh, so there
-// is normally one; the newest is taken in case the harness wrote more.
+// is normally one; the newest is taken in case the harness wrote more. A path that cannot
+// be stat'd is skipped rather than compared — the previous sort dereferenced a nil FileInfo.
 func newestTranscript(state string) (string, error) {
 	paths, err := filepath.Glob(filepath.Join(state, "projects", "*", "*.jsonl"))
-	if err != nil || len(paths) == 0 {
+	if err != nil {
+		return "", fmt.Errorf("look for a transcript under %s: %w", state, err)
+	}
+	newest, at := "", time.Time{}
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if newest == "" || info.ModTime().After(at) {
+			newest, at = path, info.ModTime()
+		}
+	}
+	if newest == "" {
 		return "", fmt.Errorf("no transcript under %s: the session wrote none", state)
 	}
-	sort.Slice(paths, func(i, j int) bool {
-		a, _ := os.Stat(paths[i])
-		b, _ := os.Stat(paths[j])
-		return a.ModTime().Before(b.ModTime())
-	})
-	return paths[len(paths)-1], nil
+	return newest, nil
 }
 
 func record(path string, r row) error {
 	if path == "" {
 		return nil
 	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(append(b, '\n')); err != nil {
-		_ = f.Close()
-		return err
-	}
-	return f.Close()
+	return eval.AppendJSON(path, r)
 }
 
 func tail(s string, n int) string {

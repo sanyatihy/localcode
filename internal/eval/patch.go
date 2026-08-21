@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -23,7 +22,6 @@ type Patch struct {
 	Dir      string `json:"-"`         // fixture directory, filled in at load
 	Source   string `json:"source"`    // file the model must rewrite, e.g. broken.go.txt
 	TestFile string `json:"test_file"` // unseen test run against the answer, e.g. verify_test.go.txt
-	Package  string `json:"package"`   // package name both files declare
 }
 
 var fenceRE = regexp.MustCompile("(?s)```(?:go|golang)?\\s*\n(.*?)```")
@@ -69,33 +67,26 @@ func runPatch(ctx context.Context, p Patch, code string) (Outcome, string) {
 		}
 	}
 
-	// CommandContext so cancellation actually reaches the process. The previous
-	// hand-rolled timer killed the process but left its reader goroutine blocked
-	// until the pipe closed, and ignored the caller's context entirely.
-	runCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	// Bounded: a model can emit code that compiles and then loops forever. That is a
+	// failed answer, not a broken harness, so it is scored rather than fatal.
+	runCtx, cancel := context.WithTimeout(ctx, patchTestBudget)
 	defer cancel()
-
-	cmd := exec.CommandContext(runCtx, "go", "test", "./...")
-	cmd.Dir = work
-	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
+	out, err := goTest(runCtx, work)
+	switch {
+	case err == nil:
 		return Pass, ""
+	case runCtx.Err() != nil:
+		return FailTest, fmt.Sprintf("test run exceeded %s (likely non-terminating)", patchTestBudget)
+	case isBuildFailure(out):
+		// Kept apart from a test failure: one is invalid Go, the other is Go that is wrong.
+		return FailCompile, truncate(firstUseful(string(out)), 200)
 	}
-	if runCtx.Err() != nil {
-		// A model can emit code that compiles and then loops forever. That is a
-		// failed answer, not a broken harness, so it is scored rather than fatal.
-		return FailTest, "test run exceeded 90s (likely non-terminating)"
-	}
-	text := string(out)
-	// go reports build errors before any test runs; distinguishing them keeps
-	// "wrote invalid Go" separate from "wrote Go that fails the test".
-	if strings.Contains(text, "[build failed]") || strings.Contains(text, "syntax error") ||
-		strings.Contains(text, "undefined:") || strings.Contains(text, "cannot use") {
-		return FailCompile, truncate(firstUseful(text), 200)
-	}
-	return FailTest, truncate(firstUseful(text), 200)
+	return FailTest, truncate(firstUseful(string(out)), 200)
 }
+
+// patchTestBudget bounds one scored answer. Well above the seconds a fixture's own tests
+// take, and short enough that a non-terminating answer costs a minute rather than a sweep.
+const patchTestBudget = 90 * time.Second
 
 // firstUseful skips go's noise lines so the recorded detail is the actual error.
 func firstUseful(s string) string {
