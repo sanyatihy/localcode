@@ -664,21 +664,96 @@ which includes prefill. Both sit near 40% of the ~25 tok/s ceiling that 16.1 GB 
 token implies at this machine's ~400 GB/s — normal for real kernels, and the reason no
 configuration change reaches the figures quoted for speculative decoding.
 
-**Multi-token prediction is not reachable here.** `mlx-community/Qwen3.8-27B-MTP-4bit` is
-256 MB of heads meant to be passed as a draft model, and `mlx_lm` 0.31.3 — the current release
-— rejects it: `Model type qwen3_5_mtp not supported`. So MTP is not a lever we declined to
-pull; it does not exist in this server yet.
+**Multi-token prediction is reachable, and not through this server.** `mlx_lm` 0.31.3 still
+rejects `mlx-community/Qwen3.8-27B-MTP-4bit` with `Model type qwen3_5_mtp not supported`, so
+the sentence this paragraph used to carry was true of MLX and false of the project: the lever
+exists on llama.cpp, where the served GGUF's own MTP head is dropped as unused until a build
+with PR #27342 picks it up. It is measured at 1.26–1.57× depending on prompt depth, and the
+figures are under "Speculative decoding" above. MTPLX, the MLX runtime that does implement
+native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
 
 **What would reverse it:** a 128 GB machine, where slot count stops competing with the model
-and MLX's reuse advantage runs unconstrained. `mlx_lm` gaining `qwen3_5_mtp` support *and*
-beating llama.cpp's own draft-model path, which is the symmetric comparison since MTP is
-consumed as a draft model rather than as a runtime feature. Or MLX gaining `/v1/messages`.
+and MLX's reuse advantage runs unconstrained — and where MTPLX's 20.68 GB checkpoint would
+have room to hold a context, which is the only thing that stopped it here. `mlx_lm` gaining
+`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
+rather than a hypothetical. Or MLX gaining `/v1/messages`.
 
 **One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
 repeating any, which is what forced the slot-count problem. A real agent session is one
 conversation resending a growing prefix, needing one or two slots — the configuration that is
 memory-safe. So this comparison understates MLX for the workload the project actually cares
 about, and the honest reading is that neither runtime is disqualified.
+
+## Speculative decoding: adoptable at the top of the context, not the bottom
+
+Three candidates were screened against 0014's desktop rule before any suite ran, and two
+never generated a token on this machine. What survives is the model's own multi-token
+prediction head, which the served GGUF has carried all along: stock llama.cpp logs those
+tensors as unused and drops them, and the build from llama.cpp PR #27342 makes an MTP draft
+context against the same weights instead of loading a second model.
+
+| candidate | extra weights | verdict |
+|---|---|---|
+| **native MTP**, `--spec-type draft-mtp` | none — the target's own head | admissible at 32,768, refused at 49,152 |
+| DFlash2 drafter, PR #27342 | 1.1 GB | GPU out of memory at load, both contexts |
+| MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | loads, then out of memory under a real prompt |
+
+**The ratio is of decode and not of wall, measured client-side from the gap to the first
+token.** A speculative decoder moves decode and cannot move prefill, and prefill is most of
+the clock at depth: one validation run spent 279 seconds, 247 of them before the first token.
+Server-reported rates are not used for the comparison, per the rule below.
+
+| prompt depth | baseline | native MTP | ratio | acceptance |
+|---|---|---|---|---|
+| ~200 tokens (the ranking suite) | 0.1050 s/tok | 0.0669 | **1.57×** | 3.94 |
+| 8 000 | 0.1181 | 0.0844 | 1.40× | 3.96 |
+| 16 000 | 0.1348 | 0.1005 | 1.34× | 3.97 |
+| 32 000 | 0.1700 | 0.1346 | **1.26×** | 3.97 |
+
+**Acceptance does not decay; the cost of a verification step does.** Nearly four tokens are
+committed per step at every depth, while both sides slow — 0.105 to 0.170 s/token on the
+baseline — because attention over a longer cache is not something speculation can make
+cheaper. So the same config is adoptable against short prompts and, by the same rule, is
+not against long ones.
+
+**It is lossless by measurement.** Fixed prompts at temperature zero hash identically with
+the mechanism on and off. That is what licenses reading the speed number at all: a decoder
+that changed the answer would be measuring something else.
+
+**The verdict, per profile.**
+
+- **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
+  bar set before the runs, pass rate is 23/27 against 25/27 on the two tasks 0013 built to
+  discriminate — sampling at 0.7, which the identical greedy hash rules out as a
+  distribution change — and it costs 0.43 GB of wired memory.
+- **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
+  rule reserves for "measured, not taken", and an agent session's prompt is deep.
+- **Editor, 49,152**: refused. The allocator fails on the first prefill batch, where the
+  same config without speculation finishes the fill at 22.02 GB.
+- **Attended, any profile**: undecided, and deliberately not guessed. Every screen here ran
+  `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
+  has not been taken against this config. It peaks at 22.10 GB where the desktop died at
+  22.29, so the margin is 0.19 GB and the answer is not obvious.
+
+**One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
+Once is not a characterisation, and it is recorded rather than explained.
+
+**The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
+builds a second `llama_context` over the same weights — no second copy — but its cache is
+sized at the context the target serves, so its cost grows with `--ctx-size` like any other.
+Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
+40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
+49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
+and not to the editor.
+
+`--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
+params to free device memory: n_gpu_layers already set by user to 999, abort`, so the build's
+own fitter was being blocked by this project's pinned value — but unpinned at 49,152 it
+reaches 22.255 GB and still refuses. The lever is measured and spent.
+
+A caveat that matters more than the ceiling: **38,912 peaks at 22.28 GB, and 0014's desktop
+died at 22.29.** Serving the ceiling and using the machine are not the same question, and
+nothing here answers the second.
 
 ## The suite is bounded on purpose
 
