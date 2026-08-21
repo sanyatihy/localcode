@@ -105,7 +105,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
 - [x] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
 - [x] handoff works in any repository, with state under `~/.local/state/localcode/` and
       `HANDOFF.md` still at the checkout root when working on localcode itself
-- [ ] the agent runs under a seatbelt profile that confines writes to the working
+- [x] the agent runs under a seatbelt profile that confines writes to the working
       directory, temp and the cache roots, with reads unrestricted
 - [ ] a write denied outside that set names the path and the line that would allow it, and
       `~/.config/localcode/writable` widens it

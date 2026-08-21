@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,23 @@ func stubClaude(t *testing.T, script string) string {
 	return argv
 }
 
+// passthroughSandbox substitutes a stand-in for sandbox-exec that drops `-f PROFILE` and
+// runs the rest. It keeps these tests about what the launcher assembles, which is the part
+// that is the same on every platform; the boundary itself is asserted separately and only
+// where it exists.
+func passthroughSandbox(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "sandbox-exec")
+	body := "#!/bin/sh\nshift 2\nexec \"$@\"\n"
+	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := sandboxExec
+	sandboxExec = stub
+	t.Cleanup(func() { sandboxExec = old })
+}
+
 func healthy(t *testing.T, code int) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -53,6 +71,7 @@ func healthy(t *testing.T, code int) string {
 func TestRunWritesNothingToTheRepository(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 0")
+	passthroughSandbox(t)
 	repo := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repo, "only.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -81,6 +100,7 @@ func TestRunWritesNothingToTheRepository(t *testing.T) {
 func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	root := fakeCheckout(t)
 	argv := stubClaude(t, "exit 0")
+	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
 	if code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
@@ -102,6 +122,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 	root := fakeCheckout(t)
 	argv := stubClaude(t, "exit 0")
+	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
 	if _, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
@@ -116,6 +137,7 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 0")
+	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
 	// 503 is what llama-server answers while it loads: something is listening, and it
@@ -129,6 +151,7 @@ func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 3")
+	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
 	code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
@@ -142,6 +165,7 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 0")
+	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
@@ -249,5 +273,88 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 	}
 	if code, err := script(root, "stop.sh"); err != nil || code != 2 {
 		t.Fatalf("want 2 passed through, got %d err %v", code, err)
+	}
+}
+
+func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
+	state, cwd := t.TempDir(), t.TempDir()
+	path, err := writeSandboxProfile(state, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	if !strings.Contains(got, "(deny file-write*)") {
+		t.Fatalf("writes must be denied by default:\n%s", got)
+	}
+	// Reads are deliberately not restricted: an agent that cannot read a toolchain
+	// cannot use one.
+	if strings.Contains(got, "(deny file-read") {
+		t.Fatalf("reads must stay open:\n%s", got)
+	}
+	resolved, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, resolved) {
+		t.Fatalf("the working directory must be writable:\n%s", got)
+	}
+	// Resolved, because /var and /tmp are symlinks into /private and seatbelt matches the
+	// resolved path — an unresolved entry denies what it appears to allow.
+	if strings.Contains(got, `(subpath "/tmp")`) {
+		t.Fatalf("paths must be resolved before they reach the profile:\n%s", got)
+	}
+}
+
+func TestSandboxProfileQuotesAPathThatWouldEndTheString(t *testing.T) {
+	got := sbplString(`/a/"b`)
+	if got != `"/a/\"b"` {
+		t.Fatalf("an unescaped quote would change the policy: %s", got)
+	}
+}
+
+// The boundary itself, on the machine that has one. Everything destructive here aims at a
+// directory this test created, so a profile that failed open would destroy only that.
+func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip("no seatbelt on this platform")
+	}
+	state, cwd := t.TempDir(), t.TempDir()
+	profile, err := writeSandboxProfile(state, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(home, ".localcode-test-probe-"+filepath.Base(t.TempDir()))
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(outside) })
+	keep := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(keep, []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Inside is allowed.
+	in := exec.Command("/usr/bin/sandbox-exec", "-f", profile, "/bin/sh", "-c",
+		"echo ok > "+filepath.Join(cwd, "f.txt"))
+	if out, err := in.CombinedOutput(); err != nil {
+		t.Fatalf("a write in the working directory must succeed: %v: %s", err, out)
+	}
+	// Outside is not, and the file survives to prove it.
+	out := exec.Command("/usr/bin/sandbox-exec", "-f", profile, "/bin/sh", "-c", "rm -rf "+outside)
+	if err := out.Run(); err == nil {
+		t.Fatal("rm -rf outside the working directory was permitted")
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("the file outside was destroyed: %v", err)
 	}
 }

@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -142,7 +143,25 @@ func run(o opts) (int, error) {
 		argv = append(argv, o.args...)
 	}
 
-	cmd := exec.Command("claude", argv...)
+	// The agent runs inside a seatbelt sandbox, which is what makes exposing an
+	// unrestricted Bash tool defensible: the boundary is the kernel's rather than the
+	// model's judgement, and it needs to know nothing about the language in the repository.
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		return 2, fmt.Errorf("claude is not on PATH: %w", err)
+	}
+	// Refused rather than skipped: running unsandboxed because the sandbox is missing is
+	// the one failure mode that would be silent and would matter.
+	if _, err := os.Stat(sandboxExec); err != nil {
+		return 2, fmt.Errorf("no %s: localcode runs the agent sandboxed and will not run it otherwise", sandboxExec)
+	}
+	profile, err := writeSandboxProfile(state, cwd)
+	if err != nil {
+		return 2, err
+	}
+	sandboxArgv := append([]string{"-f", profile, claudePath}, argv...)
+
+	cmd := exec.Command(sandboxExec, sandboxArgv...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -356,4 +375,59 @@ func writeSettings(root, state string) (string, error) {
 		return "", fmt.Errorf("could not write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// sandboxExec is macOS's own. A var so a test can substitute a pass-through: the CI that
+// runs `make check` is Linux, and the launcher's argument assembly is worth testing there
+// even though the boundary itself can only be exercised on the machine VISION fixes.
+var sandboxExec = "/usr/bin/sandbox-exec"
+
+// writeSandboxProfile renders the policy: writes confined, reads open. Reads stay open
+// because an agent that cannot read a toolchain cannot use one, and the risk that matters
+// here is a mistaken write rather than a curious read.
+//
+// Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
+// and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
+// that uses one while appearing to allow it.
+func writeSandboxProfile(state, cwd string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	writable := []string{
+		cwd,   // the repository being worked in
+		state, // this repository's handoff and settings
+		os.TempDir(),
+		"/private/tmp",
+		filepath.Join(home, "Library", "Caches"), // where macOS toolchains cache
+		filepath.Join(home, ".cache"),            // where XDG ones do
+		filepath.Join(home, ".claude"),           // the agent's own history and project state
+	}
+
+	var b strings.Builder
+	b.WriteString("(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n")
+	for _, p := range writable {
+		resolved, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			continue // absent is not an error: not every machine has every cache root
+		}
+		fmt.Fprintf(&b, "  (subpath %s)\n", sbplString(resolved))
+	}
+	// Writing to a terminal is not writing to the filesystem, and a shell needs these.
+	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\")\n")
+	b.WriteString("  (literal \"/dev/dtracehelper\") (literal \"/dev/tty\"))\n")
+
+	path := filepath.Join(state, "sandbox.sb")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return "", fmt.Errorf("could not write %s: %w", path, err)
+	}
+	return path, nil
+}
+
+// sbplString quotes a path for the profile. A path is attacker-adjacent here only in the
+// sense that it comes from the filesystem, but an unescaped quote would end the string and
+// change the policy, which is the one bug a sandbox must not have.
+func sbplString(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return `"` + r.Replace(s) + `"`
 }
