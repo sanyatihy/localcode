@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Print the context rungs this machine should be laddered over, one per line.
 #
-# Every rung in the first ladder was a fact about a 32 GB machine, written by hand. A
-# 128 GB machine moves all of them at once, and a hand-edited list is a list that gets
-# forgotten — so the rungs are computed from what the machine actually has.
+# Every rung in the first ladder was a fact about a 32 GB machine, written by hand, and a
+# hand-edited list is a list that gets forgotten. The rungs are computed from what the machine
+# reports, so this also runs on hardware nobody here owns.
 #
 # The arithmetic is deliberately crude, because its job is to bracket the interesting
 # range rather than predict it. 0003 measured the KV cost that matters here and it came
@@ -17,8 +17,8 @@ RESERVE_GB="${RESERVE_GB:-8}"                 # OS, editor, browser — never th
 MAX_CTX="${MAX_CTX:-262144}"                  # the model's own limit; no point above it
 MAX_INGEST_MIN="${MAX_INGEST_MIN:-20}"        # a rung nobody will wait for is not a measurement
 
-# TOTAL_GB overrides detection so a machine can be planned before it is owned — the
-# 128 GB upgrade changes which constraint binds, and that is worth knowing in advance.
+# TOTAL_GB overrides detection, which is how "would more memory buy context?" was answered
+# without buying any: it would not, and docs/TECH.md records it.
 total_gb="${TOTAL_GB:-$(( $(sysctl -n hw.memsize) / 1073741824 ))}"
 
 # Weights dominate the floor. Measure them from the file when we can, rather than

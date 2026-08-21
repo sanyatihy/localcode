@@ -69,13 +69,17 @@ remembered.
 
 ## Constraints
 
-- **Hardware is the current envelope, not a permanent one.** M2 Max, 32 GB unified memory,
-  30 GPU cores. A 128 GB machine is planned, and it moves every ceiling at once: quants
-  that do not fit today, models that cannot load, contexts that cost too much. So
-  **measured numbers are always recorded with the machine they came from**, and anything
-  that hardcodes this machine's limits — ladder rungs above all — is a defect to fix rather
-  than a value to update. No config may make the machine unusable for the editor and
-  browser the developer is running while the agent works.
+- **Hardware is fixed: M2 Max, 32 GB unified memory, 30 GPU cores.** A larger machine was
+  considered and decided against, so this is the envelope every answer here is for. **Some
+  exclusions are therefore permanent rather than provisional** — Q5_K_M and Q6_K stay ruled
+  out *by projection*, and no run will ever test that; MTPLX stays inadmissible; Hermes stays
+  unattended-only. Where a conclusion rests on a projection this machine cannot check, it says
+  so and stays that way.
+  **Measured numbers are still recorded with the machine they came from**, and this machine's
+  limits still live in `config/machine.json` rather than in code — for the second audience
+  rather than a second machine, since anyone reproducing these choices is on different
+  silicon. No config may make the machine unusable for the editor and browser the developer
+  is running while the agent works.
 - **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
   quality, and whatever else emerges are candidates, and which one binds depends on the
   envelope — model, quant, context, and the machine. A constraint asserted in advance is
