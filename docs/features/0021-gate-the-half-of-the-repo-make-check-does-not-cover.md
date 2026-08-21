@@ -72,7 +72,7 @@ code — not the sweep behind them, which needs a server.
 - [x] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
 - [x] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
 - [x] The real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
-- [ ] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
+- [x] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
 
 ## Open questions
 
