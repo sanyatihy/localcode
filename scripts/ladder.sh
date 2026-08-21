@@ -1,93 +1,58 @@
 #!/usr/bin/env bash
-# Drive each ladder config to a genuinely full context and record what it cost.
+# Drive each ladder rung to a genuinely full context and record what it cost.
 #
-# Filling the context is the whole point. Allocation at load time understates the peak,
-# and a config that loads and then dies at 30k is exactly the failure this measures. So
-# every cell sends a prompt sized to the context it claims to serve.
+# Filling the context is the whole point. Allocation at load time understates the peak, and
+# a config that loads and then dies at 30k is exactly the failure this measures.
 #
-# CONDITION labels the machine state, because the same config has two answers: with a
-# desktop in use (attended) and with the machine to itself (unattended). Recording it is
-# what keeps the two from being averaged together later.
+# The rungs are derived, never written down. scripts/rungs.sh computes them from what this
+# machine actually has and reports which of memory or time binds; a hand-written rung is a
+# fact about one laptop, which docs/VISION.md names as the first defect to fix rather than a
+# value to update. Each cell is generated from BASE with only the context and KV type moved,
+# so a rung cannot drift from the config the project serves.
 #
-# Wired memory is sampled *during* the fill, not around it. Metal's buffers peak while the
-# context fills, and a probe taken after curl returns can miss it — which is how a cell that
-# exhausted the GPU wired limit was recorded as `ok` with nothing in the row to contradict
-# the desktop freezing while it ran.
+# CONDITION labels the machine state, because the same config has two answers: with a desktop
+# in use (attended) and with the machine to itself (unattended).
 #
-# The cell's outcome and the desktop's verdict are separate columns on purpose. `outcome`
-# says whether the model finished; `desktop_verdict` says whether the machine stayed usable
-# while it did. Collapsing them is the mistake this ladder already made once.
+# Wired memory is sampled *during* the fill. Metal's buffers peak while the context fills, and
+# a probe taken after curl returns can miss it — which is how a cell that exhausted the GPU
+# wired limit was recorded as `ok` with nothing in the row to contradict the desktop freezing.
+#
+# `outcome` says whether the model finished; `desktop_verdict` says whether the machine stayed
+# usable while it did. Collapsing them is the mistake this ladder already made once.
 set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=scripts/lib.sh
+. scripts/lib.sh
 
 CONDITION="${CONDITION:-unlabelled}"
 OUT="${OUT:-results/ceiling.jsonl}"
-# Which cells to walk. A re-walk usually asks about one band — cells that are not in
-# question still cost their full ingest, and 64k alone is 13 minutes.
-#
-# `-` and not `:-`: if CELLS is set but empty the answer is "no cells", not "every cell".
-# The other way round, an empty variable silently walks the whole ladder, which is an
-# hour of the machine nobody asked for.
-CELLS="${CELLS-config/ladder-*.env}"
+BASE="${BASE:-config/tuned.env}"
 FILL_FRACTION="${FILL_FRACTION:-0.90}"   # leave headroom for the reply
 
+# Which cells to walk, as ctx:kv pairs. Empty derives one per rung at the base config's KV
+# type, which is the ladder's default question; naming them asks about a band or a KV type
+# instead. A re-walk usually asks about one band — 64k alone is 13 minutes.
+CELLS="${CELLS-}"
+if [ -z "$CELLS" ]; then
+  kv=$(grep '^CACHE_TYPE_K=' "$BASE" | cut -d'"' -f2)
+  CELLS=$(./scripts/rungs.sh | sed "s/$/:$kv/" | tr '\n' ' ')
+fi
+
 # The desktop rule, written before the runs so it is a rule and not a preference. Units are
-# fractions of one core, derived from consecutive WindowServer CPU-time readings.
+# fractions of one core, from consecutive WindowServer CPU-time readings.
 #
-# Basis: attended with no model loaded measures 0.17-0.47 cores on this machine, the low
-# end being a near-static screen and the high end an editor actively rendering. Each run
-# records its own baseline in the apparatus row, because that spread is not a constant.
-# Saturation is set well above that; stall well below. Both are failures — a compositor
-# pinned at a core cannot keep up, and one doing nothing is not drawing.
+# Basis: attended with no model loaded measures 0.17-0.47 cores here, the low end a near-static
+# screen and the high end an editor actively rendering. Saturation sits well above that, stall
+# well below. Both are failures — a compositor pinned at a core cannot keep up, and one doing
+# nothing is not drawing.
 #
-# Known limit, and the reason 0014 still wants a scripted UI interaction: passive CPU cannot
-# tell "nothing to draw" from "stuck and not drawing". So the verdict is only meaningful
-# when someone is driving the machine, and unattended cells report `not_applicable` rather
-# than a pass they did not earn. Direction is unverified until a known-bad cell is walked;
-# the full series is recorded so the threshold can be reset from evidence.
+# Known limit: passive CPU cannot tell "nothing to draw" from "stuck and not drawing", so the
+# verdict means something only when somebody is driving the machine. Unattended cells report
+# `not_applicable` rather than a pass they did not earn.
 DESK_SATURATED="${DESK_SATURATED:-0.90}"
 DESK_STALLED="${DESK_STALLED:-0.02}"
 DESK_SUSTAIN_SECONDS="${DESK_SUSTAIN_SECONDS:-30}"
 mkdir -p "$(dirname "$OUT")"
-
-# An 18 GB process does not exit on a fixed sleep. Poll until it is genuinely gone,
-# or the next server fails to bind and the health check passes against the old one —
-# which silently measures the previous config under the next config's name.
-stop_server() {
-  pkill -f llama-server 2>/dev/null || true
-  local deadline=$((SECONDS + 90))
-  while pgrep -f llama-server >/dev/null; do
-    [ $SECONDS -ge $deadline ] && { pkill -9 -f llama-server 2>/dev/null || true; sleep 3; break; }
-    sleep 1
-  done
-  sleep 2
-}
-
-# The guard that would have caught the above: ask the server what it is serving and
-# refuse to measure if it disagrees with the config we launched.
-served_ctx() {
-  curl -s -m 5 http://127.0.0.1:8081/props 2>/dev/null \
-    | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null || echo 0
-}
-
-# The "has it died?" shortcut needs a grace period, or it fires before the server exists.
-# `serve.sh` is a shell script that validates its config and only then `exec`s llama-server,
-# so for the first instants after launch there is no llama-server to find. Without the
-# grace, the first poll — curl refused in a millisecond, pgrep finding nothing — returns
-# "load failed" for a server that goes on to load perfectly. It fired on a machine carrying
-# 20 GB of other processes, where the child is slow to be scheduled, which is exactly the
-# condition this ladder now runs in. The real timeout still bounds the wait.
-wait_healthy() { # seconds
-  local deadline=$((SECONDS + $1))
-  local grace=$((SECONDS + 20))
-  while [ $SECONDS -lt $deadline ]; do
-    curl -s -m 2 http://127.0.0.1:8081/health 2>/dev/null | grep -q '"ok"' && return 0
-    if [ $SECONDS -ge $grace ] && ! pgrep -f llama-server >/dev/null; then
-      return 1
-    fi
-    sleep 3
-  done
-  return 1
-}
 
 # Record what else is resident before any cell runs. A condition label is a claim about
 # the machine; this is the evidence for it. It also captures the measuring apparatus — an
@@ -107,17 +72,12 @@ APPARATUS_ANON=$(./scripts/memprobe.sh | python3 -c "import sys,json;print(json.
 # The compositor's rate before any model is loaded. Recorded per run so a verdict carries
 # the basis it was judged against, rather than inheriting a number measured once by hand
 # and quoted thereafter — the machine's baseline is not a constant.
-DESK_A=$(./scripts/deskprobe.sh); sleep 6; DESK_B=$(./scripts/deskprobe.sh)
-DESK_BASELINE=$(python3 -c "
-import json
-a=json.loads('''$DESK_A'''); b=json.loads('''$DESK_B''')
-span=b['t']-a['t']
-print(round((b['windowserver_cpu_seconds']-a['windowserver_cpu_seconds'])/span, 3) if span>0 else 0)")
+DESK_BASELINE=$(desk_baseline)
 
 export APPARATUS APPARATUS_TOTAL APPARATUS_ANON CONDITION DESK_BASELINE
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086  # a space-separated list of ctx:kv pairs, and it must expand
 set -- $CELLS
-echo "walking $# cell(s): $*" >&2
+echo "walking $# cell(s) from $BASE: $*" >&2
 echo "apparatus before any cell: ${APPARATUS_ANON} GB anonymous (summed RSS says ${APPARATUS_TOTAL}, which overcounts shared pages)" >&2
 echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
 python3 -c '
@@ -128,12 +88,12 @@ print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
                   "desktop_baseline_cores": float(os.environ["DESK_BASELINE"]),
                   "processes": os.environ["APPARATUS"]}))' >> "$OUT"
 
-# Unquoted on purpose: CELLS is a glob or a list of paths, and both must expand.
 # shellcheck disable=SC2086
-for cfg in $CELLS; do
-  name=$(basename "$cfg" .env)
-  ctx=$(grep '^CTX_SIZE=' "$cfg" | cut -d'"' -f2)
-  kv=$(grep '^CACHE_TYPE_K=' "$cfg" | cut -d'"' -f2)
+for cell in $CELLS; do
+  ctx="${cell%%:*}"; kv="${cell##*:}"
+  name="ladder-${ctx}-${kv}"
+  cfg="/tmp/$name.env"
+  cell_config "$BASE" "$ctx" "$kv" "$cfg"
   target=$(python3 -c "print(int($ctx * $FILL_FRACTION))")
 
   echo "=== $name  ctx=$ctx kv=$kv  filling to ~$target tokens ===" >&2
@@ -186,7 +146,7 @@ PY
 
   fill_start=$SECONDS
   http=$(curl -s -m 3600 -o /tmp/ladder-fill-resp.json -w '%{http_code}' \
-        http://127.0.0.1:8081/v1/chat/completions \
+        "$ENDPOINT/v1/chat/completions" \
         -H 'Content-Type: application/json' -d @/tmp/ladder-fill.json || echo 000)
   fill_seconds=$((SECONDS - fill_start))
   kill "$sampler" 2>/dev/null || true

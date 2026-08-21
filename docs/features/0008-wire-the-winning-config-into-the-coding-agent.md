@@ -87,69 +87,53 @@ auto mode as a starting permission mode, Remote Control, cross-session messaging
 - [x] The setup is committed as configuration, and `docs/TECH.md` records it, the residual traffic, and the rejection of Cursor's built-in assistant with its reason
 
 ## Log
-- 2026-08-19 — the editor flow is confirmed and recorded in
-  `harness/claude-code/editor-session.md`: the same question, the same model and the same
-  server cost **462 s in the extension and 45 s in a terminal** — 36,309 preamble tokens
-  against 3,767. Pi was checked by hand at the same time and works.
 
+- 2026-08-17 — retargeted from Cursor's built-in assistant to the Claude-Code-in-editor flow
+  already in use. The earlier tunnel design is kept as a rejected alternative: the extension
+  runs the agent locally, so the vendor backend drops out of the path entirely.
+- 2026-08-17 — dropped `needs: 0010` and `review: human`. The privacy trade that required a
+  human call belonged to the tunnel, which is no longer the path.
+- 2026-08-17 — the open question about running network-off is answered from Anthropic's
+  documented network requirements: it cannot. OAuth refresh and feature-flag fetches reach
+  Anthropic regardless of `ANTHROPIC_BASE_URL`. The feature scopes itself to local inference
+  and hands the offline claim to 0010. *Reversed by measurement below.*
+- 2026-08-18 — `needs:` moves from 0004 to 0005. 0004 is dropped, so no sweep will name a
+  winning quant; the config this feature wires in is Q4_K_M by elimination, and what it still
+  waits on is what 0005 settles. **This feature now also owns naming the context and KV cache
+  type**, which 0004 would have swept: 0003 and 0014 bound them already, but nothing had
+  written down which to use.
+- 2026-08-19 — the endpoint moves to port 8081; 8080 was already held on this machine.
+- 2026-08-19 — **a box is inserted before the terminal run: half the winning config could not
+  reach the model.** Sampling and the thinking toggle are per-request everywhere else here and
+  Claude Code sends neither, so this model served at its `xhigh` default. `config/agent.env`
+  and five optional flags in `scripts/serve.sh` make them defaults.
+- 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to go.**
+  Claude Code sends a `role: "system"` message after the user turn on every request, with 21
+  tools defined or with none, and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` does not stop it.
+  Qwen3.8's template raises on it and llama.cpp returns a 500;
+  `config/templates/qwen3.8-system-anywhere.jinja` differs in one line.
+- 2026-08-19 — **Claude Code becomes one harness among four rather than the destination.** Its
+  configuration moves to `harness/claude-code/`, `internal/harness` gains an adapter so
+  `cmd/tier2` drives it on the same terms, and it passes `patch-nil-check` against the unseen
+  test. All four are measured first: its fixed preamble is the largest on its defaults and the
+  smallest under `--tools`, so a comparison taking defaults would rank tool inventories rather
+  than harnesses. The editor box moves below the boxes that need nobody at the keyboard.
 - 2026-08-19 — **the editor flow does not fit the scorer's context, so `config/agent.env`
-  serves 49,152.** An extension session's first request measured 36,309 tokens — the full
-  tool set, the project's instructions and the editor's own context — against a 32,768
-  server, and took llama-server's 400 before anything was typed. The terminal avoids this
-  with `--tools`, which the extension has no equivalent of. That turn then cost **7.5
-  minutes**: 434 s of ingest and 82 tokens at 5.54 tok/s against 9.8 on a short prompt, so
-  depth taxes decode as well as prefill. Raising the context buys nothing: prefill costs
-  what the prompt is, not what is reserved. It also corrects a claim below — the declared
-  window catches an overflow **between turns**, not the preamble a session starts with.
-
-- 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
-  above. It said this flow cannot be made offline and handed the offline claim to 0010; as
-  committed the session contacts no host, and with every remote CONNECT refused it still
-  completes. Unset `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` and the same task makes 9
-  connections to `api.anthropic.com` and reaches no other host. Refusing to start is a
-  missing credential, not an unreachable one.
+  serves 49,152.** An extension session's first request took llama-server's 400 before
+  anything was typed; the terminal avoids that with `--tools`, which the extension has no
+  equivalent of. Raising the context buys nothing, since prefill costs what the prompt is
+  rather than what is reserved. It also corrects the entry below: the declared window catches
+  an overflow **between turns**, not the preamble a session starts with.
 - 2026-08-19 — **the context ceiling is declared rather than discovered.** Undeclared, the
   overflowing request goes out and llama-server's 400 comes back verbatim, unrecovered;
   declared, the conversation is counted through `count_tokens` against the served tokeniser
   and refused before ingest. The documented variable for an unrecognised id waits for
-  Anthropic's too-long error, which this server never sends — the same wording mismatch
-  that killed the mid-conversation-system retry, now twice.
-- 2026-08-19 — **the Anthropic→OpenAI conversion costs nothing measurable**: the tool-call
-  fixtures down `/v1/messages` are identical to 0005's native-path rows cell for cell.
-  `cmd/eval -api messages` sends the other dialect to the same grader, which is what makes
-  them comparable; it is not the backend seam 0012 owns.
-- 2026-08-19 — **Claude Code becomes one harness among four rather than the destination.**
-  Its configuration moves to `harness/claude-code/`, `internal/harness` gains an adapter so
-  `cmd/tier2` drives it on the same terms, and it passes `patch-nil-check` against the
-  unseen test. Measuring all four first: its fixed preamble is the largest of the four on
-  its defaults and the smallest under `--tools`, so a comparison taking defaults would rank
-  tool inventories rather than harnesses. The editor box moves below the boxes that need
-  nobody at the keyboard.
-- 2026-08-19 — **"no proxy is needed" holds, but the model's own chat template had to go.**
-  Claude Code sends a `role: "system"` message after the user turn on every request, with
-  21 tools defined or with none, and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` does not
-  stop it; Qwen3.8's template raises on it and llama.cpp returns a 500.
-  `config/templates/qwen3.8-system-anywhere.jinja` differs in one line.
-- 2026-08-19 — **a box is inserted before the terminal run: half the winning config could
-  not reach the model.** Sampling and the thinking toggle are per-request everywhere else
-  here and Claude Code sends neither, so this model served at its `xhigh` default.
-  `config/agent.env` and five optional flags in `scripts/serve.sh` make them defaults.
-- 2026-08-19 — the endpoint moves to port **8081**; 8080 was already held on the machine
-  this is developed on.
-
-- 2026-08-18 — `needs:` moves from 0004 to 0005. 0004 is dropped, so no sweep will name a
-  winning quant; the config this feature wires in is Q4_K_M by elimination, and what it still
-  waits on is the sampling and reasoning level 0005 settles. **This feature now also owns
-  naming the context and KV cache type**, which 0004 would have swept — 0003 and 0014 bound
-  them already (ingest time binds, not memory; 57,344 is the attended ceiling) but nothing has
-  yet written down which to use.
-
-- 2026-08-17 — retargeted from Cursor's built-in assistant to the Claude-Code-in-editor
-  flow already in use. The earlier tunnel design is kept as a rejected alternative: the
-  extension runs the agent locally, so the vendor backend drops out of the path entirely.
-- 2026-08-17 — dropped `needs: 0010` and `review: human`. The privacy trade that required
-  a human call belonged to the tunnel, which is no longer the path.
-- 2026-08-17 — the open question about running network-off is answered from Anthropic's
-  documented network requirements: it cannot. OAuth refresh and feature-flag fetches reach
-  Anthropic regardless of `ANTHROPIC_BASE_URL`. The feature now scopes itself to local
-  inference and hands the offline claim to 0010.
+  Anthropic's too-long error, which this server never sends — the same wording mismatch that
+  killed the mid-conversation-system retry, now twice.
+- 2026-08-19 — `cmd/eval -api messages` is added so the other dialect reaches the same grader,
+  which is what makes the two paths comparable. It is not the backend seam 0012 owns, and the
+  conversion costs nothing measurable.
+- 2026-08-19 — **the design's offline paragraph is reversed by measurement**, and rewritten
+  above. It said this flow cannot be made offline and handed the offline claim to 0010; as
+  committed the session contacts no host, and with every remote CONNECT refused it still
+  completes. Refusing to start is a missing credential, not an unreachable one.

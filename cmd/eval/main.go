@@ -200,7 +200,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	// After the suite rather than before it: the probes are an instrument, and running
 	// them first would warm caches the first scored task should pay for itself.
 	if *fidelity {
-		res, err := eval.Fidelity(ctx, client, 256)
+		res, err := eval.Fidelity(ctx, client, prof, 256)
 		if err != nil {
 			return fmt.Errorf("fidelity probe: %w", err)
 		}

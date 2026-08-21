@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -191,11 +192,15 @@ func (t *Task) expand() ([]Message, error) {
 	return out, nil
 }
 
-// Run executes one task and scores it. thinking is passed through to the model's
-// own chat template; nil leaves the template default alone, which is not the same
-// as setting it false. effort is the reasoning_effort level; empty leaves the
-// model's default, which for Qwen3.8 is xhigh.
+// Run executes one task and scores it. thinking nil leaves the model's template default
+// alone, which is not the same as setting it false; effort empty leaves the model's own
+// default, which for Qwen3.8 is xhigh. prof is required — how the toggle is switched and
+// where reasoning arrives are the model's properties and cannot be guessed.
 func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, effort string, prof *Profile) (Result, error) {
+	if prof == nil {
+		return Result{TaskID: t.ID, Outcome: FailServer, Detail: "no model profile"},
+			errors.New("a model profile is required: it carries the thinking mechanism and where reasoning arrives")
+	}
 	msgs, err := t.expand()
 	if err != nil {
 		return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
@@ -216,7 +221,11 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	// decode was not measured.
 	req.Stream = c.Stream && len(t.Tools) == 0
 	if thinking != nil {
-		req.ChatTemplateKwargs = map[string]any{"enable_thinking": *thinking}
+		kwargs, err := prof.ThinkingKwargs(*thinking)
+		if err != nil {
+			return Result{TaskID: t.ID, Outcome: FailServer, Detail: err.Error()}, err
+		}
+		req.ChatTemplateKwargs = kwargs
 	}
 
 	// Defaulted here as well as in LoadTask: Run must not assume its caller came
@@ -293,10 +302,7 @@ func (c *Client) Run(ctx context.Context, t *Task, s Sampling, thinking *bool, e
 	msg := resp.Choices[0].Message
 	// Through the profile: a backend that inlines its reasoning in the content would
 	// otherwise have it counted as answer text and scored as one.
-	reasoning, content := msg.ReasoningContent, msg.Content
-	if prof != nil {
-		reasoning, content = prof.ExtractReasoning(msg.ReasoningContent, msg.Content)
-	}
+	reasoning, content := prof.ExtractReasoning(msg.ReasoningContent, msg.Content)
 	msg.Content = content
 	res.ReasoningChars = len(reasoning)
 

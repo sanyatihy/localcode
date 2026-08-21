@@ -72,11 +72,19 @@ func (f *flooredDriver) ContextFloor() int { return f.floor }
 
 // The fakes here declare no floor of their own, so any profile admits them; naming a real
 // one keeps the tests reading like an invocation somebody would type.
-func unattended(t *testing.T) DeskProfile {
+func unattended(t *testing.T) DeskProfile { return deskProfile(t, "unattended") }
+
+// deskProfile reads the committed machine, so a test that names a profile is exercising the
+// same file a run would.
+func deskProfile(t *testing.T, name string) DeskProfile {
 	t.Helper()
-	p, err := LookupDeskProfile("unattended")
+	m, err := LoadMachine(filepath.Join("..", "..", "config", "machine.json"))
 	if err != nil {
-		t.Fatalf("LookupDeskProfile: %v", err)
+		t.Fatalf("config/machine.json: %v", err)
+	}
+	p, err := m.DeskProfile(name)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
 	}
 	return p
 }
@@ -236,10 +244,7 @@ func TestRunTier2StagesTheWorkdirForTheDriver(t *testing.T) {
 // machine cannot serve while somebody is using it, and left out entirely its absence would
 // be indistinguishable from a run nobody got round to.
 func TestRunTier2ExcludesAHarnessTheProfileCannotServe(t *testing.T) {
-	attended, err := LookupDeskProfile("attended")
-	if err != nil {
-		t.Fatalf("LookupDeskProfile: %v", err)
-	}
+	attended := deskProfile(t, "attended")
 	d := &flooredDriver{fakeDriver: fakeDriver{name: "floored"}, floor: attended.Ceiling + 1}
 
 	res, _, err := RunTier2(context.Background(), d, brokenFixture(t), Conditions{Desk: attended})
@@ -284,20 +289,22 @@ func TestRunTier2ScoresAFlooredHarnessThatFits(t *testing.T) {
 }
 
 // An unknown profile is refused rather than defaulted: a row that does not say which
-// profile it was taken under cannot be compared with one that does, and the two ceilings
-// differ by exactly the thing under test.
-func TestLookupDeskProfileRefusesWhatItDoesNotKnow(t *testing.T) {
-	if _, err := LookupDeskProfile("idle"); err == nil {
-		t.Fatal("expected an error naming the profiles that exist")
+// profile it was taken under cannot be compared with one that does. Asserted against the
+// committed machine, because these ceilings are that file's to declare and a run that
+// found none would have nothing to cap a context against.
+func TestCommittedMachineDeclaresBothDeskProfiles(t *testing.T) {
+	m, err := LoadMachine(filepath.Join("..", "..", "config", "machine.json"))
+	if err != nil {
+		t.Fatalf("config/machine.json: %v", err)
 	}
-	for _, name := range []string{"attended", "unattended"} {
-		p, err := LookupDeskProfile(name)
-		if err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if p.Ceiling <= 0 {
-			t.Errorf("%s: ceiling = %d", name, p.Ceiling)
-		}
+	if _, err := m.DeskProfile("idle"); err == nil {
+		t.Error("an unknown profile must be refused, not defaulted")
+	}
+	attended, unattended := deskProfile(t, "attended"), deskProfile(t, "unattended")
+	if attended.Ceiling >= unattended.Ceiling {
+		t.Errorf("attended ceiling %d is not below unattended %d — the profiles differ by "+
+			"what the desktop survives, so attended is the smaller of the two",
+			attended.Ceiling, unattended.Ceiling)
 	}
 }
 
