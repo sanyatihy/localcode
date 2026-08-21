@@ -103,7 +103,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
 - [x] the bare command starts a server when none is running, prints the cost first, and
       `--no-serve` refuses instead
 - [x] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
-- [ ] handoff works in any repository, with state under `~/.local/state/localcode/` and
+- [x] handoff works in any repository, with state under `~/.local/state/localcode/` and
       `HANDOFF.md` still at the checkout root when working on localcode itself
 - [ ] the agent runs under a seatbelt profile that confines writes to the working
       directory, temp and the cache roots, with reads unrestricted
@@ -129,3 +129,6 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
 - **A pattern allowlist and a denylist were both rejected before seatbelt was tried.** An
   allowlist of commands cannot be generic across ecosystems, and a denylist of dangerous
   strings is defeated by `sh -c`. Neither is a boundary; the kernel is.
+- **The hook's prose was part of the mechanism.** Relocating the state was not enough: the
+  SessionStart text told the model to create the handoff "at the root of the checkout", so
+  it did, in the repository being visited. The instruction now names the path it wants.
