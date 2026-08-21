@@ -1,9 +1,10 @@
 # Measurement data
 
 Raw rows behind the tables in [../TECH.md](../TECH.md). Committed because they are the
-evidence every conclusion in this repo rests on, and because some of them stop being
-reproducible: a 128 GB machine is planned, and the 32 GB baseline cannot be re-measured
-once the hardware is gone.
+evidence every conclusion in this repo rests on, and because re-measuring is expensive: one
+ladder cell costs 13 minutes and a harness sweep costs a day. The hardware is fixed, so these
+stay re-runnable — but a conclusion nobody can check without spending that time is one nobody
+checks.
 
 ## Naming
 

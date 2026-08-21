@@ -246,9 +246,10 @@ ingest-time budget. It reports **which of memory or time binds**, which is the l
 whole question.
 
 On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
-hand — and reports ingest time as the binding constraint. Modelling 128 GB with
-`TOTAL_GB=128` gives **the same rungs**, and so does a 70 GB model: memory allows ~262k
-tokens in every case while a 20-minute ingest budget allows ~64k.
+hand — and reports ingest time as the binding constraint. Modelling 128 GB with `TOTAL_GB=128`
+gives **the same rungs**, and so does a 70 GB model: memory allows ~262k tokens in every case
+while a 20-minute ingest budget allows ~64k. That is part of why more memory was not bought:
+it would not have bought context.
 
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
@@ -385,7 +386,7 @@ three below that moved.
 |---|---|
 | `patch-contradiction-rounding` | **discriminates** — the only task with a genuine, repeatable split |
 | `toolcall-constraint-readonly` | **weakly discriminates, in the opposite direction** — off 2/3, every reasoning level 3/3. Its earlier failures were a fixture flaw (the model refusing to patch a file it had not been shown), fixed by supplying the source in the prompt and re-measured |
-| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — 3/3 at every setting measured. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
+| `patch-nil-check`, `patch-off-by-one`, `patch-sibling-merge`, `patch-sibling-splitpath`, `retrieval-2000/8000/16000`, `retrieval-distractor-2000/8000`, `toolcall-constraint-unknown-path`, `toolcall-edit-file`, `toolcall-read-file` | **flat** — no quality failure at any setting measured; `patch-off-by-one` non-terminated once at `xhigh`, which is a budget outcome and not a wrong answer. They are the floor check that catches a config broken outright, and they cost seconds; they cannot rank anything |
 
 A summary over the whole suite is therefore diluted by twelve columns that cannot move. Read
 the discriminating subset, and keep the rest as the floor check they are.
@@ -537,11 +538,12 @@ unused and PR #27342 picks up. It is measured at 1.26–1.57× depending on prom
 figures are under [Speculative decoding](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). MTPLX, the MLX runtime that does implement
 native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
 
-**What would reverse it:** a 128 GB machine. Slot count would stop competing with the model,
-MLX's reuse advantage would run unconstrained, and MTPLX's 20.68 GB checkpoint would have room
-for a context — the only thing that stopped it here. `mlx_lm` gaining
-`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
-rather than a hypothetical. Or MLX gaining `/v1/messages`.
+**What would reverse it**, now that a larger machine is decided against: `mlx_lm` gaining
+`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is a measured number rather
+than a hypothetical. Or MLX gaining `/v1/messages`. The memory route is closed — more RAM would
+have stopped slot count competing with the model, and none is coming. **MTPLX has no route
+left**: its 20.68 GB checkpoint needed room this machine does not have, and that was the only
+thing standing between it and a verdict.
 
 **One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
 repeating any, which is what forced the slot-count problem. A real agent session is one
@@ -756,6 +758,10 @@ is the driver's job. Measured at 2.1.233, on both triggers.
 
 **`SessionStart` sends `source`, not `session_start_reason`.** All three events fire in a
 print session, which is the form the driver runs.
+
+**The pressure this relieves may be the incumbent's own.** Pi ingests a fifth as much per
+task, so a harness that spends less of the window may need less of the mechanism. Nothing here
+separates the two.
 
 **Whether any of this is worth its cost is unmeasured.** The before/after is one box driven
 with the mechanism and without it, and
