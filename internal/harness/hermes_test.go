@@ -27,9 +27,9 @@ func TestHermesIsAdmissibleUnattendedOnly(t *testing.T) {
 		{"attended", false},
 		{"unattended", true},
 	} {
-		p, err := eval.LookupDeskProfile(tc.profile)
+		p, err := machine(t).DeskProfile(tc.profile)
 		if err != nil {
-			t.Fatalf("LookupDeskProfile(%q): %v", tc.profile, err)
+			t.Fatalf("desk profile %q: %v", tc.profile, err)
 		}
 		// No served config: the profile's ceiling is the only bound in play, which is
 		// the comparison this test is about.
@@ -112,4 +112,15 @@ func TestTheCommittedHermesConfigServesTheLocalEndpoint(t *testing.T) {
 	if ctx < HermesContextFloor {
 		t.Errorf("committed config asks for %d, below Hermes' own floor of %d", ctx, HermesContextFloor)
 	}
+}
+
+// machine reads the committed limits, so the straddle asserted above is a property of the
+// file a real run reads rather than of a constant restated in the test.
+func machine(t *testing.T) eval.Machine {
+	t.Helper()
+	m, err := eval.LoadMachine(filepath.Join("..", "..", "config", "machine.json"))
+	if err != nil {
+		t.Fatalf("config/machine.json: %v", err)
+	}
+	return m
 }

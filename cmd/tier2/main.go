@@ -85,7 +85,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		drivers  = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
 		fixture  = fs.String("fixture", "", "one fixture directory")
 		fixtures = fs.String("fixtures", "", "directory of fixtures; every one tier 2 can drive is run")
-		profile  = fs.String("profile", "attended", "desk profile the run is scored under: attended, unattended")
+		profile  = fs.String("profile", "attended", "desk profile the run is scored under, as named in -machine")
 		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "endpoint the harnesses are pointed at, asked what it serves")
 		machine  = fs.String("machine", "config/machine.json", "machine properties: the headroom a sweep needs")
 		force    = fs.Bool("force", false, "start even when the preflight refuses, and mark every row forced")
@@ -105,7 +105,13 @@ func run(args []string, stdout, stderr *os.File) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	desk, err := eval.LookupDeskProfile(*profile)
+	// The machine is read before anything else: it declares both the headroom floor and
+	// the ceilings the profiles cap a run at, and neither can be defaulted.
+	machineCfg, err := eval.LoadMachine(*machine)
+	if err != nil {
+		return err
+	}
+	desk, err := machineCfg.DeskProfile(*profile)
 	if err != nil {
 		return err
 	}
@@ -130,10 +136,6 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	// Asked before the first task: a sweep that pages measures the pager, and tier 2 spends
 	// hours rather than minutes finding that out.
-	machineCfg, err := eval.LoadMachine(*machine)
-	if err != nil {
-		return err
-	}
 	if why := eval.Check(eval.Sample(), machineCfg.MinHeadroomGB).Refuse(); why != "" {
 		if !*force {
 			return fmt.Errorf("the machine cannot carry this sweep: %s", why)
