@@ -25,6 +25,9 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # The gate is minutes; the runner's own limit is six hours. A hung test — one waiting on
+    # a server CI does not have — should fail while somebody is still looking at the push.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
