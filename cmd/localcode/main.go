@@ -56,6 +56,7 @@ flags:
   -endpoint url   the server to use
   -config file    the serving config to start (default config/agent.env)
   -no-serve       refuse if no server is running, rather than starting one
+  -net            allow outbound network for this session (default: loopback only)
 `
 
 func main() {
@@ -65,6 +66,7 @@ func main() {
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
+	net := fs.Bool("net", false, "allow outbound network for this session")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -87,6 +89,7 @@ func main() {
 			endpoint: *endpoint,
 			config:   *config,
 			noServe:  *noServe,
+			net:      *net,
 			args:     args,
 		})
 	}
@@ -101,6 +104,7 @@ type opts struct {
 	endpoint string
 	config   string
 	noServe  bool
+	net      bool
 	args     []string
 }
 
@@ -163,7 +167,10 @@ func run(o opts) (int, error) {
 	if _, err := os.Stat(sandboxExec); err != nil {
 		return 2, fmt.Errorf("no %s: localcode runs the agent sandboxed and will not run it otherwise", sandboxExec)
 	}
-	profile, err := writeSandboxProfile(state, cwd)
+	if o.net {
+		fmt.Fprintln(os.Stderr, "network: outbound ENABLED for this session")
+	}
+	profile, err := writeSandboxProfile(state, cwd, o.net)
 	if err != nil {
 		return 2, err
 	}
@@ -399,7 +406,7 @@ var sandboxExec = "/usr/bin/sandbox-exec"
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
 // that uses one while appearing to allow it.
-func writeSandboxProfile(state, cwd string) (string, error) {
+func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("no home directory: %w", err)
@@ -429,6 +436,17 @@ func writeSandboxProfile(state, cwd string) (string, error) {
 	// Writing to a terminal is not writing to the filesystem, and a shell needs these.
 	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\")\n")
 	b.WriteString("  (literal \"/dev/dtracehelper\") (literal \"/dev/tty\"))\n")
+
+	// Loopback reaches the model and nothing else reaches anywhere. It is what makes the
+	// repository's source unable to leave the machine, and it is VISION's offline property
+	// enforced rather than configured. -net is for the session that has to install
+	// something, and it says so at startup rather than quietly.
+	if !net {
+		b.WriteString("(deny network*)\n")
+		b.WriteString("(allow network-outbound (remote ip \"localhost:*\"))\n")
+		b.WriteString("(allow network-inbound (local ip \"localhost:*\"))\n")
+		b.WriteString("(allow network* (remote unix-socket))\n")
+	}
 
 	path := filepath.Join(state, "sandbox.sb")
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
