@@ -1,14 +1,10 @@
 ---
 id: NNNN
 title: <short imperative name>
-status: Draft        # Draft | Accepted | Shipped | Dropped | Superseded
+status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
 created: YYYY-MM-DD
-shipped:             # fill the date when status flips to Shipped
-check:               # optional — date to check whether this worked. Only for bets.
-checked:             # written by kit check <id> "<outcome>", never by hand
-review:              # optional — `human` means a person merges this one. kit accept --review
+shipped:             # written by kit ship, never by hand
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
-related:             # other docs worth reading first
 ---
 
 <!-- `needs:` is the only field that changes what `kit next` offers, so it earns care.
@@ -21,9 +17,7 @@ related:             # other docs worth reading first
        - a shared router, registry, or dispatch table both add an entry to
        - numbered files in one sequence — migrations above all. Two features each
          adding "the next number" merge cleanly and break at runtime.
-     Any of those means the second feature needs the first, however separate they look.
-
-     `related:` is different and does not affect ordering: it is reading material. -->
+     Any of those means the second feature needs the first, however separate they look. -->
 
 
 ## Problem

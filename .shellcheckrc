@@ -1,0 +1,5 @@
+# SC1090: "can't follow non-constant source". Every script here sources a config path chosen
+# at runtime — that is the design, since the config file is the record of how a measurement
+# was produced. There is nothing to follow at lint time and nothing to fix.
+disable=SC1090
+

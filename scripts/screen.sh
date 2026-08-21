@@ -92,7 +92,7 @@ body={'messages':[{'role':'user','content':prompt}],'max_tokens':8,'temperature'
 if os.environ.get('SMOKE_MODEL'): body['model']=os.environ['SMOKE_MODEL']
 json.dump(body, sys.stdout)" > /tmp/screen-smoke-req.json
   smoke_start=$SECONDS
-  smoke_http=$(curl -s -m 600 -o /tmp/screen-smoke-$LABEL.json -w '%{http_code}' \
+  smoke_http=$(curl -s -m 600 -o "/tmp/screen-smoke-$LABEL.json" -w '%{http_code}' \
       "$ENDPOINT/v1/chat/completions" \
       -H 'Content-Type: application/json' -d @/tmp/screen-smoke-req.json || echo 000)
   smoke_seconds=$((SECONDS - smoke_start))

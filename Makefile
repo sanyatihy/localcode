@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint test smoke verify serve eval report
+.PHONY: help build check fmt vet lint shell docs test smoke verify serve eval report
 
 ## help: list these targets
 help:
@@ -25,9 +25,11 @@ help:
 build:
 	@go build ./...
 
-## check: the offline gate — gofmt, vet, lint, tests under the race detector
-# What CI runs, so it must need no server and no model weights.
-check: fmt vet lint test
+## check: the offline gate — gofmt, vet, lint, shellcheck, doc links, race tests
+# What CI runs, so it must need no server and no model weights. Go is half this repo by
+# line count; `shell` and `docs` cover most of the rest, because a bug in either does not
+# crash — it produces a wrong measurement, or points a reader at a file that moved.
+check: fmt vet lint shell docs test
 
 fmt:
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
@@ -44,6 +46,33 @@ lint:
 	else \
 		echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"; \
 	fi
+
+## shell: shellcheck every tracked script, pinned by .shellcheckrc
+# Same `if` as lint, and for the same reason: written as `cmd && run || echo` a real finding
+# also takes the `||` branch and reports itself as a skip. bash -n is the floor when the
+# binary is absent, so a missing shellcheck still cannot let a syntax error through.
+shell:
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck -S style $$(git ls-files '*.sh'); \
+	else \
+		echo "shell: shellcheck not installed, falling back to bash -n (CI will still run it)"; \
+		for f in $$(git ls-files '*.sh'); do bash -n "$$f" || exit 1; done; \
+	fi
+	@# Shell options are the half shellcheck does not check, and the file mode says which
+	@# half a script is in: executable means it runs and must fail fast, non-executable
+	@# means it is sourced and must not set options that leak into its caller.
+	@fail=0; for f in $$(git ls-files '*.sh'); do \
+		if [ -x "$$f" ]; then \
+			grep -q '^set -euo pipefail$$' "$$f" || { echo "$$f: executable, but does not set -euo pipefail"; fail=1; }; \
+		elif grep -q '^set ' "$$f"; then \
+			echo "$$f: sourced, so its shell options would leak into the caller"; fail=1; \
+		fi; \
+	done; exit $$fail
+
+## docs: every relative link and heading anchor in tracked markdown resolves
+# Offline by construction — external URLs are not fetched. See scripts/doclinks.py.
+docs:
+	@python3 scripts/doclinks.py
 
 test:
 	@go test -race ./...
