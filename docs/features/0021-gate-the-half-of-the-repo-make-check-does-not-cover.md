@@ -67,7 +67,7 @@ code — not the sweep behind them, which needs a server.
 ## Tasks
 
 - [x] `make check` runs `shellcheck` over every tracked shell script, skipping loudly when it is absent, and the repo is clean under it
-- [ ] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
+- [x] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
 - [ ] `make check` fails on a broken relative link or anchor in any tracked markdown file
 - [ ] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
 - [ ] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
@@ -87,6 +87,10 @@ None.
 - 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
   gate added red is not added. What is left of box 2 is the shell-options consistency, which
   `shellcheck` does not flag.
+- 2026-08-21 — the file mode turned out to be the rule box 2 needed. Every executable script
+  must `set -euo pipefail`; `scripts/lib.sh` is the one non-executable, is sourced, and must
+  set nothing, since options set there leak into the caller. `make check` holds both halves,
+  so this is enforced rather than written down.
 - 2026-08-21 — the gate runs at `-S style`, not the `warning` the design assumed. After the
   three findings were fixed the repo is clean at every severity, so there was no reason to
   configure the stricter tiers away. `.shellcheckrc` disables one rule: SC1090, sourcing a

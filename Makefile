@@ -58,6 +58,16 @@ shell:
 		echo "shell: shellcheck not installed, falling back to bash -n (CI will still run it)"; \
 		for f in $$(git ls-files '*.sh'); do bash -n "$$f" || exit 1; done; \
 	fi
+	@# Shell options are the half shellcheck does not check, and the file mode says which
+	@# half a script is in: executable means it runs and must fail fast, non-executable
+	@# means it is sourced and must not set options that leak into its caller.
+	@fail=0; for f in $$(git ls-files '*.sh'); do \
+		if [ -x "$$f" ]; then \
+			grep -q '^set -euo pipefail$$' "$$f" || { echo "$$f: executable, but does not set -euo pipefail"; fail=1; }; \
+		elif grep -q '^set ' "$$f"; then \
+			echo "$$f: sourced, so its shell options would leak into the caller"; fail=1; \
+		fi; \
+	done; exit $$fail
 
 test:
 	@go test -race ./...
