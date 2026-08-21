@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint shell docs test smoke verify serve stop eval report
+.PHONY: help build check fmt vet lint shell docs test smoke verify serve stop install eval report
 
 ## help: list these targets
 help:
@@ -88,6 +88,17 @@ verify: check smoke
 ## serve: start llama-server from CONFIG
 serve:
 	@scripts/serve.sh $(CONFIG)
+
+## install: build localcode into PREFIX with this checkout stamped in
+# The checkout's path is compiled in rather than looked up: the launcher runs from any
+# repository, and one that searches for the checkout it belongs to finds the wrong one as
+# soon as there are two. Moving this checkout means running this again.
+PREFIX ?= $(HOME)/.local/bin
+install:
+	@mkdir -p "$(PREFIX)"
+	@go build -ldflags "-X main.checkout=$(CURDIR)" -o "$(PREFIX)/localcode" ./cmd/localcode
+	@echo "installed $(PREFIX)/localcode (checkout: $(CURDIR))" >&2
+	@command -v localcode >/dev/null 2>&1 || echo "note: $(PREFIX) is not on your PATH" >&2
 
 ## stop: stop the server and wait for the memory back
 stop:
