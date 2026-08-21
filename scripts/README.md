@@ -20,6 +20,7 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`memprobe.sh`](memprobe.sh) | one JSON object of the memory facts that decide whether a config is viable |
 | [`deskprobe.sh`](deskprobe.sh) | one JSON object of the compositor's state, so the desktop is judged from outside the model process |
 | [`deskverdict.py`](deskverdict.py) | the desktop rule itself, in one place because `ladder.sh` and `screen.sh` both apply it |
+| [`doclinks.py`](doclinks.py) | every relative link and heading anchor in tracked markdown resolves — `make docs` |
 | [`claude-code-settings.sh`](claude-code-settings.sh) | generate the project-scoped settings file the editor extension reads |
 
 Two of them take the machine's own answer rather than a list somebody typed:
