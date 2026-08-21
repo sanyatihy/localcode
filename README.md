@@ -75,7 +75,7 @@ localclaude() (                     # parens make it a subshell, so nothing leak
 )
 ```
 
-**3.** Run `localclaude` in any repository. **4.** Stop with `pkill -f llama-server`.
+**3.** Run `localclaude` in any repository. **4.** Stop with `make stop`.
 
 Nothing is written to the repository you work in, to your shell, or to `~/.claude`. `--tools`
 cuts the preamble from 18,388 tokens to 3,711 and `--allowedTools` pre-approves that same set,
