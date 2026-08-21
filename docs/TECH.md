@@ -140,6 +140,11 @@ Everything in this section is observed, not derived. It is scoped to **Qwen3.8-2
 Q4_K_M, contexts 8k–64k, on a 32 GB M2 Max**, and re-measuring is required before any of
 it is quoted for another model, quant, context or machine.
 
+**Every limit below that code acts on lives in `config/machine.json`** — the headroom a sweep
+needs, and each desk profile's context ceiling. Nothing in Go or in a script carries one, and
+the ladder's rungs are derived by `scripts/rungs.sh` rather than written down. Another machine
+is one file, which is what makes the numbers here a measurement rather than a constant.
+
 ### Context costs time, not memory — in this envelope
 
 | ctx | KV | peak RSS | cold ingest | prompt tok/s | swap Δ |
@@ -313,8 +318,9 @@ into `docs/data/`.
   guard that checks it against the typed label switched off and said so.
 - **Model-specific behaviour lives in a profile, not in the scorer** — `config/profiles/`.
   The thinking mechanism, each mode's sampling pair, and where reasoning arrives are all
-  properties of the model. The pair especially: it is in the profile so that a toggle cannot
-  be swept at one fixed temperature by accident, which has already cost 114 rows.
+  properties of the model, and all three are read: a profile naming a mechanism the scorer
+  cannot perform is refused at load rather than leaving the toggle unset. The pair is there so
+  a toggle cannot be swept at one fixed temperature by accident, which has cost 114 rows.
 - **A row records what the server reported serving** — `n_ctx`, model file, and the
   `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
   did not take would otherwise attribute one config's numbers to another.
