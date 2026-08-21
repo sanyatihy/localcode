@@ -59,7 +59,7 @@ func TestRunWritesNothingToTheRepository(t *testing.T) {
 	}
 	t.Chdir(repo)
 
-	if code, err := run(root, healthy(t, http.StatusOK), nil); err != nil || code != 0 {
+	if code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 
@@ -83,7 +83,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	argv := stubClaude(t, "exit 0")
 	t.Chdir(t.TempDir())
 
-	if code, err := run(root, healthy(t, http.StatusOK), nil); err != nil || code != 0 {
+	if code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 	got, err := os.ReadFile(argv)
@@ -104,7 +104,7 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 	argv := stubClaude(t, "exit 0")
 	t.Chdir(t.TempDir())
 
-	if _, err := run(root, healthy(t, http.StatusOK), nil); err != nil {
+	if _, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(argv)
@@ -120,7 +120,7 @@ func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 
 	// 503 is what llama-server answers while it loads: something is listening, and it
 	// cannot serve yet.
-	code, err := run(root, healthy(t, http.StatusServiceUnavailable), nil)
+	code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a loading server must refuse, got code %d err %v", code, err)
 	}
@@ -131,9 +131,29 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 	stubClaude(t, "exit 3")
 	t.Chdir(t.TempDir())
 
-	code, err := run(root, healthy(t, http.StatusOK), nil)
+	code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
 	if err != nil || code != 3 {
 		t.Fatalf("want exit 3 passed through, got %d err %v", code, err)
+	}
+}
+
+// -no-serve is what a script wants: it must refuse rather than spend twenty seconds and
+// most of the machine's memory on the caller's behalf.
+func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
+	root := fakeCheckout(t)
+	stubClaude(t, "exit 0")
+	t.Chdir(t.TempDir())
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close() // nothing is listening now
+
+	code, err := run(opts{checkout: root, endpoint: url, noServe: true})
+	if code != 2 || err == nil {
+		t.Fatalf("want a refusal, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "no-serve") {
+		t.Fatalf("the refusal must say which flag caused it: %v", err)
 	}
 }
 

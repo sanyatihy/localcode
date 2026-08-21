@@ -100,7 +100,7 @@ nothing. This is `docs/VISION.md`'s offline property enforced rather than config
       already up, with 0008's tools and permissions, writing nothing to that repository
 - [x] `make install` puts it on `PATH` with this checkout's location stamped in, and
       `localcode status` reports what is served
-- [ ] the bare command starts a server when none is running, prints the cost first, and
+- [x] the bare command starts a server when none is running, prints the cost first, and
       `--no-serve` refuses instead
 - [ ] `serve` and `stop` reach the same scripts `make serve` and `make stop` do
 - [ ] handoff works in any repository, with state under `~/.local/state/localcode/` and
