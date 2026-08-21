@@ -70,7 +70,7 @@ code — not the sweep behind them, which needs a server.
 - [x] `runtimes/mlx/compare.sh` cannot run from the wrong directory, and every script sets the same shell options
 - [x] `make check` fails on a broken relative link or anchor in any tracked markdown file
 - [x] `cmd/eval` and `cmd/tier2` have tests for every refusal they document, including the sampling guard and the desk-profile ceiling
-- [ ] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
+- [x] `cmd/report`, `cmd/prefixlog` and `cmd/handoff` have tests for the flag errors their exit codes rest on
 - [ ] The three real findings from the stricter-linter trial are fixed, including the test that panics instead of failing when a marker is absent
 - [ ] CI carries a job timeout, so a hung gate fails rather than running until the runner is reclaimed
 
@@ -87,6 +87,10 @@ None.
 - 2026-08-21 — box 1 absorbed `runtimes/mlx/compare.sh`'s unchecked `cd` from box 2, because a
   gate added red is not added. What is left of box 2 is the shell-options consistency, which
   `shellcheck` does not flag.
+- 2026-08-21 — `cmd/prefixlog`'s tests take their server-log fixture from
+  `internal/prefix`'s own rather than inventing one. A hand-written log passed the parser's
+  shape check and produced no rows, which would have made the test assert that the command
+  refuses everything.
 - 2026-08-21 — the refusal tests assert the *wording* as well as the exit, because a refusal
   a reader cannot act on is one they will force. An unknown desk profile has to name the ones
   the machine declares, and the sampling guard has to say "sampling".
