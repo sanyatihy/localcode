@@ -6,7 +6,7 @@ created: 2026-08-21
 shipped:             # fill the date when status flips to Shipped
 check:               # optional — date to check whether this worked. Only for bets.
 checked:             # written by kit check <id> "<outcome>", never by hand
-review: human
+review:              # optional — `human` means a person merges this one. kit accept --review
 needs:
 related: 0012, 0014, 0019
 ---
@@ -78,12 +78,31 @@ row already carries `ctx` and `kv`, so nothing about the record is lost.
 
 ## Log
 
-- 2026-08-21 — written after the work, which inverts the protocol: a direct audit of an empty
-  board rather than a feature planned from the vision. The branch is not a `kit claim` and
-  does not carry this id.
+- 2026-08-21 — written after the work, as 0019 was, and for the same reason: a direct audit of
+  an empty board rather than a feature planned from the vision.
+- 2026-08-21 — **the two desk ceilings move out of Go and into `config/machine.json`**, which
+  `cmd/tier2` and the tests now read. They are numbers about one laptop; on a 128 GB machine a
+  tier-2 sweep would have capped itself at this one's. `docs/TECH.md` records the new home.
+- 2026-08-21 — **ladder rungs stop being files.** Nine were committed while `scripts/rungs.sh`
+  derived them and was called by nothing, which is the defect the vision names first.
+  `ladder.sh` generates each cell from `config/tuned.env`; a band stays askable as
+  `CELLS="40960:q8_0 57344:q8_0"`.
+- 2026-08-21 — **five of eighteen serving configs were the same configuration under other
+  names.** `baseline.env`, `tuned.env` and `ladder-32k-q8_0.env` were byte-identical in every
+  setting. `make serve` and `scripts/serve.sh` now default to `tuned.env`, which is a path
+  other documents cite.
+- 2026-08-21 — **a documented property of the scorer was one-third false.** The profile was
+  said to own the thinking mechanism while `task.go` and `fidelity.go` hardcoded
+  `enable_thinking` and `Profile.Thinking` was read by nothing. The toggle is rendered from the
+  profile, and `LoadProfile` refuses a mechanism it cannot perform rather than leaving it
+  unset. `effort_levels` went with it: a validation list against a decision not to validate.
+- 2026-08-21 — **the assumption that four copies of a function are one function is falsified.**
+  `wait_healthy` differed in all four scripts — in timeout, in how it detected death, and in
+  how it read health — guarding a trap `docs/TECH.md` records as having already cost a wrong
+  number. Both traps move to `scripts/lib.sh`.
 - 2026-08-21 — the design gained a constraint the doing found: a generated cell must drop the
   base config's comments, which describe a context the cell does not serve. Caught by running
   `cell_config`, not by reading it.
-- 2026-08-21 — the Go grows 44 lines net rather than shrinking, which the plan assumed it
-  would not. `internal/eval/machine.go` is the cost of reading limits from config instead of
+- 2026-08-21 — the Go grows 44 lines net rather than shrinking, which the plan assumed it would
+  not. `internal/eval/machine.go` is the cost of reading limits from config instead of
   declaring them, and it is the trade taken.
