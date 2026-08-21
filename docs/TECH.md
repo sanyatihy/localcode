@@ -865,6 +865,35 @@ one function, and the instruction is one sentence. Nothing here says what the lo
 does with a change spanning modules, or with a specification long enough to hold its own
 contradictions. That is what a feature tests, and it is measured rather than extrapolated.
 
+## The local model runs in any repository, sandboxed
+
+`localcode` is this configuration installed: `make install` builds it with the checkout's
+path compiled in, and it drives the agent from whatever repository the developer is
+standing in. Nothing searches for the checkout, because a launcher that guesses picks the
+wrong one as soon as there are two — which is the normal state here.
+
+**An unrestricted `Bash` tool is defensible only because the boundary is the kernel's.** A
+command allowlist cannot be generic across ecosystems and a denylist of dangerous strings
+is defeated by `sh -c`, so neither is a boundary. `sandbox-exec` needs to know nothing about
+the language in the repository. Writes reach the working directory, temp, the two cache
+roots and the agent's own state; reads are unrestricted, because an agent that cannot read
+a toolchain cannot use one. Go, Python, Node, `make` and `git` all complete under it.
+
+**The network is loopback-only**, so a repository's source cannot leave the machine and
+`curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
+`-net` lifts it for one session and widens reachability, never the filesystem.
+
+**A denied write is explained by the session, not by the launcher.** claude gives a tool's
+stderr to the model rather than passing it through, so the process that could print a hint
+is the one that never learns the write was refused. The sandbox is described in the
+appended system prompt instead, and `~/.config/localcode/writable` is where a developer
+names the paths their ecosystems need — the tool learns no language.
+
+**Session state stays out of the repository being visited**, under
+`~/.local/state/localcode/repos/<slug>/`, keyed by the repository's path. 0016's hooks take
+`LOCALCODE_HANDOFF_DIR` and still default to the checkout, so working on localcode itself is
+unchanged.
+
 ## Gotchas
 
 Each of these has already caused a wrong number in this repo.
@@ -883,6 +912,14 @@ Each of these has already caused a wrong number in this repo.
   pressure it stops distinguishing configs exactly where the answer matters — peak RSS
   moved 0.82 GB across a fourfold context range while saturated, and more once pressure
   was gone. Time-to-ingest discriminates where RSS does not.
+- **seatbelt matches resolved paths, and `/var`, `/tmp` and `/etc` are symlinks into
+  `/private`.** A profile naming an unresolved `TMPDIR` denies every compiler that uses one
+  while appearing to allow it, and the failure reads as a broken toolchain rather than as a
+  policy. Resolve every path before it reaches the profile.
+- **A hook's prose is part of the mechanism.** Relocating the handoff's state was not
+  enough: the SessionStart text still told the model to create it "at the root of the
+  checkout", so the model did, in the repository being visited. Moving where a file is
+  written means changing what the session is told about it.
 - **A health check must not conclude "dead" before the process exists.** `serve.sh`
   validates its config and only then `exec`s llama-server, so for the first instants after
   launch there is nothing for `pgrep` to find. A poll that bails the moment the process is

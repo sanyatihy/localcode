@@ -3,7 +3,10 @@
 set -euo pipefail
 
 payload=$(cat)
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+# State goes under LOCALCODE_HANDOFF_DIR when it is set, and under the checkout otherwise.
+# The override is what lets a session run in somebody else's repository: a handoff written
+# to their root is untracked noise in a tree nobody asked us to touch.
+ROOT="${LOCALCODE_HANDOFF_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 LOG="$ROOT/results/precompact.jsonl"
 
 # Best-effort: a record that fails must not cost the refusal.

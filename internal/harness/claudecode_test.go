@@ -143,7 +143,7 @@ func TestTheSessionStartHookPrintsTheHandoffOrTheShapeOfOne(t *testing.T) {
 	run := func(root string) string {
 		t.Helper()
 		cmd := exec.Command(script)
-		cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+root)
+		cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+root, "LOCALCODE_HANDOFF_DIR=")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("hook failed: %v: %s", err, out)
@@ -164,7 +164,7 @@ func TestTheSessionStartHookPrintsTheHandoffOrTheShapeOfOne(t *testing.T) {
 		t.Errorf("the handoff was not printed:\n%s", got)
 	}
 	// Printed whether or not there is a handoff to print with it.
-	if !strings.Contains(got, "Keep HANDOFF.md current") {
+	if !strings.Contains(got, "current as you work") {
 		t.Errorf("the instruction to keep it current was dropped:\n%s", got)
 	}
 }
@@ -270,5 +270,67 @@ func TestTheSessionEndHookWritesAHandoffOnlyWhenTheSessionWroteNone(t *testing.T
 	}
 	if string(b) != "what the session meant to do\n" {
 		t.Errorf("the session's own handoff was overwritten:\n%s", b)
+	}
+}
+
+// The override is what lets 0016 run outside this checkout. Both halves matter: state
+// follows LOCALCODE_HANDOFF_DIR when it is set, and working on localcode itself is
+// unchanged when it is not.
+func TestTheHooksPutStateWhereTheOverrideSaysOrTheCheckoutOtherwise(t *testing.T) {
+	end, err := filepath.Abs("../../harness/claude-code/hooks/session-end.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := `{"session_id":"s1","reason":"other","transcript_path":"/nonexistent"}`
+
+	t.Run("override wins", func(t *testing.T) {
+		project, state := t.TempDir(), filepath.Join(t.TempDir(), "elsewhere")
+		cmd := exec.Command(end)
+		cmd.Stdin = strings.NewReader(payload)
+		cmd.Env = append(os.Environ(),
+			"CLAUDE_PROJECT_DIR="+project, "LOCALCODE_HANDOFF_DIR="+state)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("hook failed: %v: %s", err, out)
+		}
+		if _, err := os.Stat(filepath.Join(state, "HANDOFF.md")); err != nil {
+			t.Fatalf("no handoff under the override: %v", err)
+		}
+		// The visited repository is the thing being protected.
+		if _, err := os.Stat(filepath.Join(project, "HANDOFF.md")); err == nil {
+			t.Fatal("a handoff was written into the repository being visited")
+		}
+	})
+
+	t.Run("checkout by default", func(t *testing.T) {
+		project := t.TempDir()
+		cmd := exec.Command(end)
+		cmd.Stdin = strings.NewReader(payload)
+		// A parent that has one set must not leak it into the unset case.
+		cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+project, "LOCALCODE_HANDOFF_DIR=")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("hook failed: %v: %s", err, out)
+		}
+		if _, err := os.Stat(filepath.Join(project, "HANDOFF.md")); err != nil {
+			t.Fatalf("working on localcode itself must still write to the checkout: %v", err)
+		}
+	})
+}
+
+// The shape the hook prints has to name the path it actually wants, or the model creates
+// a HANDOFF.md in the repository it is standing in — which is what it did.
+func TestTheSessionStartHookNamesThePathItWants(t *testing.T) {
+	start, err := filepath.Abs("../../harness/claude-code/hooks/session-start.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(t.TempDir(), "elsewhere")
+	cmd := exec.Command(start)
+	cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+t.TempDir(), "LOCALCODE_HANDOFF_DIR="+state)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("hook failed: %v: %s", err, out)
+	}
+	if !strings.Contains(string(out), filepath.Join(state, "HANDOFF.md")) {
+		t.Fatalf("the injected instruction must name the real path:\n%s", out)
 	}
 }
