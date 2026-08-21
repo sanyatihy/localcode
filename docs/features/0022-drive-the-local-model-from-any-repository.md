@@ -1,9 +1,9 @@
 ---
 id: 0022
 title: Drive the local model from any repository
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-21
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-21
 needs:
 ---
 
