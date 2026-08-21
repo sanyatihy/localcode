@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/sanyatihy/localcode/internal/harness"
@@ -48,6 +49,8 @@ usage:
 flags:
   -checkout dir   the localcode checkout to read configuration from
   -endpoint url   the server to use
+  -config file    the serving config to start (default config/agent.env)
+  -no-serve       refuse if no server is running, rather than starting one
 `
 
 func main() {
@@ -55,6 +58,8 @@ func main() {
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
+	config := fs.String("config", "config/agent.env", "the serving config to start")
+	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -67,7 +72,13 @@ func main() {
 	if len(args) > 0 && args[0] == "status" {
 		code, err = status(*endpoint)
 	} else {
-		code, err = run(*checkoutFlag, *endpoint, args)
+		code, err = run(opts{
+			checkout: *checkoutFlag,
+			endpoint: *endpoint,
+			config:   *config,
+			noServe:  *noServe,
+			args:     args,
+		})
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "localcode: "+err.Error())
@@ -75,12 +86,20 @@ func main() {
 	os.Exit(code)
 }
 
-func run(checkoutFlag, endpoint string, args []string) (int, error) {
-	root, err := resolveCheckout(checkoutFlag)
+type opts struct {
+	checkout string
+	endpoint string
+	config   string
+	noServe  bool
+	args     []string
+}
+
+func run(o opts) (int, error) {
+	root, err := resolveCheckout(o.checkout)
 	if err != nil {
 		return 2, err
 	}
-	if err := serverUp(endpoint); err != nil {
+	if err := ensureServer(root, o.endpoint, o.config, o.noServe); err != nil {
 		return 2, err
 	}
 
@@ -92,9 +111,9 @@ func run(checkoutFlag, endpoint string, args []string) (int, error) {
 	argv := []string{"--tools", agentTools, "--allowedTools", agentTools}
 	// The instruction goes last and only when there is one: with no prompt this is an
 	// interactive session, which is the common case for a developer in their own repo.
-	if len(args) > 0 {
+	if len(o.args) > 0 {
 		argv = append(argv, "-p")
-		argv = append(argv, args...)
+		argv = append(argv, o.args...)
 	}
 
 	cmd := exec.Command("claude", argv...)
@@ -173,4 +192,79 @@ func status(endpoint string) (int, error) {
 	}
 	fmt.Printf("serving %s at %d ctx on %s\n", filepath.Base(props.ModelPath), props.Settings.NCtx, endpoint)
 	return 0, nil
+}
+
+// ensureServer starts one when nothing is serving, because requiring a second terminal is
+// the headache this command exists to remove. What it costs is printed before it is spent
+// rather than discovered afterwards: twenty seconds and most of the machine's memory are
+// not something to find out about by waiting.
+func ensureServer(root, endpoint, config string, noServe bool) error {
+	if serverUp(endpoint) == nil {
+		return nil
+	}
+	if noServe {
+		return fmt.Errorf("no server at %s, and -no-serve was given", endpoint)
+	}
+	fmt.Fprintf(os.Stderr, "no server at %s\n", endpoint)
+	fmt.Fprintf(os.Stderr, "starting %s — about 20s to load, ~17 GB resident while it runs\n", config)
+	fmt.Fprintf(os.Stderr, "(a first run downloads ~17 GB and takes considerably longer)\n")
+
+	logPath, err := serverLog()
+	if err != nil {
+		return err
+	}
+	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("could not open %s: %w", logPath, err)
+	}
+	defer log.Close() //nolint:errcheck // the child holds its own descriptor
+
+	cmd := exec.Command(filepath.Join(root, "scripts", "serve.sh"), config)
+	// serve.sh resolves a relative chat-template path against its working directory, so
+	// this has to be the checkout or the server loads the model's own template instead.
+	cmd.Dir = root
+	cmd.Stdout, cmd.Stderr = log, log
+	// Its own session, so the terminal's Ctrl-C reaches the agent and not the server the
+	// next session will want. It outlives this process deliberately; `localcode stop` ends it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("could not start the server: %w", err)
+	}
+	if err := waitHealthy(endpoint, 20*time.Minute); err != nil {
+		return fmt.Errorf("%w — see %s", err, logPath)
+	}
+	fmt.Fprintln(os.Stderr, "server ready")
+	return nil
+}
+
+func waitHealthy(endpoint string, limit time.Duration) error {
+	deadline := time.Now().Add(limit)
+	for time.Now().Before(deadline) {
+		if serverUp(endpoint) == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("the server did not become ready within %s", limit)
+}
+
+// serverLog is under the state directory rather than in the repository being worked in,
+// for the same reason everything else here is.
+func serverLog() (string, error) {
+	dir, err := stateDir()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "serve.log"), nil
+}
+
+func stateDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".local", "state", "localcode"), nil
 }
