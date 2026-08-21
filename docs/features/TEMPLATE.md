@@ -50,8 +50,8 @@ needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty 
        - [ ] the outcome, not the activity
 
      Guidance lives in comments here on purpose. A box written inside one is invisible
-     to the tool, so an unwritten plan counts as unwritten: `no-tasks` says the plan is
-     missing instead of `kit next` handing an agent a placeholder to build. -->
+     to the tool, so an unwritten plan counts as unwritten: `unfilled-template` says the
+     plan is missing instead of `kit next` handing an agent a placeholder to build. -->
 
 ## Open questions
 <!-- Optional. Delete when empty. Each with a leaning if you have one. -->
