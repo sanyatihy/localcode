@@ -44,29 +44,3 @@ trigger nobody watches is not an idea, it is a hedge.
   category of rule as doing the topmost one. Promote when: a second project wants it, or the box
   parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
   shell hooks at all, or only the rule.
-
-## What the 128 GB machine unlocks
-
-One trigger, so one entry. Six separate lines used to wait on this machine, which made the
-file look like six ideas rather than one purchase. Promote whichever of these the arriving
-hardware actually makes answerable:
-
-- **The quant ladder.** 0004 was dropped because the admissible wired budget on 32 GB is
-  ~22.2 GB and Q4_K_M already sits at 21.75, so Q5_K_M and Q6_K are excluded *by projection
-  rather than by measurement*. More memory makes the exclusion testable.
-- **Quantising the model ourselves**, if that ladder shows a gap in the published quants
-  worth filling.
-- **Harder tier-1 tasks.** 0013 added seven traps and this model took only one: twelve of the
-  fourteen tasks show no quality failure at any setting. The traps are proven to trap, so this
-  is the model being good rather than the fixtures being soft. Needed only when a comparison
-  requires tier-1 to *rank* rather than floor-check, which a quant grid would be the first to.
-- **One pass for the floor-check tasks, three for the ones that move.** Their repeats measure
-  nothing and cost most of a sweep's runtime. Worth doing only when sweep runtime is what
-  blocks a feature; no sweep so far has been large enough.
-- **Qwen3-Coder-Next (80B-A3B)** — MoE built for agentic coding, 3B active. At ~45 GB for Q4 it
-  does not fit 32 GB at all, and the vision rules out a model zoo, so it needs both the memory
-  and a reason.
-- **Hermes' persistent memory over a real week.** 0010 scores all four harnesses cold, which is
-  the only reproducible comparison but deliberately blind to Hermes' main bet — and Hermes is
-  unattended-only here, its 64,000-token floor sitting above the attended ceiling. More memory
-  is what would let it be used attended long enough to answer.

@@ -246,9 +246,10 @@ ingest-time budget. It reports **which of memory or time binds**, which is the l
 whole question.
 
 On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
-hand — and reports ingest time as the binding constraint. Modelling 128 GB with
-`TOTAL_GB=128` gives **the same rungs**, and so does a 70 GB model: memory allows ~262k
-tokens in every case while a 20-minute ingest budget allows ~64k.
+hand — and reports ingest time as the binding constraint. Modelling 128 GB with `TOTAL_GB=128`
+gives **the same rungs**, and so does a 70 GB model: memory allows ~262k tokens in every case
+while a 20-minute ingest budget allows ~64k. That is part of why more memory was not bought:
+it would not have bought context.
 
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
@@ -537,11 +538,12 @@ unused and PR #27342 picks up. It is measured at 1.26–1.57× depending on prom
 figures are under [Speculative decoding](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). MTPLX, the MLX runtime that does implement
 native MTP, loads on this machine and then runs out of GPU memory under a real prompt.
 
-**What would reverse it:** a 128 GB machine. Slot count would stop competing with the model,
-MLX's reuse advantage would run unconstrained, and MTPLX's 20.68 GB checkpoint would have room
-for a context — the only thing that stopped it here. `mlx_lm` gaining
-`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is now a measured number
-rather than a hypothetical. Or MLX gaining `/v1/messages`.
+**What would reverse it**, now that a larger machine is decided against: `mlx_lm` gaining
+`qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is a measured number rather
+than a hypothetical. Or MLX gaining `/v1/messages`. The memory route is closed — more RAM would
+have stopped slot count competing with the model, and none is coming. **MTPLX has no route
+left**: its 20.68 GB checkpoint needed room this machine does not have, and that was the only
+thing standing between it and a verdict.
 
 **One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
 repeating any, which is what forced the slot-count problem. A real agent session is one

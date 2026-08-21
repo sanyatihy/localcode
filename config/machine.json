@@ -1,5 +1,5 @@
 {
-  "note": "Every limit this machine imposes, measured rather than assumed. Nothing in Go or in a script may carry one of these numbers: the 128 GB machine moves all of them at once, and docs/VISION.md calls a hardcoded machine limit a defect to fix rather than a value to update. docs/TECH.md says how each was measured.",
+  "note": "Every limit this machine imposes, measured rather than assumed. Nothing in Go or in a script may carry one of these numbers: they are readings from one laptop, and anyone reproducing these choices is on different silicon. docs/TECH.md says how each was measured.",
   "machine": "m2max-32gb",
 
   "min_headroom_gb": 4.0,
