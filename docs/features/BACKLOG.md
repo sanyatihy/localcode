@@ -44,3 +44,8 @@ trigger nobody watches is not an idea, it is a hedge.
   category of rule as doing the topmost one. Promote when: a second project wants it, or the box
   parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
   shell hooks at all, or only the rule.
+  **That trigger has fired.** kit matches `^\s*[-*]\s*\[[xX]\]\s*(.*)$` and
+  `internal/handoff/handoff.go` matches the literal `- [x] `, so a box ticked `- [X]` is not
+  merely unticked to the driver — it is absent from the list, `Ticked` returns false forever,
+  and the run loops to its bound. Matching kit's pattern is three lines and does not need the
+  reconciliation; the reconciliation is what this entry is still for.
