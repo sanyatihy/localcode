@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -110,7 +111,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := strings.Fields(string(got))
+	args := argsOf(got)
 	tools := flagValue(args, "--tools")
 	allowed := flagValue(args, "--allowedTools")
 	if tools == "" || tools != allowed {
@@ -129,7 +130,8 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(argv)
-	if strings.Contains(string(got), "-p") {
+	// An exact token: --append-system-prompt contains "-p" and is not it.
+	if slices.Contains(argsOf(got), "-p") {
 		t.Fatalf("no prompt was given, so the session must not be -p: %s", got)
 	}
 }
@@ -188,6 +190,12 @@ func TestResolveCheckoutRefusesSomethingThatIsNotOne(t *testing.T) {
 	if _, err := resolveCheckout(""); err == nil {
 		t.Fatal("no checkout at all must be refused, not guessed")
 	}
+}
+
+// argsOf reads the stub's record, which is one argument per line — arguments here contain
+// spaces, so splitting on whitespace would invent tokens that were never passed.
+func argsOf(b []byte) []string {
+	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 }
 
 func flagValue(args []string, name string) string {
@@ -356,5 +364,24 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(keep); err != nil {
 		t.Fatalf("the file outside was destroyed: %v", err)
+	}
+}
+
+func TestExtraWritableReadsTheConfigAndExpandsHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "localcode")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "# what this machine's ecosystems need\n\n~/.cargo\n/opt/homebrew/var\n"
+	if err := os.WriteFile(filepath.Join(dir, "writable"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := extraWritable()
+	want := []string{filepath.Join(home, ".cargo"), "/opt/homebrew/var"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v (comments and blanks dropped, ~ expanded)", got, want)
 	}
 }
