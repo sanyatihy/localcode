@@ -757,6 +757,10 @@ is the driver's job. Measured at 2.1.233, on both triggers.
 **`SessionStart` sends `source`, not `session_start_reason`.** All three events fire in a
 print session, which is the form the driver runs.
 
+**The pressure this relieves may be the incumbent's own.** Pi ingests a fifth as much per
+task, so a harness that spends less of the window may need less of the mechanism. Nothing here
+separates the two.
+
 **Whether any of this is worth its cost is unmeasured.** The before/after is one box driven
 with the mechanism and without it, and
 [0011](features/0011-split-planning-and-grinding-across-frontier-and-local-models.md) is
