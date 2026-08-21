@@ -1,19 +1,17 @@
 # localcode
 
-Making one MacBook a viable place to run agentic coding: a quantised **Qwen3.8-27B**
-served locally, tuned by measurement rather than guesswork, driven by a coding harness
-chosen on evidence. The work here is **how the model is launched, served and driven** —
-not the weights, and not a new agent.
-
-Everything is measured on one machine — **M2 Max, 32 GB unified memory, 30 GPU cores** —
-and every number is committed with the machine it came from. Nothing here is a benchmark
-claim about Apple Silicon in general.
+Agentic coding on one MacBook, with the model on the machine: **Qwen3.8-27B** at Q4_K_M,
+served by llama.cpp, driven by Claude Code. Every choice here was settled by measurement, and
+every number was taken on one **M2 Max with 32 GB** — nothing here is a benchmark claim about
+Apple Silicon in general.
 
 - [`docs/VISION.md`](docs/VISION.md) — what this is for, and what it is not.
 - [`docs/TECH.md`](docs/TECH.md) — **the answers**, as built and as measured.
-- [`docs/features/`](docs/features/) — how each answer was arrived at. All 18 have shipped
-  or been dropped; the docs are frozen history.
+- [`docs/features/`](docs/features/) — how each answer was arrived at. Every one has shipped
+  or been dropped; a shipped doc is frozen history.
 - [`docs/data/`](docs/data/) — the raw rows every table rests on.
+- [`docs/TECH.md#gotchas`](docs/TECH.md#gotchas) — every trap that has already cost this repo
+  a wrong number. Worth reading before changing how anything is measured.
 
 ## What was settled
 
@@ -24,7 +22,7 @@ claim about Apple Silicon in general.
 | KV cache | `q8_0` for K and V | same |
 | context | **32k** to grind, **49k** for the editor | [serving](docs/TECH.md#serving) |
 | thinking | **off** — 4× the wall clock bought nothing | [sampling and thinking](docs/TECH.md#sampling-and-thinking-settled) |
-| sampling | `temp 0.7 / top_p 0.80 / top_k 20 / presence_penalty 1.5` | same |
+| sampling | the model card's own pair for thinking-off | same |
 | harness | **Claude Code** stays; nothing displaced it | [nothing displaces Claude Code](docs/TECH.md#nothing-displaces-claude-code-and-the-two-axes-disagree) |
 | decode speedup | the model's own MTP head, **at 32k only** | [speculative decoding](docs/TECH.md#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom) |
 
@@ -47,7 +45,7 @@ strings /opt/homebrew/lib/libllama.dylib | grep -c '^qwen35$'   # expect 1
 Then:
 
 ```sh
-make check                              # the offline gate: gofmt, vet, lint, race tests
+make check                              # the offline gate: Go, shell, doc links, race tests
 make serve CONFIG=config/tuned.env      # llama-server on 127.0.0.1:8081, ~17 GB of weights
 make smoke                              # in another shell: does it answer, and call a tool?
 make eval N=3 LABEL=tuned-32k           # score the tier-1 suite and print the summary
@@ -86,24 +84,6 @@ results/    live scratch, gitignored; snapshots land in docs/data/ when a featur
 
 Every command documents its exit codes at the top of `main.go`, because the scripts branch
 on them rather than parsing output.
-
-## The rules the measurements follow
-
-These are not style. Each one has already cost this repo a wrong number, and
-[`docs/TECH.md`](docs/TECH.md#gotchas) records what it cost.
-
-- **A run that swapped is void, not slow.** Every row records free memory and the swap
-  delta; the reporter names contaminated runs instead of averaging them in.
-- **A row says what the *server* reported serving**, never the label a human typed. A
-  restart that did not take would otherwise attribute one config's numbers to another.
-- **Spread is min–max over three passes**, never a standard deviation — three samples do
-  not support one.
-- **One toggle at a time, and never one that moves two things.** Thinking carries its own
-  sampling, so sweeping the toggle at a fixed temperature measures the pair. `cmd/eval`
-  refuses it; that mistake voided 114 rows before it did.
-- **A derived number is a hypothesis** and is labelled as one until a run confirms it.
-  Arithmetic about this machine has been wrong three times.
-- **Free memory is not a pressure signal on macOS.** It sits near zero idle or paging.
 
 ## Contributing
 

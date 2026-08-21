@@ -23,24 +23,11 @@ it is a floor check against damage at depth, costs most of the clock, and ranks 
 
 ## How a fixture earns its place
 
-- **Exactly one defensible action.** A task that scores a style preference — reading a
-  file before editing it — fails every config identically and ranks nothing.
-- **Proved to discriminate before any model time is spent on it.**
-  `TestPatchFixturesDiscriminate` runs a correct answer and the tempting wrong one through
-  the real patch runner and requires the first to pass and the second to fail.
-- **Proved against answers that are merely different.** The same test asserts that
-  equally-defensible answers pass — returning `nil` rather than an empty slice, say. A
-  fixture whose unseen test rejects a correct fix costs a config marks for being right,
-  which is the more expensive failure.
-- **Bounded.** Every fixture carries `timeout_seconds`, and over budget is scored as
-  `fail_over_budget` rather than as a wrong answer. A single task once spent 15 minutes
-  reasoning and produced nothing.
-
-Two of the nine actually discriminate at present:
-`patch-contradiction-rounding` and `toolcall-constraint-readonly`. The rest are 3/3 at
-every setting ever measured — they are the floor check that catches a config broken
-outright. See [which tier-1 tasks carry
-signal](../docs/TECH.md#which-tier-1-tasks-carry-signal).
+Exactly one defensible action, bounded by its own `timeout_seconds`, and proved to
+discriminate by `TestPatchFixturesDiscriminate` before any model time is spent on it. What
+that test asserts and why both halves of it matter:
+[the harness](../docs/TECH.md#the-harness). Which fixtures actually rank and which are the
+floor check: [which tier-1 tasks carry signal](../docs/TECH.md#which-tier-1-tasks-carry-signal).
 
 ## How a fixture is written
 

@@ -19,22 +19,13 @@ re-run reproduces the runtime the comparison was measured on; `.venv/` is gitign
 
 ## What it was measured to be
 
-MLX wins on memory — **18.02 GB wired against llama.cpp's 20.89**, zero swapped runs
-against seven — and on warm reuse, 39× against 10×. It loses on three things that mattered
-more: it serves no Anthropic `/v1/messages`, which the editor flow needs; it reports no
-served config or timings, so a run cannot be checked against its label; and its failure
-mode under memory pressure is a hard stall rather than degradation.
-
-**`--prompt-cache-bytes` and `--prompt-cache-size` are mandatory here, not tuning**, and
-the slot count is the part that bites. `mlx_lm`'s LRU is unbounded by default: one 16k
-prompt drove free memory to zero, with swap flat because wired pages cannot be paged out.
-Bounded but generous is no better — capacity is allocated eagerly *per slot* at startup, so
-16 slots left 0.11 GB free on the first request where 2 left 5.38, and every depth row of
-that run hit its budget.
-
-[`config/mlx-4bit.env`](config/mlx-4bit.env) therefore serves **2**, which is what the
-scored comparison ran on and what one agent conversation needs. Reuse breadth and depth
-headroom trade directly against each other on 32 GB.
-
-The full table, and what would reverse the decision:
+MLX wins on wired memory and on warm reuse, and loses on `/v1/messages`, on reporting no
+served config to check a run against, and on stalling rather than degrading under memory
+pressure. The table, and what would reverse it:
 [llama.cpp against MLX](../../docs/TECH.md#llamacpp-against-mlx).
+
+**`--prompt-cache-bytes` and `--prompt-cache-size` are mandatory here, not tuning**, and the
+slot count is the part that bites: capacity is allocated eagerly *per slot* at startup, and
+the LRU is unbounded by default. [`config/mlx-4bit.env`](config/mlx-4bit.env) serves **2**,
+which is what the scored comparison ran on and what one agent conversation needs. Reuse
+breadth and depth headroom trade directly against each other on 32 GB.
