@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint shell docs test smoke verify serve eval report
+.PHONY: help build check fmt vet lint shell docs test smoke verify serve stop eval report
 
 ## help: list these targets
 help:
@@ -88,6 +88,10 @@ verify: check smoke
 ## serve: start llama-server from CONFIG
 serve:
 	@scripts/serve.sh $(CONFIG)
+
+## stop: stop the server and wait for the memory back
+stop:
+	@scripts/stop.sh
 
 ## eval: run the tier-1 suite N times under LABEL, then summarise
 eval:
