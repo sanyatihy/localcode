@@ -7,21 +7,17 @@ import (
 	"strings"
 )
 
-// Retrieval tasks bury a sentinel in filler and ask for it back. They exist to catch
-// damage that only shows at depth — KV cache quantisation above all, which is cheap
-// on memory and is exactly the setting that could silently cost long-context recall.
-// A tool-call task at 400 tokens would never see it.
+// Retrieval tasks bury a sentinel in filler and ask for it back, to catch damage that only
+// shows at depth — KV cache quantisation above all, which a 400-token tool-call task would
+// never see.
 //
-// With Distractors set, the task stops measuring recall and starts measuring
-// discrimination: several near-identical sentinels are present and the question names
-// the wanted one by a property. Recalling *a* key is then no longer the same as
-// answering, which is what 0013 needs — a plain recall task cannot express "worse"
-// because a shallow read of it is also the correct one.
+// With Distractors set the task measures discrimination rather than recall: several
+// near-identical sentinels are present and the prompt names the wanted one by a property,
+// so recalling *a* key stops being the same as answering.
 type Retrieval struct {
 	DepthTokens int     `json:"depth_tokens"` // approximate prompt size to build
 	Position    float64 `json:"position"`     // 0.0 start, 0.5 middle, 1.0 end
 	Sentinel    string  `json:"sentinel"`     // the string the answer must contain
-	Question    string  `json:"question"`
 
 	// Label qualifies the sentinel where distractors need telling apart, e.g.
 	// "staging". Empty keeps the original unqualified phrasing, so the fixtures
@@ -65,10 +61,9 @@ type planted struct {
 	text string
 }
 
-// buildHaystack is seeded from the task's own depth so a given task produces the
-// same prompt on every run. Comparing configs against different filler would be
-// comparing noise. Insertions do not draw from the generator, so adding distractors
-// to a task does not disturb the filler of any other.
+// buildHaystack is seeded from the task's own depth, so a task produces the same prompt on
+// every run. Insertions do not draw from the generator, so adding a distractor to one task
+// does not disturb another's filler.
 func buildHaystack(r Retrieval) string {
 	rng := rand.New(rand.NewSource(int64(r.DepthTokens)))
 	words := r.DepthTokens // ~1 token per word for this vocabulary, close enough

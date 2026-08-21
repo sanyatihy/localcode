@@ -6,8 +6,7 @@
   "retrieval": {
     "depth_tokens": 8000,
     "position": 0.5,
-    "sentinel": "KEY-7F3A-8000",
-    "question": "What is the deployment key mentioned in the dump?"
+    "sentinel": "KEY-7F3A-8000"
   },
   "messages": [
     {

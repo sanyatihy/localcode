@@ -13,13 +13,8 @@ import (
 )
 
 // Driver is the seam this package consumes: something that can be handed a checkout and
-// an instruction and left to act.
-//
-// Declared here, in the consumer, rather than beside the adapters — and kept to two
-// methods because that is all four harnesses genuinely agree on. They differ in almost
-// everything else: where configuration lives, whether it is repo-local, what context
-// window they will accept, where they keep what they learn. An interface wide enough to
-// express those differences would have one implementation each and no seam at all.
+// an instruction and left to act. Two methods, because that is all four harnesses agree
+// on; everything else about them differs and is the adapter's business.
 type Driver interface {
 	// Name identifies the driver in results. Stable, because it is a grouping key.
 	Name() string
@@ -59,13 +54,8 @@ type ContextFloorer interface {
 
 // A DeskProfile is how the machine is being used while a harness is scored, and it caps
 // the context that may be served. It is the machine's profile; Profile in this package is
-// the model's, and the two are unrelated.
-//
-// Both ceilings are 0014's, measured against the desktop rather than against the model:
-// every context up to 57,344 left the compositor working, and 65,536 stalled it for the
-// whole run while still completing every request. So the two profiles differ in the
-// desktop column alone, and the unattended ceiling is simply the largest context measured
-// to serve.
+// the model's, and the two are unrelated. Both ceilings are measured against the desktop
+// rather than the model — see docs/TECH.md's measured envelope.
 type DeskProfile struct {
 	Name    string
 	Ceiling int
@@ -92,13 +82,11 @@ func LookupDeskProfile(name string) (DeskProfile, error) {
 }
 
 // Excludes reports why a driver cannot be scored under this profile against this server,
-// and returns "" when it can be. A driver that declares no floor is admitted everywhere.
+// and "" when it can be. A driver that declares no floor is admitted everywhere.
 //
-// Two bounds can exclude it and they take different fixes, so the reason names which one
-// bit: a floor above the profile's ceiling is a verdict — the machine cannot serve that
-// harness while somebody is using it — while a floor above what the server is actually
-// serving is a restart. A server that cannot be asked bounds nothing, which is the
-// backend-without-/props case and is why the floor is checked against the profile first.
+// The reason names which bound bit, because they take different fixes: above the profile's
+// ceiling is a verdict, above what the server serves is a restart. A server that cannot be
+// asked bounds nothing, which is why the profile is checked first.
 func (p DeskProfile) Excludes(d Driver, served ServerProps) string {
 	f, ok := d.(ContextFloorer)
 	if !ok {
@@ -185,11 +173,9 @@ type Conditions struct {
 	Keep    bool
 }
 
-// DefaultBudget bounds one tier-2 run. Generous against what a harness legitimately takes
-// here — the slowest honest run measured five minutes, most take one — and bounded because
-// a harness that loops does not stop on its own: one spent 45 minutes and 90 turns on a
-// fixture the others finished in three, which at 15 fixtures a sweep is a day of machine
-// time for no result.
+// DefaultBudget bounds one tier-2 run. The slowest honest run measured five minutes; a
+// harness that loops does not stop on its own, and one spent 45 minutes on a fixture the
+// others finished in three.
 const DefaultBudget = 10 * time.Minute
 
 // RunTier2 stages the fixture in a scratch module, hands it to the driver, and scores the
@@ -198,10 +184,9 @@ const DefaultBudget = 10 * time.Minute
 func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result, string, error) {
 	res := Result{TaskID: t.ID}
 
-	// Checked before anything is staged, and returned as a result rather than an error:
-	// scoring a harness at a context it refuses produces either a quality figure for a
-	// configuration nobody can use or a harness failure that reads as the model
-	// answering badly. Both are worse than having no figure at all.
+	// A result rather than an error: a harness scored at a context it refuses yields
+	// either a figure for a configuration nobody can use or a failure that reads as the
+	// model answering badly.
 	if why := c.Desk.Excludes(d, c.Served); why != "" {
 		res.Outcome, res.Detail = Inadmissible, why
 		return res, "", nil
@@ -223,7 +208,7 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 	}
 
 	// A fixture that already passes cannot measure anything.
-	if out, err := goTest(ctx, work); err == nil {
+	if out, err := goTestBounded(ctx, work); err == nil {
 		return res, work, ErrFixtureNotBroken
 	} else if isBuildFailure(out) {
 		return res, work, fmt.Errorf("fixture does not compile before the run: %s", firstUseful(string(out)))
@@ -238,18 +223,15 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 		defer func() { _ = os.RemoveAll(state) }()
 	}
 
-	// The test is taken away for the duration of the run and put back to score with. It
-	// has to be present for the check above and absent for the harness, and "a test the
-	// harness never saw" is otherwise just a description of a file sitting in its working
-	// directory: every candidate here has a Read tool, and they differ in how much of the
-	// directory they look at, which would make the leak a per-harness advantage.
+	// Taken away for the run and put back to score with. Every candidate has a Read tool
+	// and they differ in how much of the directory they look at, so a test left in place
+	// would be a per-harness advantage rather than a test nobody saw.
 	if err := os.Remove(filepath.Join(work, testName)); err != nil {
 		return res, work, fmt.Errorf("withhold the test: %w", err)
 	}
 
-	// Memory across the run, for the same reason tier 1 records it: a run whose swap grew
-	// measured the pager. It matters more here — a tier-2 run is minutes of a harness and
-	// a model working together, at a context the desktop was already measured to strain.
+	// A run whose swap grew measured the pager, which matters more here: minutes of a
+	// harness and a model together, at a context already measured to strain the desktop.
 	memBefore := sampleMemory()
 	budget := c.Budget
 	if budget <= 0 {
@@ -269,17 +251,13 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 	res.MemMeasured = memBefore.OK && memAfter.OK
 
 	if driveErr != nil {
-		// Out of budget is not a broken adapter and not a wrong answer: the harness was
-		// still working when its clock ran out. Kept distinct because the two take
-		// different fixes — one is a bug, the other is a harness that does not converge,
-		// which is a result about the harness and one this comparison is looking for.
+		// Three outcomes, never merged: out of budget is a harness that does not
+		// converge, a drive error is a broken adapter, and neither is a wrong answer.
 		if runCtx.Err() != nil && ctx.Err() == nil {
 			res.Outcome = FailOverBudget
 			res.Detail = fmt.Sprintf("still working after its %s budget", budget)
 			return res, work, nil
 		}
-		// The harness failed, which is not the model answering badly. Kept distinct so a
-		// broken adapter is never recorded as a quality result.
 		res.Outcome, res.Detail = FailServer, truncate(driveErr.Error(), 200)
 		return res, work, nil
 	}
@@ -300,7 +278,7 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 		return res, work, err
 	}
 
-	out, err := goTest(ctx, work)
+	out, err := goTestBounded(ctx, work)
 	switch {
 	case err == nil:
 		res.Outcome = Pass
@@ -310,6 +288,13 @@ func RunTier2(ctx context.Context, d Driver, t Tier2Task, c Conditions) (Result,
 		res.Outcome, res.Detail = FailTest, truncate(firstUseful(string(out)), 200)
 	}
 	return res, work, nil
+}
+
+// goTestBounded is goTest under tier 2's own ceiling on grading a fixture.
+func goTestBounded(ctx context.Context, dir string) ([]byte, error) {
+	runCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+	return goTest(runCtx, dir)
 }
 
 // testName is what the fixture's test is called inside the scratch module. Fixed rather
@@ -353,16 +338,20 @@ func stageTest(t Tier2Task, work string) error {
 	return nil
 }
 
+// goTest runs the scratch module's tests. Both tiers grade an answer this way, so they
+// share the runner and the markers below rather than each keeping a copy that can drift.
+//
+// CommandContext so cancellation reaches the process: a hand-rolled timer kills it and
+// leaves the reader goroutine blocked until the pipe closes.
 func goTest(ctx context.Context, dir string) ([]byte, error) {
-	runCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(runCtx, "go", "test", "./...")
+	cmd := exec.CommandContext(ctx, "go", "test", "./...")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
 	return cmd.CombinedOutput()
 }
 
+// isBuildFailure separates "wrote invalid Go" from "wrote Go that fails the test". go
+// reports build errors before any test runs, and these are the shapes it reports them in.
 func isBuildFailure(out []byte) bool {
 	text := string(out)
 	for _, marker := range []string{"[build failed]", "syntax error", "undefined:", "cannot use"} {

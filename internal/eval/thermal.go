@@ -7,13 +7,12 @@ import (
 )
 
 // ThermalSample is the machine's own account of whether it was allowed to run at full
-// speed. A timing taken while the scheduler was capped measures the cap, which is the
-// same category of void as a run that swapped: not slow, but measuring something else.
+// speed. A timing taken while the scheduler was capped measures the cap — void in the same
+// way a run that swapped is.
 //
-// The reading is cumulative in the way swap is. macOS records a thermal warning when one
-// occurs and leaves it there, so an absolute value says only that the machine has been
-// throttled at some point since boot. The signal is the delta across a run, which is why
-// this is sampled either side of one rather than read once.
+// Cumulative, the way swap is: macOS leaves a thermal warning in place once it occurs, so
+// an absolute value says only that the machine was throttled sometime since boot. The
+// signal is the delta, which is why it is sampled either side of a run.
 type ThermalSample struct {
 	// SpeedLimit is the percentage of full speed the CPU is permitted, 100 when
 	// unthrottled. A machine that has never been warned reports nothing at all, which

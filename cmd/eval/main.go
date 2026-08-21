@@ -55,15 +55,12 @@ func run(args []string, stdout, stderr *os.File) error {
 		session  = fs.String("session", "", "label pairing this run with the baseline it is read against")
 		fidelity = fs.Bool("fidelity", false, "after the suite, hash fixed greedy probes so the pair can be checked for losslessness")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
-		// Passed through rather than validated against a list. Qwen3.8 takes
-		// low/medium/xhigh; the next model will take something else, and a harness that
-		// hardcodes one vendor's vocabulary has to be edited before it can measure
-		// anything new. The server rejects what it does not know. What this process
-		// guarantees instead is that whatever was sent is on every row.
+		// Passed through rather than checked against a list: the next model's vocabulary
+		// differs and the server rejects what it does not know. What is guaranteed here
+		// is that whatever was sent appears on every row.
 		effort = fs.String("reasoning-effort", "", "reasoning_effort passed to the server verbatim; empty leaves the model default")
-		// The mode's recommended sampling, as one flag. The values come from the model
-		// profile rather than from constants here: they are a property of the model, and
-		// the next model's differ. Getting the pair wrong silently is what voided 114 rows.
+		// The values come from the model profile rather than constants here: the pair is a
+		// property of the model, and getting it wrong silently voided 114 rows.
 		profile     = fs.String("sampling-profile", "", "thinking|nonthinking: apply the model's recommended sampling for that mode")
 		profilePath = fs.String("model-profile", "config/profiles/qwen3.8.json", "model profile: thinking mechanism, per-mode sampling, reasoning extraction")
 		temp        = fs.Float64("temperature", -1, "temperature; negative leaves it unset")
@@ -103,13 +100,9 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 
-	// Negative means "not set", so the server's own default applies. Zero is a real
-	// value a sweep may want, and must stay distinguishable from silence.
 	// The toggle carries its own sampling, so comparing modes at one fixed setting
-	// measures the pair rather than the toggle — the vision calls such a result void,
-	// and 114 rows were collected that way before anyone noticed. Setting the mode
-	// without saying which sampling goes with it is refused rather than defaulted:
-	// the whole point is that there is no neutral setting to fall back on.
+	// measures the pair and not the toggle — 114 rows were collected that way. Refused
+	// rather than defaulted: there is no neutral setting to fall back on.
 	if *thinking != "" && *profile == "" && *temp < 0 && *topP < 0 && *topK < 0 && *presPen < 0 {
 		return errors.New("-thinking was set with no sampling: pass -sampling-profile thinking|nonthinking, " +
 			"or set the sampling flags explicitly. Comparing modes at one fixed sampling measures the pair, not the toggle")
@@ -159,10 +152,9 @@ func run(args []string, stdout, stderr *os.File) error {
 	client.API = *api
 	client.Stream = *stream
 
-	// A backend that cannot introspect is still scoreable — MLX serves completions
-	// without llama.cpp's /props. What is lost is the guard that checks the served
-	// config against the label a human typed, so the run says so loudly and the rows
-	// record it rather than carrying a confident zero that reads as "0 context".
+	// A backend that cannot introspect is still scoreable — MLX serves completions without
+	// llama.cpp's /props. What is lost is the guard on the label a human typed, so the run
+	// says so rather than recording a confident zero that reads as "0 context".
 	props, err := client.Props(ctx)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "eval: %s exposes no served config (%v); "+
@@ -170,8 +162,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		props = eval.ServerProps{}
 	}
 
-	// Sequential on purpose: the server runs one slot, so concurrent requests would
-	// queue and every timing would measure the queue instead of the model.
+	// Sequential: the server runs one slot, so concurrent requests would measure the queue.
 	failures := 0
 	for rep := range *repeats {
 		for _, p := range paths {
@@ -181,8 +172,8 @@ func run(args []string, stdout, stderr *os.File) error {
 			}
 			res, err := client.Run(ctx, task, sampling, think, *effort, prof)
 			if err != nil {
-				// A transport failure is recorded and the suite continues: losing hours
-				// of sweep to one dropped connection would be worse than a gap.
+				// The suite continues: losing hours of sweep to one dropped connection
+				// is worse than a gap in the rows.
 				_, _ = fmt.Fprintf(stderr, "eval: %s: %v\n", task.ID, err)
 				failures++
 				continue

@@ -8,7 +8,6 @@
     "position": 0.33,
     "sentinel": "KEY-B24F-STAGING",
     "label": "staging",
-    "question": "What is the staging deployment key?",
     "distractors": [
       {
         "label": "production",

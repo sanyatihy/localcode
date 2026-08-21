@@ -6,7 +6,7 @@ How each candidate harness is pointed at the local endpoint. All four work.
 |---|---|---|---|
 | **Pi** | extension registering a provider | [`pi/local-provider.js`](pi/local-provider.js), loaded with `pi -e` | works |
 | **OpenCode** | `provider` block using `@ai-sdk/openai-compatible` | [`opencode/opencode.json`](opencode/opencode.json), copied into the working dir | works |
-| **Hermes** | top-level `model:` block with `provider: custom` | global, not repo-local | [works](hermes/README.md), needs 64k |
+| **Hermes** | top-level `model:` block with `provider: custom` | [`hermes/config.yaml.reference`](hermes/config.yaml.reference), seeded into a per-run `HERMES_HOME` | [works](hermes/README.md), needs 64k |
 | **Claude Code** | environment variables, and the only Anthropic Messages client | [`claude-code/claude-code.env`](claude-code/claude-code.env) | [works](claude-code/README.md), needs a patched chat template |
 
 ## Which projects these are
@@ -79,26 +79,16 @@ the file it goes into named instead — so both tiers pose one problem and the t
 row is enough to recover what was asked. `-fixtures tasks` runs every fixture that can be
 driven this way.
 
-| harness | patch-nil-check | outcome |
-|---|---|---|
-| **Pi** | 47.1 s | pass |
-| **Claude Code** | 62.5 s | pass |
-| **OpenCode** | 2 m 13 s | pass |
-| **Hermes** | 4 m 07 s | pass |
-
-Served by [`config/harness.env`](../config/harness.env) at **65,536**, which is not a
+All four produce a correct fix on `patch-nil-check` and none edits the test staged beside
+it. Served by [`config/harness.env`](../config/harness.env) at **65,536**, which is not a
 capacity decision: Hermes refuses anything below 64,000, so the next rung above its floor is
 the only context all four share. 0014 measured that context as leaving the desktop unusable,
-so these are unattended numbers and `cmd/tier2` records them as such.
+so these are unattended runs and `cmd/tier2` records them as such.
 
-The timings this section carried before were taken at 32k for three of the four and against
-an instruction nobody wrote down; the run above supersedes them rather than being compared
-with them.
-
-All four produced a correct fix and none edited the test staged beside it. The spread is
-behavioural rather than model-related: OpenCode spends turns running `go build` and `go vet`
-where Pi goes straight to the edit. It is one task at one context, so it is a signal and not
-a result — 0010 is where it gets ranked.
+**For the ranking, read [docs/TECH.md](../docs/TECH.md#nothing-displaces-claude-code-and-the-two-axes-disagree)**,
+not a single run of one fixture. 0010 put all four over five fixtures at three passes and
+found no challenger wins on both axes: the cheapest is the least reliable and the most
+reliable is the dearest. The incumbent stays.
 
 ## Reproducing
 

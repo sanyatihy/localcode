@@ -25,19 +25,6 @@ type MemSample struct {
 	OK          bool    `json:"-"` // false when the platform did not answer
 }
 
-// Refuse reports why a sweep must not start, and "" when it may. The message names every
-// number the verdict used, because a refusal a human cannot check is one they will force.
-func (p Preflight) Refuse() string {
-	if p.Carries {
-		return ""
-	}
-	if !p.OK {
-		return "the platform did not answer the memory probe, so headroom is unknown; -force starts anyway"
-	}
-	return fmt.Sprintf("%.2f GB headroom against a %.2f GB floor (%.2f GB free, %.0f MB swap in use); -force starts anyway",
-		p.HeadroomGB, p.FloorGB, p.FreeGB, p.SwapUsedMB)
-}
-
 // Machine is what config/ records about the hardware, kept there rather than in Go because
 // a floor derived on 32 GB is wrong on the next machine and would be re-derived by hand.
 type Machine struct {
@@ -70,6 +57,19 @@ type Preflight struct {
 	HeadroomGB float64 `json:"headroom_gb"`
 	FloorGB    float64 `json:"floor_gb"`
 	Carries    bool    `json:"carries"`
+}
+
+// Refuse reports why a sweep must not start, and "" when it may. The message names every
+// number the verdict used, because a refusal a human cannot check is one they will force.
+func (p Preflight) Refuse() string {
+	if p.Carries {
+		return ""
+	}
+	if !p.OK {
+		return "the platform did not answer the memory probe, so headroom is unknown; -force starts anyway"
+	}
+	return fmt.Sprintf("%.2f GB headroom against a %.2f GB floor (%.2f GB free, %.0f MB swap in use); -force starts anyway",
+		p.HeadroomGB, p.FloorGB, p.FreeGB, p.SwapUsedMB)
 }
 
 // Headroom is the arithmetic docs/TECH.md uses: what is left after wired and anonymous.

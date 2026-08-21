@@ -8,16 +8,25 @@ LABEL    ?= unlabelled
 TASKS    ?= tasks
 RESULTS  ?= results/tier1.jsonl
 N        ?= 1
-THINKING ?=
 
-.PHONY: build check fmt vet lint test smoke verify serve eval report
+# The thinking toggle carries its own sampling, and cmd/eval refuses one without the
+# other: at a single fixed sampling a toggle sweep measures the pair, not the toggle.
+# So these two move together — `make eval THINKING=off SAMPLING=nonthinking`.
+THINKING ?=
+SAMPLING ?=
+
+.PHONY: help build check fmt vet lint test smoke verify serve eval report
+
+## help: list these targets
+help:
+	@grep -hE '^## ' $(MAKEFILE_LIST) | sed 's/^## /  /'
 
 ## build: compile everything
 build:
 	@go build ./...
 
-## check: the offline gate — formatting, vet, and tests under the race detector.
-## Runs in CI, so it must need no server and no model weights.
+## check: the offline gate — gofmt, vet, lint, tests under the race detector
+# What CI runs, so it must need no server and no model weights.
 check: fmt vet lint test
 
 fmt:
@@ -26,13 +35,9 @@ fmt:
 vet:
 	@go vet ./...
 
-## lint: golangci-lint, pinned by .golangci.yml. Skipped with a loud note if the
-## binary is absent, so a laptop without it still runs the rest — CI always has it.
-##
-## Written as an if rather than `command -v ... && run || echo`: in that form a lint
-## *failure* also takes the `||` branch, so real findings were reported as "not
-## installed, SKIPPED" and `make check` exited 0 while CI failed on them. The skip
-## must be reachable only when the binary is genuinely missing.
+## lint: golangci-lint, pinned by .golangci.yml; skipped loudly when absent
+# An `if`, never `command -v ... && run || echo`: in that form a lint *failure* also
+# takes the `||` branch, so findings print as "SKIPPED" and the gate exits 0.
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run ./...; \
@@ -43,8 +48,8 @@ lint:
 test:
 	@go test -race ./...
 
-## smoke: assert a *served* endpoint answers and round-trips a tool call.
-## Separate from check because it needs a running llama-server, which CI has not.
+## smoke: assert a running endpoint answers and round-trips a tool call
+# Apart from check because it needs a live llama-server, which CI has not.
 smoke:
 	@scripts/smoke.sh
 
@@ -58,7 +63,8 @@ serve:
 ## eval: run the tier-1 suite N times under LABEL, then summarise
 eval:
 	@go run ./cmd/eval -tasks $(TASKS) -n $(N) -config "$(LABEL)" \
-		-results $(RESULTS) $(if $(THINKING),-thinking $(THINKING),) $(EVALFLAGS) || true
+		-results $(RESULTS) $(if $(THINKING),-thinking $(THINKING),) \
+		$(if $(SAMPLING),-sampling-profile $(SAMPLING),) $(EVALFLAGS) || true
 	@$(MAKE) --no-print-directory report
 
 ## report: summarise the results file
