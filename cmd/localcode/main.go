@@ -25,10 +25,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/harness"
 )
 
@@ -49,6 +51,7 @@ usage:
   localcode serve              start the server here, in the foreground
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
+  localcode hook <name>        run one of this binary's own session hooks
   localcode --help
 
 flags:
@@ -57,6 +60,8 @@ flags:
   -config file    the serving config to start (default config/agent.env)
   -no-serve       refuse if no server is running, rather than starting one
   -net            allow outbound network for this session (default: loopback only)
+  -ceiling pct    how much of the window a session may fill before it hands off
+  -calls n        how many tool calls a session may spend
 `
 
 func main() {
@@ -67,6 +72,8 @@ func main() {
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
+	ceiling := fs.Int("ceiling", 50, "how much of the window a session may fill, in percent")
+	calls := fs.Int("calls", 30, "how many tool calls a session may spend")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -83,6 +90,8 @@ func main() {
 		code, err = script(*checkoutFlag, "serve.sh", *config)
 	case len(args) > 0 && args[0] == "stop":
 		code, err = script(*checkoutFlag, "stop.sh")
+	case len(args) > 1 && args[0] == "hook":
+		code, err = hook(args[1])
 	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,
@@ -90,6 +99,8 @@ func main() {
 			config:   *config,
 			noServe:  *noServe,
 			net:      *net,
+			ceiling:  *ceiling,
+			calls:    *calls,
 			args:     args,
 		})
 	}
@@ -105,6 +116,8 @@ type opts struct {
 	config   string
 	noServe  bool
 	net      bool
+	ceiling  int
+	calls    int
 	args     []string
 }
 
@@ -127,32 +140,46 @@ func run(o opts) (int, error) {
 		return 2, fmt.Errorf("no working directory: %w", err)
 	}
 
-	// The handoff hooks are addressed absolutely and given a state directory of their
-	// own, which is what lets 0016 run outside this checkout at all.
+	// The budget is derived from the window the harness was declared, so a served config
+	// and the enforcement over it cannot disagree. Refused rather than guessed: a session
+	// started in a window nothing fits in spends a cold ingest to say `Prompt is too long`.
+	maxContext, maxOutput, err := declared(env)
+	if err != nil {
+		return 2, err
+	}
+	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
+	if err != nil {
+		return 2, err
+	}
+
+	// Sessions are kept out of the repository being visited, which is what lets the
+	// handoff hooks run in somebody else's checkout at all.
 	state, err := repoState(cwd)
 	if err != nil {
 		return 2, err
 	}
-	settings, err := writeSettings(root, state)
+	// One directory per session, holding what it was budgeted, what it spent and what it
+	// hands on. Fresh, because a handoff left in it by the session before is a stale
+	// instruction the next one obeys.
+	chainDir, _, err := newChain(state)
 	if err != nil {
 		return 2, err
 	}
-	env = append(env, "LOCALCODE_HANDOFF_DIR="+state)
-
-	argv := []string{
-		"--tools", agentTools, "--allowedTools", agentTools,
-		"--settings", settings,
-		// The model is the only thing that sees a denied write: claude gives a tool's
-		// stderr to it rather than passing it through. So the fix has to be knowledge the
-		// session already has, not something printed afterwards by a process that never
-		// learns the write was refused.
-		"--append-system-prompt", sandboxBriefing(cwd),
+	session := filepath.Join(chainDir, "01")
+	handoffPath := filepath.Join(session, chain.HandoffName)
+	if err := chain.WriteSpec(session, chain.Spec{
+		Limits: limits, Handoff: handoffPath, Chain: filepath.Base(chainDir), Session: 1,
+	}); err != nil {
+		return 2, err
 	}
-	// The instruction goes last and only when there is one: with no prompt this is an
-	// interactive session, which is the common case for a developer in their own repo.
-	if len(o.args) > 0 {
-		argv = append(argv, "-p")
-		argv = append(argv, o.args...)
+
+	// Whether there is an instruction decides more than what the harness is told. A
+	// session answering one ends once; an interactive session ends every time it hands the
+	// keyboard back. Only the first can be refused permission to stop without a handoff.
+	oneShot := len(o.args) > 0
+	settings, err := writeSettings(root, chainDir, oneShot)
+	if err != nil {
+		return 2, err
 	}
 
 	// The agent runs inside a seatbelt sandbox, which is what makes exposing an
@@ -174,14 +201,39 @@ func run(o opts) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	sandboxArgv := append([]string{"-f", profile, claudePath}, argv...)
 
-	cmd := exec.Command(sandboxExec, sandboxArgv...)
+	// A budget on calls is not a budget on tokens: one unbounded `cat` fills a window
+	// inside a single permitted call, and the gate decides on the context as it stood
+	// before that result arrived. This is the harness's own cap on the one tool whose
+	// result has no bound of its own, sized from the window it is protecting.
+	env = append(env, "LOCALCODE_HANDOFF_DIR="+session,
+		fmt.Sprintf("BASH_MAX_OUTPUT_LENGTH=%d", limits.ResultCap))
+
+	argv := []string{
+		"--tools", agentTools, "--allowedTools", agentTools,
+		"--settings", settings,
+		// The handoff is written outside the repository being visited, so a session leaves
+		// it with exactly the files the work changed. Claude Code confines its file tools
+		// to the workspace, and this is what puts that one directory in it.
+		"--add-dir", session,
+		// The model is the only thing that sees a denied write: claude gives a tool's
+		// stderr to it rather than passing it through. So the fix has to be knowledge the
+		// session already has, not something printed afterwards by a process that never
+		// learns the write was refused.
+		"--append-system-prompt", sandboxBriefing(cwd) + "\n\n" + handoffBriefing(limits, handoffPath),
+	}
+	// The instruction goes last and only when there is one: with no prompt this is an
+	// interactive session, which is the common case for a developer in their own repo.
+	if oneShot {
+		argv = append(argv, "-p")
+		argv = append(argv, o.args...)
+	}
+
+	cmd := exec.Command(sandboxExec, append([]string{"-f", profile, claudePath}, argv...)...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
-	err = cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			return exit.ExitCode(), nil
@@ -371,27 +423,156 @@ func repoState(repo string) (string, error) {
 // in anybody else's the hooks resolve to scripts that are not there and the session dies
 // saying so. Generated rather than committed, because the path is only known once
 // installed.
-func writeSettings(root, state string) (string, error) {
-	hook := func(name string) any {
-		return []any{map[string]any{"hooks": []any{map[string]string{
-			"type":    "command",
-			"command": filepath.Join(root, "harness", "claude-code", "hooks", name),
-		}}}}
+//
+// The gate is this binary run as a hook rather than a fourth script. It reads a transcript
+// and counts against a budget, which is the half of the repository `make check` covers.
+//
+// Stop is installed only for a session answering one instruction. It fires whenever the
+// agent finishes responding, which in an interactive session is every time it hands the
+// keyboard back — refusing there would refuse the conversation itself.
+func writeSettings(root, dir string, oneShot bool) (string, error) {
+	script := func(name string) any {
+		return command(filepath.Join(root, "harness", "claude-code", "hooks", name))
 	}
-	doc := map[string]any{"hooks": map[string]any{
-		"SessionStart": hook("session-start.sh"),
-		"PreCompact":   hook("pre-compact.sh"),
-		"SessionEnd":   hook("session-end.sh"),
-	}}
+	self, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("could not find this binary to install it as a hook: %w", err)
+	}
+	hooks := map[string]any{
+		"SessionStart": script("session-start.sh"),
+		"PreCompact":   script("pre-compact.sh"),
+		"SessionEnd":   script("session-end.sh"),
+		"PreToolUse":   command(shellQuote(self) + " hook gate"),
+	}
+	if oneShot {
+		hooks["Stop"] = command(shellQuote(self) + " hook stop")
+	}
+	doc := map[string]any{"hooks": hooks}
 	body, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(state, "settings.json")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "settings.json")
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		return "", fmt.Errorf("could not write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// command is one hook entry. Every matcher is empty, so each fires for everything its
+// event covers.
+func command(line string) any {
+	return []any{map[string]any{"hooks": []any{map[string]string{
+		"type":    "command",
+		"command": line,
+	}}}}
+}
+
+// shellQuote guards the one path here that a person did not type: the harness runs a hook
+// through a shell, and an installation under a directory with a space in it would
+// otherwise run the first word of it.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// hook runs one of this binary's own session hooks. The harness spawns them, so they get
+// nothing but stdin and the environment, and the session directory carries the rest.
+//
+// Exit 2 is the harness's contract for "refuse this, and give the model what stderr said".
+// Everything else exits 0: a hook that cannot do its job must be able to stop a session
+// overrunning and must not be able to stop it working.
+func hook(name string) (int, error) {
+	v, err := chain.Hook(name, os.Stdin, os.Getenv("LOCALCODE_HANDOFF_DIR"))
+	switch {
+	case errors.Is(err, chain.ErrNoSpec):
+		return 0, nil
+	case err != nil:
+		return 0, err
+	case v.Deny:
+		fmt.Fprintln(os.Stderr, v.Reason)
+		return 2, nil
+	}
+	return 0, nil
+}
+
+// declared reads the window the harness was told it has. Both numbers are needed and
+// neither is guessed: the budget is derived from them, and a guessed budget protects
+// against a wall that is not the one there.
+func declared(env []string) (maxContext, maxOutput int, err error) {
+	read := func(name, value string, into *int) error {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("%s is not a number: %q", name, value)
+		}
+		*into = n
+		return nil
+	}
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		switch name {
+		case "CLAUDE_CODE_MAX_CONTEXT_TOKENS":
+			err = read(name, value, &maxContext)
+		case "CLAUDE_CODE_MAX_OUTPUT_TOKENS":
+			err = read(name, value, &maxOutput)
+		}
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+	if maxContext == 0 || maxOutput == 0 {
+		return 0, 0, errors.New("claude-code.env must set both CLAUDE_CODE_MAX_CONTEXT_TOKENS " +
+			"and CLAUDE_CODE_MAX_OUTPUT_TOKENS: a session's budget is derived from them")
+	}
+	return maxContext, maxOutput, nil
+}
+
+// newChain makes the directory one run of the tool keeps its sessions in, and names it.
+// Sortable and typable, because the name is what `-resume` takes and what `localcode
+// sessions` lists.
+//
+// The directory is what reserves the name: two invocations in the same second would
+// otherwise share a chain, and the second would inherit a handoff written for the first.
+func newChain(state string) (dir, id string, err error) {
+	if err := os.MkdirAll(filepath.Join(state, "chains"), 0o755); err != nil {
+		return "", "", err
+	}
+	base := time.Now().Format("20060102-150405")
+	for n := 1; n <= 100; n++ {
+		id = base
+		if n > 1 {
+			id = fmt.Sprintf("%s-%d", base, n)
+		}
+		dir = filepath.Join(state, "chains", id)
+		switch err := os.Mkdir(dir, 0o755); {
+		case err == nil:
+			return dir, id, nil
+		case !os.IsExist(err):
+			return "", "", err
+		}
+	}
+	return "", "", fmt.Errorf("could not name a new chain under %s", filepath.Join(state, "chains"))
+}
+
+// handoffBriefing is the protocol, and it travels in the system prompt because that is the
+// channel the model trusts. The same words arriving through a tool result were refused as
+// injection — correctly, which is why the gate itself only reports a state.
+func handoffBriefing(l chain.Limits, path string) string {
+	return fmt.Sprintf(
+		"This session is budgeted. It may spend %d tool calls, and its context may reach %d "+
+			"tokens of the %d it has; past either, every call is refused except writing the "+
+			"handoff. A refusal is the budget, not a fault to work around.\n"+
+			"Write the handoff to %s with the Write tool before you stop, in this shape:\n"+
+			"# Handoff\n"+
+			"**Box:** what you were asked to do, in one line\n"+
+			"**Files:** each path that matters, and why it does\n"+
+			"**Tried:** what you did and what came of it — the results themselves, not the "+
+			"commands that produced them\n"+
+			"**Next:** the one thing to do next, or `none` when the instruction is finished\n"+
+			"A fresh session inherits that file and nothing else. Keep it under 40 lines.",
+		l.Calls, l.Ceiling, l.Window, path)
 }
 
 // sandboxExec is macOS's own. A var so a test can substitute a pass-through: the CI that

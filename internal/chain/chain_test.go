@@ -1,0 +1,204 @@
+package chain
+
+import (
+	"strings"
+	"testing"
+)
+
+// The property the whole gate rests on: whatever it permits, the session still has room
+// for the result of that call, for the turn that asked for it, and for the turn that
+// writes the handoff after the denial. A ceiling that does not leave those is a session
+// that hits the wall while being protected from it.
+func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
+	for _, w := range []struct{ maxContext, maxOutput int }{
+		{12288, 1024}, {45056, 4096}, {32768, 4096}, {16384, 2048},
+	} {
+		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
+		if err != nil {
+			t.Fatalf("%d/%d: %v", w.maxContext, w.maxOutput, err)
+		}
+		spent := l.Ceiling + l.Batch*(l.ResultCap/bytesPerToken) + 2*w.maxOutput
+		if spent > l.Window {
+			t.Fatalf("%d/%d: a session permitted at %d needs %d of a %d window",
+				w.maxContext, w.maxOutput, l.Ceiling, spent, l.Window)
+		}
+	}
+}
+
+// A window too small to work in is refused rather than clamped: the session that discovers
+// it instead pays a cold ingest to say `Prompt is too long`, having done nothing.
+func TestNewLimitsRefusesAWindowNothingFitsIn(t *testing.T) {
+	if _, err := NewLimits(8192, 4096, 50, 30); err == nil {
+		t.Fatal("8,192 against a 4,096 reservation leaves less than the preamble and must be refused")
+	}
+	if _, err := NewLimits(45056, 4096, 50, 30); err != nil {
+		t.Fatalf("the shipped window must be workable: %v", err)
+	}
+}
+
+// The requested fraction is what binds while it is the smaller of the two, and the derived
+// headroom is what binds when it is not. Both have to, or the flag either does nothing or
+// can be set to something unsafe.
+func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
+	half, err := NewLimits(45056, 4096, 50, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 40960 / 2; half.Ceiling != want {
+		t.Fatalf("50%% of a 40,960 window is %d, got %d", want, half.Ceiling)
+	}
+	all, err := NewLimits(45056, 4096, 100, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Ceiling >= all.Window {
+		t.Fatalf("100%% must still be held under the window by the reserve, got %d of %d",
+			all.Ceiling, all.Window)
+	}
+}
+
+func limits(t *testing.T) Limits {
+	t.Helper()
+	l, err := NewLimits(12288, 1024, 50, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func work() Payload {
+	return Payload{ToolName: "Bash", ToolInput: map[string]any{"command": "go test ./..."}}
+}
+
+func handoffCall() Payload {
+	return Payload{ToolName: "Write", ToolInput: map[string]any{"file_path": "/tmp/state/HANDOFF.md"}}
+}
+
+// The way out is never part of the work, so a spent budget must not close it. This is the
+// difference between a session that hands over and one that dies holding what it learned.
+func TestGatePermitsTheHandoffAfterTheBudgetIsSpent(t *testing.T) {
+	l := limits(t)
+	spent := State{Calls: l.Calls, Peak: l.Ceiling + 1}
+	if v := Gate(work(), l, spent); !v.Deny {
+		t.Fatal("work must be denied once the budget is spent")
+	}
+	if v := Gate(handoffCall(), l, spent); v.Deny {
+		t.Fatalf("the handoff must stay permitted: %s", v.Reason)
+	}
+}
+
+func TestGateDeniesOnTheCeilingAndOnTheCallBudget(t *testing.T) {
+	l := limits(t)
+	byContext := Gate(work(), l, State{Calls: 0, Peak: l.Ceiling})
+	if !byContext.Deny || !strings.Contains(byContext.Reason, "ceiling") {
+		t.Fatalf("the context ceiling must deny and say so: %+v", byContext)
+	}
+	byCalls := Gate(work(), l, State{Calls: l.Calls, Peak: 10})
+	if !byCalls.Deny || !strings.Contains(byCalls.Reason, "tool calls") {
+		t.Fatalf("the call budget must deny and say so: %+v", byCalls)
+	}
+}
+
+// A transcript that cannot be read yields -1, which must not read as "plenty of room". The
+// call budget is what bounds a session whose context the gate cannot see.
+func TestGateStillBoundsASessionItCannotMeasure(t *testing.T) {
+	l := limits(t)
+	if v := Gate(work(), l, State{Calls: 0, Peak: -1}); v.Deny {
+		t.Fatalf("an unmeasurable first call must be permitted: %s", v.Reason)
+	}
+	if v := Gate(work(), l, State{Calls: l.Calls, Peak: -1}); !v.Deny {
+		t.Fatal("an unmeasurable session must still be stopped by its call budget")
+	}
+}
+
+// The harness issues a turn's calls together and the transcript does not change while they
+// run, so one reading decides all of them. Measured without this bound: a five-call turn
+// carried the context 1,960 tokens past a ceiling it had been under when the gate looked.
+func TestGateBoundsOneTurnsCallsSoOneReadingCannotDecideAnyNumber(t *testing.T) {
+	l := limits(t)
+	if v := Gate(work(), l, State{Batch: l.Batch - 1, Peak: 10}); v.Deny {
+		t.Fatalf("a turn under its bound must be permitted: %s", v.Reason)
+	}
+	v := Gate(work(), l, State{Batch: l.Batch, Peak: 10})
+	if !v.Deny {
+		t.Fatal("a turn past its bound must be refused")
+	}
+	// A throttle, not an end: saying otherwise would tell the session to hand off when it
+	// has most of its window left.
+	if strings.Contains(v.Reason, "other than writing the handoff") {
+		t.Fatalf("a turn's bound is not the session's: %q", v.Reason)
+	}
+}
+
+// Permitting the handoff without bounding it turns a session that cannot write one into a
+// session that never ends.
+func TestGateBoundsTheHandoffItself(t *testing.T) {
+	l := limits(t)
+	if v := Gate(handoffCall(), l, State{Handoffs: handoffGrace}); !v.Deny {
+		t.Fatal("a session rewriting its handoff forever must be stopped")
+	}
+}
+
+// The denial is the model's only account of why its tools stopped working, and it reaches
+// it verbatim. It states the state; the protocol is in the system prompt, because an
+// instruction arriving through a tool result is refused as injection and should be.
+func TestDenialStatesTheStateAndGivesNoInstruction(t *testing.T) {
+	l := limits(t)
+	reason := Gate(work(), l, State{Calls: l.Calls, Peak: 0}).Reason
+	for _, told := range []string{"Write ", "you must", "now —", "then stop"} {
+		if strings.Contains(reason, told) {
+			t.Fatalf("the denial instructs rather than reports: %q", reason)
+		}
+	}
+	if !strings.Contains(reason, "localcode:") {
+		t.Fatalf("the denial must say who refused: %q", reason)
+	}
+}
+
+const good = "# Handoff\n\n**Box:** the third one\n**Files:** `median.go`\n" +
+	"**Tried:** fixed the even-length case, TestMedianEven passes\n**Next:** fix Clamp\n"
+
+func TestStopRefusesWithoutAHandoffAndRelentsRatherThanWedging(t *testing.T) {
+	if v := Stop(nil, "/s/HANDOFF.md", 0); !v.Deny {
+		t.Fatal("a session that wrote no handoff must not be allowed to end")
+	}
+	if v := Stop([]byte("# Handoff\n"), "/s/HANDOFF.md", 0); !v.Deny {
+		t.Fatal("a heading is not a handoff")
+	}
+	if v := Stop([]byte(good), "/s/HANDOFF.md", 0); v.Deny {
+		t.Fatalf("a usable handoff must let the session end: %s", v.Reason)
+	}
+	// The bound is what makes this safe to run unattended: the extractor is the floor.
+	if v := Stop(nil, "/s/HANDOFF.md", stopTries); v.Deny {
+		t.Fatal("after its refusals the hook must relent rather than wedge the run")
+	}
+}
+
+// Seven of eight handoffs in the measured chain carried `Prompt is too long` as their next
+// step. What is read back out of one is therefore the line, not the file.
+func TestNextAndDoneReadTheChainsOnlySignals(t *testing.T) {
+	if got := Next([]byte(good)); got != "fix Clamp" {
+		t.Fatalf("Next: got %q", got)
+	}
+	if Done([]byte(good)) {
+		t.Fatal("a chain with work left is not done")
+	}
+	if !Done([]byte(strings.Replace(good, "fix Clamp", "none", 1))) {
+		t.Fatal("`none` is the completion signal the system prompt names")
+	}
+	if Next(nil) != "" {
+		t.Fatal("a handoff with no Next line has none")
+	}
+}
+
+func TestIsHandoffIgnoresWhereTheFileIs(t *testing.T) {
+	if !IsHandoff("Write", map[string]any{"file_path": "/anywhere/HANDOFF.md"}) {
+		t.Fatal("the handoff is the handoff wherever the session was told to put it")
+	}
+	if IsHandoff("Write", map[string]any{"file_path": "/repo/median.go"}) {
+		t.Fatal("work is not the handoff")
+	}
+	if IsHandoff("Bash", map[string]any{"command": "echo > HANDOFF.md"}) {
+		t.Fatal("only the file tools write the handoff; a shell can write anything")
+	}
+}

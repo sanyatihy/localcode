@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,18 +10,28 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/sanyatihy/localcode/internal/chain"
 )
 
 // fakeCheckout builds the one file the launcher reads out of a checkout, so a test never
 // depends on the real one being where the test runner happens to stand.
 func fakeCheckout(t *testing.T) string {
 	t.Helper()
+	// A home of its own: a session's state directory hangs off it, and a test that wrote
+	// into the developer's would leave chains behind that `localcode sessions` lists.
+	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	dir := filepath.Join(root, "harness", "claude-code")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	env := `ANTHROPIC_BASE_URL="http://127.0.0.1:8081"` + "\n" + `ANTHROPIC_AUTH_TOKEN="local"` + "\n"
+	// The two window variables are here because the launcher refuses without them: a
+	// session's budget is derived from the window the harness was declared.
+	env := `ANTHROPIC_BASE_URL="http://127.0.0.1:8081"` + "\n" +
+		`ANTHROPIC_AUTH_TOKEN="local"` + "\n" +
+		`CLAUDE_CODE_MAX_CONTEXT_TOKENS="45056"` + "\n" +
+		`CLAUDE_CODE_MAX_OUTPUT_TOKENS="4096"` + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "claude-code.env"), []byte(env), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +90,7 @@ func TestRunWritesNothingToTheRepository(t *testing.T) {
 	}
 	t.Chdir(repo)
 
-	if code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 
@@ -104,7 +115,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 	got, err := os.ReadFile(argv)
@@ -126,7 +137,7 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if _, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
+	if _, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(argv)
@@ -144,7 +155,7 @@ func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 
 	// 503 is what llama-server answers while it loads: something is listening, and it
 	// cannot serve yet.
-	code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
+	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a loading server must refuse, got code %d err %v", code, err)
 	}
@@ -156,7 +167,7 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	code, err := run(opts{checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
+	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
 	if err != nil || code != 3 {
 		t.Fatalf("want exit 3 passed through, got %d err %v", code, err)
 	}
@@ -174,7 +185,7 @@ func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing is listening now
 
-	code, err := run(opts{checkout: root, endpoint: url, noServe: true})
+	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: url, noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("want a refusal, got code %d err %v", code, err)
 	}
@@ -440,4 +451,182 @@ func TestNetOpensOutboundForTheSession(t *testing.T) {
 	if !strings.Contains(string(body), "(deny file-write*)") {
 		t.Fatalf("-net must not widen writes:\n%s", body)
 	}
+}
+
+// The gate is this binary, not a fourth shell script, so what enforces the budget is
+// covered by the same `make check` as everything else that decides something.
+func TestSettingsInstallTheGateAsThisBinary(t *testing.T) {
+	root, dir := fakeCheckout(t), t.TempDir()
+	path, err := writeSettings(root, dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			Hooks []struct{ Command string } `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	pre, ok := doc.Hooks["PreToolUse"]
+	if !ok || len(pre) == 0 || len(pre[0].Hooks) == 0 {
+		t.Fatalf("no PreToolUse hook is installed:\n%s", body)
+	}
+	if !strings.HasSuffix(pre[0].Hooks[0].Command, " hook gate") {
+		t.Fatalf("the gate must be this binary run as a hook: %q", pre[0].Hooks[0].Command)
+	}
+}
+
+// Stop fires whenever the agent finishes responding, which in an interactive session is
+// every time it hands the keyboard back. Installed there it would refuse the conversation.
+func TestStopIsInstalledOnlyForASessionAnsweringOneInstruction(t *testing.T) {
+	root := fakeCheckout(t)
+	installed := func(oneShot bool) bool {
+		path, err := writeSettings(root, t.TempDir(), oneShot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Hooks map[string]any `json:"hooks"`
+		}
+		if err := json.Unmarshal(body, &doc); err != nil {
+			t.Fatal(err)
+		}
+		_, ok := doc.Hooks["Stop"]
+		return ok
+	}
+	if !installed(true) {
+		t.Fatal("a session answering one instruction must not be able to end without a handoff")
+	}
+	if installed(false) {
+		t.Fatal("an interactive session would be refused at the end of every turn")
+	}
+}
+
+// An installation under a path with a space in it would otherwise run its first word.
+func TestShellQuoteSurvivesAPathAShellWouldSplit(t *testing.T) {
+	if got := shellQuote("/Users/a b/bin/localcode"); got != "'/Users/a b/bin/localcode'" {
+		t.Fatalf("got %s", got)
+	}
+	if got := shellQuote("/it's/here"); got != `'/it'\''s/here'` {
+		t.Fatalf("a quote in the path must not end the quoting: %s", got)
+	}
+}
+
+// The session is budgeted before it starts, and it is told where to write in the same
+// breath: the directory it may write to and the directory the spec names are one, or the
+// only call the gate permits is the one the harness refuses.
+func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
+	root := fakeCheckout(t)
+	argv := stubClaude(t, "exit 0")
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+
+	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root,
+		endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+		t.Fatalf("run: code %d err %v", code, err)
+	}
+	got, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := flagValue(argsOf(got), "--add-dir")
+	if dir == "" {
+		t.Fatalf("the session was given no directory to write its handoff in:\n%s", got)
+	}
+	spec, err := chain.ReadSpec(dir)
+	if err != nil {
+		t.Fatalf("the session was not budgeted: %v", err)
+	}
+	if spec.Handoff != filepath.Join(dir, chain.HandoffName) {
+		t.Fatalf("the handoff must be in the directory the session may write: %s", spec.Handoff)
+	}
+	// 50% of a window of 45,056 − 4,096.
+	if spec.Limits.Ceiling != 20480 || spec.Limits.Calls != 30 {
+		t.Fatalf("the flags must reach the session: %+v", spec.Limits)
+	}
+}
+
+// A window nothing fits in is refused before a cold ingest is spent discovering it.
+func TestRunRefusesAWindowNothingFitsIn(t *testing.T) {
+	root := fakeCheckout(t)
+	stubClaude(t, "exit 0")
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+	env := `ANTHROPIC_BASE_URL="http://127.0.0.1:8081"` + "\n" +
+		`CLAUDE_CODE_MAX_CONTEXT_TOKENS="8192"` + "\n" +
+		`CLAUDE_CODE_MAX_OUTPUT_TOKENS="4096"` + "\n"
+	if err := os.WriteFile(filepath.Join(root, "harness", "claude-code", "claude-code.env"),
+		[]byte(env), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, err := run(opts{ceiling: 50, calls: 30, checkout: root,
+		endpoint: healthy(t, http.StatusOK), noServe: true})
+	if code != 2 || err == nil {
+		t.Fatalf("a window under the preamble must be refused: code %d err %v", code, err)
+	}
+}
+
+// The gate end to end: the harness's payload in, the harness's exit code out.
+func TestHookRefusesWithExitTwoAndPermitsWithZero(t *testing.T) {
+	dir := t.TempDir()
+	limits, err := chain.NewLimits(45056, 4096, 50, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := chain.WriteSpec(dir, chain.Spec{Limits: limits,
+		Handoff: filepath.Join(dir, chain.HandoffName)}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LOCALCODE_HANDOFF_DIR", dir)
+
+	call := `{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"go test ./..."}}`
+	for i := 1; i <= limits.Calls; i++ {
+		if code, err := hookWith(call); err != nil || code != 0 {
+			t.Fatalf("call %d must be permitted: code %d err %v", i, code, err)
+		}
+	}
+	if code, err := hookWith(call); err != nil || code != 2 {
+		t.Fatalf("the call past the budget must be refused with 2: code %d err %v", code, err)
+	}
+	// And the way out stays open, or the session dies holding what it learned.
+	out := `{"session_id":"s1","tool_name":"Write","tool_input":{"file_path":"` + dir + `/HANDOFF.md"}}`
+	if code, err := hookWith(out); err != nil || code != 0 {
+		t.Fatalf("the handoff must still be permitted: code %d err %v", code, err)
+	}
+}
+
+// An unbudgeted session is left alone rather than refused: standing aside leaves it
+// behaving as it did before this feature, and refusing would make it useless in silence.
+func TestHookStandsAsideWhenNothingBudgetedTheSession(t *testing.T) {
+	t.Setenv("LOCALCODE_HANDOFF_DIR", t.TempDir())
+	code, err := hookWith(`{"session_id":"s1","tool_name":"Bash","tool_input":{}}`)
+	if err != nil || code != 0 {
+		t.Fatalf("code %d err %v", code, err)
+	}
+}
+
+// hookWith runs the hook against a payload, with stdin standing in for the harness.
+func hookWith(payload string) (int, error) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := w.WriteString(payload); err != nil {
+		return 0, err
+	}
+	_ = w.Close()
+	old := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = old; _ = r.Close() }()
+	return hook("gate")
 }
