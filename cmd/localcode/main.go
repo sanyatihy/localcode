@@ -56,18 +56,18 @@ usage:
   localcode --help
 
 flags:
-  -checkout dir   the localcode checkout to read configuration from
-  -endpoint url   the server to use
-  -config file    the serving config to start (default config/agent.env)
-  -no-serve       refuse if no server is running, rather than starting one
-  -net            allow outbound network for this session (default: loopback only)
-  -ceiling pct    lower the ceiling below what the reserve already allows, in percent
-  -calls n        how many tool calls a session may spend
-  -sessions n     how many sessions one instruction may take
-  -session-timeout d  how long one session may run before it is stopped
-  -continue       carry on this repository's most recent chain
-  -resume id      carry on the chain with this id
-  -fork id        start a chain from what that chain knew
+  -checkout dir      the localcode checkout to read configuration from
+  -endpoint url      the server to use
+  -config file       the serving config to start (default config/agent.env)
+  -no-serve          refuse if no server is running, rather than starting one
+  -net               allow outbound network for this session (loopback only by default)
+  -ceiling pct       lower the ceiling below what the reserve already allows
+  -calls n           how many tool calls a session may spend
+  -sessions n        how many sessions one instruction may take
+  -session-timeout d how long one session may run before it is stopped
+  -continue          carry on this repository's most recent chain
+  -resume id         carry on the chain with this id
+  -fork id           start a chain from what that chain knew
 `
 
 func main() {
@@ -598,8 +598,10 @@ func handoffBriefing(l chain.Limits, path string) string {
 			"A fresh session inherits that file and nothing else. Keep it under 40 lines.\n"+
 			"A handoff you were given is what the session before you established, not a "+
 			"suggestion to check: start from its **Next** rather than re-deriving what it "+
-			"already recorded. Re-reading what it read is how a chain spends every session "+
-			"learning the same thing.",
+			"already recorded.\n"+
+			"Your room is small, so finish a few things rather than surveying many. `Edit` "+
+			"refuses a file this session has not read, so a read you do not follow with a "+
+			"change is room spent for nothing: read a file, change it, move to the next.",
 		l.Calls, l.Batch, l.Ceiling, l.Window, path)
 }
 
