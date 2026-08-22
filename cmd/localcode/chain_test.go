@@ -16,7 +16,7 @@ import (
 // given, a different one per invocation. What a supervisor does with a handoff is
 // arithmetic; only producing one needs a model, so this is where the model stops being
 // needed and the decisions start being testable.
-func chainStub(t *testing.T, handoffs ...string) {
+func chainStub(t *testing.T, handoffs ...string) string {
 	t.Helper()
 	dir := t.TempDir()
 	count := filepath.Join(dir, "invocations")
@@ -26,6 +26,8 @@ func chainStub(t *testing.T, handoffs ...string) {
 	}
 	body := "#!/bin/sh\n" +
 		"n=$(cat '" + count + "' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '" + count + "'\n" +
+		"printf '%s\\n' \"$LOCALCODE_INHERIT\" > '" + dir + "'/inherit-$n\n" +
+		"printf '%s\\n' \"$*\" > '" + dir + "'/argv-$n\n" +
 		"out=/dev/null\n" +
 		"while [ $# -gt 0 ]; do\n" +
 		"  if [ \"$1\" = \"--add-dir\" ]; then out=\"$2/HANDOFF.md\"; fi\n" +
@@ -36,6 +38,7 @@ func chainStub(t *testing.T, handoffs ...string) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return dir
 }
 
 func handoffSaying(next string) string {
@@ -306,5 +309,49 @@ func TestASilentSessionDoesNotCostTheChainWhatItKnew(t *testing.T) {
 	dir := chainDirOf(t, state)
 	if got := chain.LatestHandoff(dir); got != filepath.Join(dir, "03", chain.HandoffName) {
 		t.Fatalf("latest handoff: got %s", got)
+	}
+}
+
+// The developer's own loop: a session with no instruction runs out, hands over, and
+// `-continue` picks it up. There is no chain to run it, so the handoff has to reach the
+// next session through the SessionStart hook — and that session has to stay interactive,
+// because `-p` would answer once and exit.
+func TestContinueCarriesAnInteractiveSessionOnWithoutAPrompt(t *testing.T) {
+	root := fakeCheckout(t)
+	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("fix Title"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	url := healthy(t, http.StatusOK)
+
+	// No args at all: this is somebody at a keyboard.
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 8, checkout: root,
+		endpoint: url, noServe: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 8, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := chainDirOf(t, state)
+	if got := chain.NextSession(dir); got != 3 {
+		t.Fatalf("-continue must add to the same chain, next is %d", got)
+	}
+	// The second session inherits the first session's handoff, not its own empty file.
+	inherit := strings.TrimSpace(string(chain.Read(filepath.Join(stub, "inherit-2"))))
+	if want := filepath.Join(dir, "01", chain.HandoffName); inherit != want {
+		t.Fatalf("the second session inherited %q, want %q", inherit, want)
+	}
+	if chain.Next(chain.Read(inherit)) != "fix Clamp" {
+		t.Fatalf("what it inherited is not the handoff the first session wrote")
+	}
+	// And it is still a conversation, not a one-shot answer.
+	if argv := string(chain.Read(filepath.Join(stub, "argv-2"))); strings.Contains(argv, " -p ") {
+		t.Fatalf("an interactive continuation must not be -p: %s", argv)
 	}
 }
