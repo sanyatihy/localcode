@@ -11,7 +11,7 @@ import (
 // that hits the wall while being protected from it.
 func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	for _, w := range []struct{ maxContext, maxOutput int }{
-		{12288, 1024}, {45056, 4096}, {32768, 4096}, {16384, 2048},
+		{45056, 4096}, {32768, 4096}, {24576, 2048}, {16384, 1024},
 	} {
 		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
 		if err != nil {
@@ -61,7 +61,7 @@ const handoffPath = "/state/01/HANDOFF.md"
 
 func limits(t *testing.T) Spec {
 	t.Helper()
-	l, err := NewLimits(12288, 1024, 100, 3)
+	l, err := NewLimits(24576, 1024, 100, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
