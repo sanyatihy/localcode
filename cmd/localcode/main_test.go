@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sanyatihy/localcode/internal/chain"
 )
@@ -90,7 +91,7 @@ func TestRunWritesNothingToTheRepository(t *testing.T) {
 	}
 	t.Chdir(repo)
 
-	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 
@@ -115,7 +116,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 	got, err := os.ReadFile(argv)
@@ -137,7 +138,7 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if _, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
+	if _, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(argv)
@@ -155,7 +156,7 @@ func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 
 	// 503 is what llama-server answers while it loads: something is listening, and it
 	// cannot serve yet.
-	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a loading server must refuse, got code %d err %v", code, err)
 	}
@@ -167,7 +168,7 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
 	if err != nil || code != 3 {
 		t.Fatalf("want exit 3 passed through, got %d err %v", code, err)
 	}
@@ -185,7 +186,7 @@ func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing is listening now
 
-	code, err := run(opts{ceiling: 50, calls: 30, checkout: root, endpoint: url, noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: url, noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("want a refusal, got code %d err %v", code, err)
 	}
@@ -531,7 +532,7 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{ceiling: 50, calls: 30, checkout: root,
+	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d err %v", code, err)
 	}
@@ -550,8 +551,9 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	if spec.Handoff != filepath.Join(dir, chain.HandoffName) {
 		t.Fatalf("the handoff must be in the directory the session may write: %s", spec.Handoff)
 	}
-	// 50% of a window of 45,056 − 4,096.
-	if spec.Limits.Ceiling != 20480 || spec.Limits.Calls != 30 {
+	// The headroom of a 40,960 window: less a quarter for a turn's results, less twice the
+	// 4,096 output reservation.
+	if spec.Limits.Ceiling != 22528 || spec.Limits.Calls != 30 {
 		t.Fatalf("the flags must reach the session: %+v", spec.Limits)
 	}
 }
@@ -569,7 +571,7 @@ func TestRunRefusesAWindowNothingFitsIn(t *testing.T) {
 		[]byte(env), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, err := run(opts{ceiling: 50, calls: 30, checkout: root,
+	code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a window under the preamble must be refused: code %d err %v", code, err)
@@ -629,4 +631,20 @@ func hookWith(payload string) (int, error) {
 	os.Stdin = r
 	defer func() { os.Stdin = old; _ = r.Close() }()
 	return hook("gate")
+}
+
+// The clock bounds a session nobody is watching. On one somebody is, it would end the work
+// mid-thought: an interactive session is cancelled with Ctrl-C, not by a timer.
+func TestTheClockDoesNotRunOnAnInteractiveSession(t *testing.T) {
+	root := fakeCheckout(t)
+	// Longer than the timeout, and it must still be allowed to finish.
+	stubClaude(t, "sleep 1")
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, timeout: 50 * time.Millisecond,
+		checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
+	if err != nil || code != 0 {
+		t.Fatalf("an interactive session must not be stopped by the clock: code %d err %v", code, err)
+	}
 }

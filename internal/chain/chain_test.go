@@ -40,12 +40,12 @@ func TestNewLimitsRefusesAWindowNothingFitsIn(t *testing.T) {
 // headroom is what binds when it is not. Both have to, or the flag either does nothing or
 // can be set to something unsafe.
 func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
-	half, err := NewLimits(45056, 4096, 50, 30)
+	half, err := NewLimits(45056, 4096, 40, 30)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := 40960 / 2; half.Ceiling != want {
-		t.Fatalf("50%% of a 40,960 window is %d, got %d", want, half.Ceiling)
+	if want := 40960 * 40 / 100; half.Ceiling != want {
+		t.Fatalf("40%% of a 40,960 window is %d, got %d", want, half.Ceiling)
 	}
 	all, err := NewLimits(45056, 4096, 100, 30)
 	if err != nil {
@@ -61,7 +61,7 @@ const handoffPath = "/state/01/HANDOFF.md"
 
 func limits(t *testing.T) Spec {
 	t.Helper()
-	l, err := NewLimits(12288, 1024, 50, 3)
+	l, err := NewLimits(12288, 1024, 100, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -99,6 +99,11 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// handoff.
 	headroom := window - reserve - 2*maxOutput
 
+	// As high as the arithmetic allows, and no higher. A fraction below the headroom buys
+	// no safety the reserve does not already buy, and it costs handoffs: one is about 4,265
+	// tokens, so a smaller session is a worse session unless something makes it safer.
+	// Measured at half the window, a session could not both read a file and edit it — which
+	// `Edit` requires of it — so the chain wrote handoffs and never changed a line.
 	ceiling := window * ceilingPct / 100
 	if ceiling > headroom {
 		ceiling = headroom

@@ -157,13 +157,23 @@ conversation before generating, and it was measured losing the goal it was summa
   session could spend being refused: a session that answers a spent budget by trying
   another tool would run until its thirty calls were gone. `-session-timeout` is the bound,
   and a session that reaches it ends the chain rather than handing on a guess.
-- **A chain can spend every session learning the same thing.** The second session of a
-  chain re-read all eight files its predecessor had diagnosed, and was denied the moment it
-  tried to edit — twelve calls, none of them work. The handoff said what each bug was;
-  nothing told the session that a handoff is established rather than a claim to check. The
-  appended system prompt now says so, which is the trusted channel; the alternative, a
-  mechanism that forbids re-reading, would forbid the one thing a session sometimes has to
-  do.
+- **The ceiling is the headroom, and the fraction was an arbitrary number that made the
+  feature useless.** At half the window a session's room was one turn wide: it spent it on
+  the reads `Edit` requires and was refused before it could change anything, twice over,
+  so the chain wrote handoffs and never touched a line. The reserve is what makes a ceiling
+  safe, so a fraction below it buys nothing and costs a handoff — about 4,265 tokens. The
+  default is now as high as the arithmetic allows and `-ceiling` only lowers it.
+- **A handoff cannot carry the right to edit, only the diagnosis.** `Edit` fails on a file
+  the session has not `Read` — the harness says so in as many words — so every session pays
+  the read for every file it changes, however well the handoff describes it. That sets the
+  floor on what a session can do: at this wall a read and an edit cost about 350 tokens a
+  file, so a session's working room buys two or three of them and the chain needs a session
+  per two or three files.
+- **Over-reading is the part that was fixable, and it was prose.** One session read all
+  eight files when its room bought four edits, and was denied the moment it tried the
+  fifth: twelve calls, none of them work. Nothing had told it that a handoff is established
+  rather than a claim to check. The appended system prompt now says so, which is the
+  trusted channel; a mechanism that forbade re-reading would forbid what `Edit` requires.
 - **A count of refused compactions measures turns, not pressure.** `PreCompact` fired once
   before every turn of an enforced session — at 4,325 tokens of an 11,264 window as readily
   as at 6,183 — so it is consulted per turn rather than at a threshold, and the twenty
