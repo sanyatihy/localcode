@@ -114,7 +114,7 @@ conversation before generating, and it was measured losing the goal it was summa
 - [x] a tool result cannot spend more of the window than the gate reserves for one
 - [x] the handoff is written outside the repository being visited, and `session-end.sh`
       writes one for every session in a chain
-- [ ] a chain of sessions finishes a task no single session could, with each handoff
+- [x] a chain of sessions finishes a task no single session could, with each handoff
       carrying results rather than commands
 - [x] two consecutive handoffs with the same `Next` stop the chain and name the file
 - [x] a repository carries several chains; `localcode` starts a new one, `-continue`,
