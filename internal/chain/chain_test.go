@@ -57,13 +57,15 @@ func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
 	}
 }
 
-func limits(t *testing.T) Limits {
+const handoffPath = "/state/01/HANDOFF.md"
+
+func limits(t *testing.T) Spec {
 	t.Helper()
 	l, err := NewLimits(12288, 1024, 50, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return l
+	return Spec{Limits: l, Handoff: handoffPath}
 }
 
 func work() Payload {
@@ -71,29 +73,31 @@ func work() Payload {
 }
 
 func handoffCall() Payload {
-	return Payload{ToolName: "Write", ToolInput: map[string]any{"file_path": "/tmp/state/HANDOFF.md"}}
+	return Payload{ToolName: "Write", ToolInput: map[string]any{"file_path": handoffPath}}
 }
 
 // The way out is never part of the work, so a spent budget must not close it. This is the
 // difference between a session that hands over and one that dies holding what it learned.
 func TestGatePermitsTheHandoffAfterTheBudgetIsSpent(t *testing.T) {
-	l := limits(t)
+	spec := limits(t)
+	l := spec.Limits
 	spent := State{Calls: l.Calls, Peak: l.Ceiling + 1}
-	if v := Gate(work(), l, spent); !v.Deny {
+	if v := Gate(work(), spec, spent); !v.Deny {
 		t.Fatal("work must be denied once the budget is spent")
 	}
-	if v := Gate(handoffCall(), l, spent); v.Deny {
+	if v := Gate(handoffCall(), spec, spent); v.Deny {
 		t.Fatalf("the handoff must stay permitted: %s", v.Reason)
 	}
 }
 
 func TestGateDeniesOnTheCeilingAndOnTheCallBudget(t *testing.T) {
-	l := limits(t)
-	byContext := Gate(work(), l, State{Calls: 0, Peak: l.Ceiling})
+	spec := limits(t)
+	l := spec.Limits
+	byContext := Gate(work(), spec, State{Calls: 0, Peak: l.Ceiling})
 	if !byContext.Deny || !strings.Contains(byContext.Reason, "ceiling") {
 		t.Fatalf("the context ceiling must deny and say so: %+v", byContext)
 	}
-	byCalls := Gate(work(), l, State{Calls: l.Calls, Peak: 10})
+	byCalls := Gate(work(), spec, State{Calls: l.Calls, Peak: 10})
 	if !byCalls.Deny || !strings.Contains(byCalls.Reason, "tool calls") {
 		t.Fatalf("the call budget must deny and say so: %+v", byCalls)
 	}
@@ -102,11 +106,12 @@ func TestGateDeniesOnTheCeilingAndOnTheCallBudget(t *testing.T) {
 // A transcript that cannot be read yields -1, which must not read as "plenty of room". The
 // call budget is what bounds a session whose context the gate cannot see.
 func TestGateStillBoundsASessionItCannotMeasure(t *testing.T) {
-	l := limits(t)
-	if v := Gate(work(), l, State{Calls: 0, Peak: -1}); v.Deny {
+	spec := limits(t)
+	l := spec.Limits
+	if v := Gate(work(), spec, State{Calls: 0, Peak: -1}); v.Deny {
 		t.Fatalf("an unmeasurable first call must be permitted: %s", v.Reason)
 	}
-	if v := Gate(work(), l, State{Calls: l.Calls, Peak: -1}); !v.Deny {
+	if v := Gate(work(), spec, State{Calls: l.Calls, Peak: -1}); !v.Deny {
 		t.Fatal("an unmeasurable session must still be stopped by its call budget")
 	}
 }
@@ -115,11 +120,12 @@ func TestGateStillBoundsASessionItCannotMeasure(t *testing.T) {
 // run, so one reading decides all of them. Measured without this bound: a five-call turn
 // carried the context 1,960 tokens past a ceiling it had been under when the gate looked.
 func TestGateBoundsOneTurnsCallsSoOneReadingCannotDecideAnyNumber(t *testing.T) {
-	l := limits(t)
-	if v := Gate(work(), l, State{Batch: l.Batch - 1, Peak: 10}); v.Deny {
+	spec := limits(t)
+	l := spec.Limits
+	if v := Gate(work(), spec, State{Batch: l.Batch - 1, Peak: 10}); v.Deny {
 		t.Fatalf("a turn under its bound must be permitted: %s", v.Reason)
 	}
-	v := Gate(work(), l, State{Batch: l.Batch, Peak: 10})
+	v := Gate(work(), spec, State{Batch: l.Batch, Peak: 10})
 	if !v.Deny {
 		t.Fatal("a turn past its bound must be refused")
 	}
@@ -133,8 +139,8 @@ func TestGateBoundsOneTurnsCallsSoOneReadingCannotDecideAnyNumber(t *testing.T) 
 // Permitting the handoff without bounding it turns a session that cannot write one into a
 // session that never ends.
 func TestGateBoundsTheHandoffItself(t *testing.T) {
-	l := limits(t)
-	if v := Gate(handoffCall(), l, State{Handoffs: handoffGrace}); !v.Deny {
+	spec := limits(t)
+	if v := Gate(handoffCall(), spec, State{Handoffs: handoffGrace}); !v.Deny {
 		t.Fatal("a session rewriting its handoff forever must be stopped")
 	}
 }
@@ -143,8 +149,9 @@ func TestGateBoundsTheHandoffItself(t *testing.T) {
 // it verbatim. It states the state; the protocol is in the system prompt, because an
 // instruction arriving through a tool result is refused as injection and should be.
 func TestDenialStatesTheStateAndGivesNoInstruction(t *testing.T) {
-	l := limits(t)
-	reason := Gate(work(), l, State{Calls: l.Calls, Peak: 0}).Reason
+	spec := limits(t)
+	l := spec.Limits
+	reason := Gate(work(), spec, State{Calls: l.Calls, Peak: 0}).Reason
 	for _, told := range []string{"Write ", "you must", "now —", "then stop"} {
 		if strings.Contains(reason, told) {
 			t.Fatalf("the denial instructs rather than reports: %q", reason)
@@ -191,14 +198,18 @@ func TestNextAndDoneReadTheChainsOnlySignals(t *testing.T) {
 	}
 }
 
-func TestIsHandoffIgnoresWhereTheFileIs(t *testing.T) {
-	if !IsHandoff("Write", map[string]any{"file_path": "/anywhere/HANDOFF.md"}) {
-		t.Fatal("the handoff is the handoff wherever the session was told to put it")
+// A spent budget opens exactly one door, and it is the door the supervisor reads from.
+func TestOnlyTheOneHandoffTheSessionWasGivenCounts(t *testing.T) {
+	if !IsHandoff("Write", map[string]any{"file_path": "/state/01/./HANDOFF.md"}, handoffPath) {
+		t.Fatal("the path the session was given is the handoff")
 	}
-	if IsHandoff("Write", map[string]any{"file_path": "/repo/median.go"}) {
+	if IsHandoff("Write", map[string]any{"file_path": "/repo/HANDOFF.md"}, handoffPath) {
+		t.Fatal("a file named like the handoff is not the handoff")
+	}
+	if IsHandoff("Write", map[string]any{"file_path": "/repo/median.go"}, handoffPath) {
 		t.Fatal("work is not the handoff")
 	}
-	if IsHandoff("Bash", map[string]any{"command": "echo > HANDOFF.md"}) {
+	if IsHandoff("Bash", map[string]any{"command": "echo > HANDOFF.md"}, handoffPath) {
 		t.Fatal("only the file tools write the handoff; a shell can write anything")
 	}
 }
