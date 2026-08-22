@@ -133,7 +133,7 @@ conversation before generating, and it was measured losing the goal it was summa
       `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
 - [x] the README says what the developer sees when a session hands over
 - [x] a running session shows what it is doing, not only what it concluded
-- [ ] a `Read` cannot spend more of the window than the gate reserves for one call
+- [x] a `Read` cannot spend more of the window than the gate reserves for one call
 
 ## Open questions
 

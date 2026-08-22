@@ -522,6 +522,18 @@ func hook(name string) (int, error) {
 	case v.Deny:
 		fmt.Fprintln(os.Stderr, v.Reason)
 		return 2, nil
+	case v.Input != nil:
+		// The harness reads a permitted call back off stdout, and runs the tool with what
+		// it finds there.
+		body, err := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
+			"hookEventName":      "PreToolUse",
+			"permissionDecision": "allow",
+			"updatedInput":       v.Input,
+		}})
+		if err != nil {
+			return 0, err
+		}
+		fmt.Println(string(body))
 	}
 	return 0, nil
 }

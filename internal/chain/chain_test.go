@@ -1,6 +1,9 @@
 package chain
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -210,5 +213,79 @@ func TestOnlyTheOneHandoffTheSessionWasGivenCounts(t *testing.T) {
 	}
 	if IsHandoff("Bash", map[string]any{"command": "echo > HANDOFF.md"}, handoffPath) {
 		t.Fatal("only the file tools write the handoff; a shell can write anything")
+	}
+}
+
+func lineFile(t *testing.T, lines int) string {
+	t.Helper()
+	var b strings.Builder
+	for i := 1; i <= lines; i++ {
+		fmt.Fprintf(&b, "line %d: the quick brown fox jumps over the lazy dog\n", i)
+	}
+	path := filepath.Join(t.TempDir(), "big.txt")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// `Bash` takes its cap from the harness and `Read` has none: its own bound is two thousand
+// lines, which bounds lines rather than the window. The clamp comes from the file, because
+// how many of its lines fit in the reserve is a question the file answers and a
+// tokens-per-line guess does not.
+func TestClampReadHoldsALongFileToTheReserve(t *testing.T) {
+	path := lineFile(t, 500) // ~25 KB
+	got, clamped := ClampRead(map[string]any{"file_path": path}, 1000)
+	if !clamped {
+		t.Fatal("a 25 KB file against a 1 KB reserve must be clamped")
+	}
+	lines, _ := got["limit"].(int)
+	if lines < 15 || lines > 21 {
+		t.Fatalf("about a thousand bytes of 50-byte lines is around twenty, got %d", lines)
+	}
+	if got["file_path"] != path {
+		t.Fatal("the rest of the call must survive the clamp")
+	}
+}
+
+// Most reads are of ordinary files and must go through untouched, or the gate is spending
+// the session's window on its behalf.
+func TestClampReadLeavesAReadThatAlreadyFits(t *testing.T) {
+	if _, clamped := ClampRead(map[string]any{"file_path": lineFile(t, 5)}, 1000); clamped {
+		t.Fatal("a file inside the reserve must not be clamped")
+	}
+	if _, clamped := ClampRead(map[string]any{"file_path": "/no/such/file"}, 1000); clamped {
+		t.Fatal("an unreadable file is the tool's error to report, not the gate's to guess at")
+	}
+	if _, clamped := ClampRead(map[string]any{}, 1000); clamped {
+		t.Fatal("a call with no path is not a read of anything")
+	}
+}
+
+// A session that asked for ten lines wanted ten. Widening it would spend the window for it.
+func TestClampReadNeverWidensWhatWasAskedFor(t *testing.T) {
+	path := lineFile(t, 500)
+	// json numbers arrive as float64, which is how the payload really reaches this.
+	if _, clamped := ClampRead(map[string]any{"file_path": path, "limit": float64(5)}, 1000); clamped {
+		t.Fatal("a limit under the reserve is the one that binds")
+	}
+	got, clamped := ClampRead(map[string]any{"file_path": path, "limit": float64(400)}, 1000)
+	if !clamped {
+		t.Fatal("a limit over the reserve must still be brought down")
+	}
+	if lines, _ := got["limit"].(int); lines >= 400 {
+		t.Fatalf("got %d", lines)
+	}
+}
+
+// Counting from an offset is what a session does when it comes back for more of a file.
+func TestClampReadCountsFromWhereTheReadStarts(t *testing.T) {
+	path := lineFile(t, 500)
+	// Ten lines from the end are about 500 bytes and fit; the whole file does not.
+	if _, clamped := ClampRead(map[string]any{"file_path": path, "offset": float64(491)}, 1000); clamped {
+		t.Fatal("what is left after the offset is what has to fit, not the whole file")
+	}
+	if _, clamped := ClampRead(map[string]any{"file_path": path}, 1000); !clamped {
+		t.Fatal("the whole file does not fit and must still be clamped")
 	}
 }
