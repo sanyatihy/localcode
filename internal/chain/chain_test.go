@@ -289,3 +289,38 @@ func TestClampReadCountsFromWhereTheReadStarts(t *testing.T) {
 		t.Fatal("the whole file does not fit and must still be clamped")
 	}
 }
+
+// Every one of these is a real `**Next:**` line, taken from chains run against the model.
+// The first four ended a chain and the rest must not: "none of the tests pass" is the
+// opposite of done and begins the same way.
+func TestDoneReadsTheFirstClauseAndNotTheWholeLine(t *testing.T) {
+	finished := []string{
+		"none",
+		"none — 0003 is done. Remaining: human merges 0001 and 0003 branches, then 0002 unblocks",
+		"none for an agent. Human merges the two branches (0001 first — 0002 needs it)",
+		"nothing left to do",
+		"done.",
+		"no further work",
+	}
+	for _, line := range finished {
+		if !Done([]byte("**Next:** " + line + "\n")) {
+			t.Fatalf("this ends a chain and did not: %q", line)
+		}
+	}
+	unfinished := []string{
+		"none of the tests pass — fix Clamp first",
+		"nothing works yet, start with median.go",
+		"no tests exist for the even-length case",
+		"fix Clamp",
+		"",
+	}
+	for _, line := range unfinished {
+		if Done([]byte("**Next:** " + line + "\n")) {
+			t.Fatalf("this is not done and was read as done: %q", line)
+		}
+	}
+	// A handoff with no Next line at all is not a finished one.
+	if Done([]byte("# Handoff\n")) {
+		t.Fatal("a handoff carrying no Next is not done")
+	}
+}

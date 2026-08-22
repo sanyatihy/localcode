@@ -254,9 +254,47 @@ func Next(handoff []byte) string {
 // Done reports whether a handoff says the instruction is finished. The word is the
 // chain's only completion signal, which is why the system prompt names it and the
 // supervisor does not guess from anything else.
+//
+// The first clause, not the whole line. A session that has finished says so and then
+// explains: measured on real work, `**Next:** none — 0003 is done. Remaining: human
+// merges…` read as unfinished, which cost the chain an entire extra session and made it
+// report its bound instead of its success. Demanding one bare word demands the model be
+// terse about the one thing it most wants to justify.
+//
+// A qualifier after the word is allowed only from a short list, because "none of the
+// tests pass" is the opposite of done and starts the same way.
 func Done(handoff []byte) bool {
-	next := strings.ToLower(strings.Trim(Next(handoff), " .`"))
-	return next == "none" || next == "nothing" || next == "done"
+	head := strings.ToLower(strings.TrimSpace(clause(Next(handoff))))
+	words := strings.Fields(head)
+	if len(words) == 0 {
+		return false
+	}
+	switch strings.Trim(words[0], " .,;:`*-—–") {
+	case "none", "nothing", "done", "no":
+	default:
+		return false
+	}
+	if len(words) == 1 {
+		return true
+	}
+	switch words[1] {
+	case "for", "left", "further", "more", "remaining", "else", "to", "needed",
+		"required", "pending", "outstanding":
+		return true
+	}
+	return false
+}
+
+// clause is the part of a line before it starts explaining itself, and "" for a line that
+// is only punctuation or nothing at all.
+func clause(line string) string {
+	parts := strings.FieldsFunc(line, func(r rune) bool {
+		return strings.ContainsRune(".;:,—–", r)
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(parts[0])
 }
 
 // ClampRead holds a `Read` to what the gate reserved for one call, and reports whether it
