@@ -9,12 +9,21 @@ needs:
 
 ## Problem
 
-A `localcode` session that fills its context dies rather than handing off. 0016 refuses every
-compaction, which frees no context, so Claude Code retries and is refused again until it hits
-the hard limit and stops. Measured on one real session in a work repository: **20 refusals
-over 17 minutes**, ending at `Prompt is too long` with the work abandoned. The refusal was
-designed for the driven flow, where `cmd/handoff` starts the next session; interactive
-`localcode` has no such driver, so the refusal has nothing to fall back on.
+A `localcode` session that fills its context dies rather than handing off, and the handoff it
+leaves is worthless. Measured on one real session in a work repository: **20 compaction
+refusals over 17 minutes**, ending at `Prompt is too long` with the work abandoned.
+
+Reproduced and taken apart since, at a 12,288-token wall. **Every mechanism that reacts to a
+full context loses the work.** A chain of eight sessions produced eight handoffs of which
+seven carried `Prompt is too long` as their `Next` step, because `session-end.sh` extracts
+the last thing a session said and a dying session says an error; the chain spent 49,671
+tokens and never began the task. Claude Code's own compaction fares no better here — its
+summary recorded that *"the original task from before compaction is not fully preserved"*.
+A hook that warns the model at 45% of the window was seen, acknowledged and ignored.
+
+**The context has to be kept away from the wall instead, and neither property may rest on
+the model agreeing.** A session told to spend at most three commands reached compaction
+anyway.
 
 ## Non-goals
 
@@ -35,87 +44,61 @@ designed for the driven flow, where `cmd/handoff` starts the next session; inter
 
 ## Design
 
-**`localcode` supervises the session it already launched.** The refusal cannot end a session
-itself: exit 2 blocks the compaction and nothing else, and a hook returning
-`{"continue": false}` was measured to change nothing — the session still died at
-`Prompt is too long`. The launcher is the parent process, so ending and replacing the session
-is its job rather than the hook's.
+**Two hooks enforce what instructions could not.** Both were measured: a session given a
+budget in prose ignored it, and a session warned about its context ignored that too. Neither
+mechanism below asks the model for anything.
 
-**The refusal log is the signal.** `pre-compact.sh` already appends to
-`results/precompact.jsonl` under the state directory, and that file is the only trace a
-refusal leaves. The supervisor watches it and needs no new channel.
+**`PreToolUse` spends a budget and then permits only the way out.** It counts a session's
+tool calls and, once the budget is gone, denies every call except writing the handoff. The
+denial names the state and the remedy, and the model receives it verbatim. Measured: the
+third call of a two-call budget was refused and the session peaked at **5,941 tokens of
+12,288 — 48%**, where every earlier design reached compaction.
 
-**A refused compaction ends the session, and the next one starts from the handoff.** On the
-first new refusal the supervisor terminates the session, waits for `SessionEnd` to write the
-handoff, and launches a fresh one that `SessionStart` feeds it into. Measured: a terminated
-session still runs `SessionEnd` and still writes its handoff.
+**`Stop` refuses to let a session end without a usable handoff.** It checks the file exists,
+clears a size floor and carries a `Next`. Measured: the model tried to stop **twice** without
+one and was refused both times before complying. It is bounded by `stop_hook_active` and a
+try counter, so an autonomous run cannot be wedged by the hook that is supposed to protect
+it; after two refusals it relents and the mechanical extractor takes over as the floor.
 
-**The developer is told, not asked.** One line naming what happened and which session this is
-— seamless means the work continues, not that it happens invisibly.
+**A handoff is written while the session still has its context, and it carries results.**
+The one produced under enforcement recorded the counts themselves — `Production 140, Preprod
+133, Other 127` — and the caveat that words in a free-text field were excluded. That is what
+a fresh session needs and what the extracted handoffs never had.
 
-**The instruction is re-issued; the handoff carries what was done.** A `-p` session gets its
-original prompt again, since the handoff is what says how far it got. This is what
-`cmd/handoff` already does with a task box, and it is why the handoff's `Next` field matters
-more than its `Tried` field. Re-issuing is also what stops the goal drifting: the instruction
-is quoted from the developer every time rather than paraphrased through a chain of handoffs.
+**The model writes it into the working directory.** Writing to the state directory failed:
+the file tool is confined to the working directory, so the supervisor relocates the handoff
+afterwards rather than asking the session to write outside its tree. `Write` must therefore
+be in `--tools`, which 0022's four already provide.
 
-**A session never inherits and writes the same file.** The supervisor archives the handoff
-into `handoffs/NNNN.md` before launching, so `HANDOFF.md` is absent at session start and
-`session-end.sh` always writes one. `SessionStart` reads the newest archive when there is
-one. That is what makes the second handoff in a chain describe the second session.
+**Tool output is capped, because a budget on calls is not a budget on tokens.** One
+unbounded `cat` fills a window inside a single permitted call. Pi caps a result at 50 KB or
+2,000 lines and spills the rest to a file the model may read; the same cap belongs here, and
+`PostToolUse` is where it goes.
 
-**Long chains carry a digest, not their whole history.** `SessionStart` injects the newest
-handoff whole and one line from each of the previous four — enough to see what has already
-been ruled out, bounded so the injection cannot grow with the chain. The newest handoff
-measured 452 tokens against a 45,056-token window, so the budget is not the constraint; what
-is read again at every session start is.
+**The supervisor chains sessions and owns everything outside the session.** It archives the
+inherited handoff so `session-end.sh` always writes a fresh one, re-issues the original
+instruction verbatim so the goal cannot drift through a chain, and stops when two
+consecutive handoffs carry the same `Next`. A chain is one invocation; `-continue`,
+`-resume <id>` and `-fork <id>` choose between chains, and starting clean is the default
+because that is Claude Code's.
 
-**A chain that stops advancing is stopped rather than bounded.** Two consecutive handoffs
-with the same `Next` mean the sessions are repeating each other, which `-max-sessions` would
-hide behind a count. The run ends and names the handoff to read.
-
-**A handoff belongs to a chain, and a repository carries as many chains as it has lines of
-work.** One handoff per repository assumes one thing is being worked on there, and two
-unrelated tasks in the same checkout would overwrite each other's state. A chain is one
-`localcode` invocation and every session its handovers produce.
-
-**Starting clean is the default, because that is Claude Code's.** `localcode` inherits
-nothing; `-continue` takes the most recent chain in this repository and `-resume <id>` takes
-a named one, which is the choice `claude` already offers and the one a developer already
-knows. Inheriting by default would make a second task in a repository silently resume the
-first.
-
-**A chain is named by its first session's id**, so it matches what `claude` prints and what
-sits under `~/.claude/projects/`. A session that ends says how to continue it, in the shape
-`claude` uses, because the developer reading that line has just been told the other one.
-
-**`localcode sessions` lists the chains in this repository** — id, when it last ran, and its
-`Next`. A `-resume` that requires an id nobody recorded is a resume nobody uses.
-
-**Automatic handover extends the current chain rather than starting one.** The distinction is
-the whole model: handover is what happens inside an invocation, and choosing a chain is what
-happens between them.
-
-**Bounded, and the bound is a refusal rather than a silence.** `-max-sessions` caps the
-chain, defaulting to a small number. A session that fills its context without advancing the
-handoff would otherwise loop forever, and the honest failure is to stop and say which
-handoff to read.
+**Compaction stays refused.** It is not merely slower: on this machine it re-reads the whole
+conversation before generating, and it was measured losing the goal it was summarising.
 
 ## Tasks
 
-- [ ] a repository carries several chains, each with its own handoff and archive, and
-      `localcode` starts a new one rather than inheriting
-- [ ] `-continue` resumes the most recent chain and `-resume <id>` a named one
-- [ ] `localcode sessions` lists the chains, and a session that ends says how to continue it
-- [ ] a session's handoff is its own: the supervisor archives the inherited one, and
+- [ ] a `PreToolUse` budget denies further work once spent, permitting only the handoff, and
+      a session under it stays below half the window
+- [ ] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
+      up after two refusals rather than wedging the run
+- [ ] `PostToolUse` caps a tool result and spills the remainder to a file the model may read
+- [ ] the handoff is written in the working directory and relocated by the supervisor, and
       `session-end.sh` writes for every session in a chain
-- [ ] `localcode` ends a session on the first refusal recorded during it, and reports why
-- [ ] the next session in the chain starts from that handoff, with the original instruction
-      re-issued
-- [ ] `SessionStart` injects the newest handoff and a bounded digest of the previous four
+- [ ] a chain of sessions finishes a task no single session could, with each handoff
+      carrying results rather than commands
 - [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
-- [ ] the chain is bounded by `-max-sessions`, and reaching it stops with the handoff named
-- [ ] `-no-chain` runs a single session, and a session that ends normally never starts another
+- [ ] a repository carries several chains; `localcode` starts a new one, `-continue`,
+      `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
 - [ ] the README says what the developer sees when a session hands over
 
 ## Open questions
@@ -137,3 +120,12 @@ handoff to read.
   have resumed the first and then overwritten its handoff. Chains are per invocation, the
   default is clean, and continuing is a choice with an id — which is what `claude` does and
   therefore what needs no explaining.
+- **The feature was re-planned against measurements rather than patched.** Its first design
+  had a supervisor end a session on the first compaction refusal and let `session-end.sh`
+  write the handoff. Both halves were wrong: the refusal loop is a symptom of a context
+  already full, and the handoff written at that point says `Prompt is too long`. What
+  replaced it keeps the session away from the wall and enforces the handoff before it.
+- **A hypothesis about Pi was refuted and is gone.** Its compaction was predicted to thrash
+  at the committed 32,768; measured, it completed the same task without compacting once, and
+  at a 12,288 wall it compacted five times and still finished. Pi under `localcode` is worth
+  its own feature and is a `BACKLOG.md` line.
