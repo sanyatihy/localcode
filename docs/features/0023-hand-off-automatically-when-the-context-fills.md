@@ -187,12 +187,11 @@ conversation before generating, and it was measured losing the goal it was summa
   what was dropped re-runs the command through a filter — which is cheaper here than
   reading a spill file back in.
 - **A ceiling expressed as a fraction cannot bound a session's peak, so the box asks for
-  what it can.** One tool result and one assistant turn land after the last call the gate
-  permits, so a session held at half the window peaks above half; the 37–48% that was
-  measured is what a two-call budget produced, not what a 50% ceiling guarantees. The
-  ceiling is therefore derived from what has to fit after it — one capped result, the turn
-  that asked for it, and the turn that writes the handoff — and the requested fraction
-  binds only while it is the smaller of the two.
+  what it can.** A whole turn of results and the turn that asked for them land after the
+  last call the gate permits, so a session held at half the window peaks well above half —
+  measured, between 6,434 and 8,558 of an 11,264 window. The 37–48% recorded above is what
+  a two-call budget produced, not what a 50% ceiling guarantees. What a ceiling must
+  reserve is what lands after it, which is what it is now derived from.
 - **The gate is the launcher run as a hook, not a fourth shell script.** It reads a
   transcript and counts against a budget, which is a decision rather than a record, and
   0021 put decisions where `make check` covers them. The three hooks 0016 ships stay shell

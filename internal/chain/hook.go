@@ -81,8 +81,10 @@ func Hook(name string, payload io.Reader, dir string) (Verdict, error) {
 	}
 }
 
-// gate counts what it permits, not what it is asked. A denied call spends nothing, so a
-// session cannot be pushed past its budget by calls that never ran.
+// gate takes a number before it decides, so that concurrent hooks decide against different
+// ones. A call the turn's bound holds back is the only kind that costs nothing: past the
+// session's own bounds every attempt is charged, which is what keeps a session that answers
+// a refusal with another call from being refused forever.
 func gate(p Payload, spec Spec, dir string) Verdict {
 	s := State{Peak: Peak(p.TranscriptPath)}
 	// Every counter is bumped before it is decided on, never after. The harness runs a
