@@ -290,3 +290,21 @@ func TestASessionThatWillNotStopIsStoppedAndEndsTheChain(t *testing.T) {
 		t.Fatalf("the chain must stop at the first timeout, next is %d", got)
 	}
 }
+
+// A session that wrote no handoff must not erase the chain's memory: the next one inherits
+// the newest handoff the chain holds, which is the one before it.
+func TestASilentSessionDoesNotCostTheChainWhatItKnew(t *testing.T) {
+	root := fakeCheckout(t)
+	// Second session writes nothing at all; third writes a handoff again.
+	chainStub(t, handoffSaying("fix Clamp"), "", handoffSaying("none"))
+	passthroughSandbox(t)
+
+	code, state := runHere(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	if code != 0 {
+		t.Fatalf("the chain must still finish, got %d", code)
+	}
+	dir := chainDirOf(t, state)
+	if got := chain.LatestHandoff(dir); got != filepath.Join(dir, "03", chain.HandoffName) {
+		t.Fatalf("latest handoff: got %s", got)
+	}
+}
