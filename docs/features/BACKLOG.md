@@ -44,13 +44,14 @@ trigger nobody watches is not an idea, it is a hedge.
   category of rule as doing the topmost one. Promote when: a second project wants it, or the box
   parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
   shell hooks at all, or only the rule.
-- **Bounding what a tool result may put in the context** — one real session reached its
-  limit with 74.6% of the window spent on tool results and 23.6% on the calls themselves,
-  against 1.7% of the model's own text and two user messages. Nothing caps a command's
-  output, so `seq 1 100000` costs a session. 0023 makes a full context survivable rather
-  than fatal, and does not slow down how fast one fills. Promote when: a session hands over
-  more than once on work that should have fitted, or when the cap is cheap enough to try —
-  head-limiting Bash output is a hook, not a feature.
+- **A progress signal a supervisor can check** — 0023 stops a chain when two sessions in a
+  row plan the same `Next`, which is weak: two sessions that both surveyed the same files
+  and changed nothing wrote different `Next` lines, so the chain ran to its `-sessions`
+  bound instead. The obvious mechanical alternative — did any file change — is wrong for a
+  chain whose work is a question rather than an edit, so this needs a definition of
+  progress that covers both. Promote when: a chain is seen spending its bound on sessions
+  that achieved nothing, often enough that the wasted sessions cost more than the
+  measurement would.
 - **Pi under `localcode`** — measured against Claude Code on one profiling task at a 12,288
   wall: Pi compacted five times and finished; Claude Code died. At a 32,768 window Pi
   finished without compacting at all, on 22,845 ingested tokens against Claude Code's

@@ -824,10 +824,14 @@ is in [`harness/claude-code/`](../harness/claude-code/README.md) with the rest o
 configuration.
 
 **A refused compaction does not end the session.** The turn completes and `PreCompact` fires
-again on the next one, once per turn while the conversation stays over the threshold. What
-ends a session is `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refusing a send it cannot fit, so the
-refusal buys the generation a summary would have cost and nothing else — bounding a session
-is the driver's job. Measured at 2.1.233, on both triggers.
+again on the next one, once per turn. Not only over a threshold: under 0023's gate it fired
+before every turn of a session whose context ran 4,325 to 6,183 of an 11,264 window, so a
+count of refusals measures turns rather than pressure, and the twenty refusals 0016 opened
+with are twenty turns. `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` was tried against it and changed
+nothing, so nothing here sets it. What ends a session is
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` refusing a send it cannot fit, so the refusal buys the
+generation a summary would have cost and nothing else — bounding a session is the driver's
+job. Measured at 2.1.233, on both triggers.
 
 **`SessionStart` sends `source`, not `session_start_reason`.** All three events fire in a
 print session, which is the form the driver runs.
@@ -841,6 +845,90 @@ with the mechanism and without it, and
 [0011](features/0011-split-planning-and-grinding-across-frontier-and-local-models.md) is
 where boxes are driven locally, so it is where those runs happen. Until then this is
 apparatus, not a result.
+
+## A session is budgeted rather than left to fill up
+
+0016 made a full context survivable; this keeps a session from reaching one. Every session
+`localcode` starts carries a budget derived from the window the harness was declared, and
+two hooks enforce it — `localcode hook gate` on `PreToolUse`, `localcode hook stop` on
+`Stop`. Neither asks the model for anything, because instruction was measured not to work:
+a session told in prose to spend three commands reached compaction anyway, and one warned at
+45% of its window acknowledged the warning and carried on.
+
+**The ceiling is derived from what lands after it.** The gate decides on the context as the
+transcript last recorded it, and three things arrive after that reading: the results of the
+calls it is permitting, the turn that asked for them, and the turn that answers the denial
+by writing the handoff. So the ceiling is the window less a quarter for results and twice
+the output reservation, and that is also the default: as high as the arithmetic allows and
+no higher. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
+already buy while costing a handoff — measured at half the window, a session could not both
+read a file and edit it, which `Edit` requires of it, so the chain wrote handoffs and never
+changed a line. A window with no room left for the preamble is refused rather than clamped:
+a session started in one spends a cold ingest to say `Prompt is too long`.
+
+**A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
+decides a whole turn's calls, because the harness issues them together and nothing changes
+while they run.
+
+**Measured end to end.** Eight independent Go bugs, one per file, at a 16,384 wall — a
+12,288 prompt budget and a 7,168 ceiling. Three sessions, 1,115 s, 20,565 tokens ingested,
+all eight tests passing, and the first two both denied at their ceiling mid-work so no
+single session could have done it. Peaks of 10,090, 8,819 and 5,834 against a 12,288
+budget: the overshoot past the ceiling is about 2,900 tokens, which is what the
+quarter-window reserve is for. Each handoff carried results — which files were fixed, which
+test still failed, what `go test` said — and the rows are in
+[data/2026-08-22-m2max-32gb-0023-chain.jsonl](data/2026-08-22-m2max-32gb-0023-chain.jsonl).
+
+**A handoff cannot carry the right to edit.** `Edit` fails on a file the session has not
+`Read`, so every session in a chain pays the read for every file it changes, however well
+the handoff describes it. A read and an edit cost about 350 tokens a file at a 12,288 wall,
+which is what sets how many files a session can get through before its ceiling. The
+appended system prompt says so, because a session that surveys before it acts spends its
+whole ceiling on reads it cannot follow up — measured, three times over.
+
+**Both unbounded tools are capped, each where it can be.** `BASH_MAX_OUTPUT_LENGTH` is set
+to a sixteenth of the window, so one unbounded command cannot spend a session inside a
+single permitted call. `Read` has no such setting — its own bound is two thousand lines,
+which bounds lines rather than the window — so the gate narrows the call instead: a
+`PreToolUse` hook may rewrite a tool's input, and `Read` takes a structured `limit`. How
+many of a file's lines fit in the reserve is computed from the file, not from a
+tokens-per-line guess. Measured against a 108,893-byte file in a 12,288-token window: the
+model asked for `limit: 1200` on every call — 65 KB apiece — and each came back at about
+3,230 bytes against a 3,072-byte reserve, the excess being the line numbers the harness
+adds. Unclamped, the first call would have ended the session.
+
+**A session shows its work.** `claude -p` prints its result and nothing before it, so a
+chain was minutes of silence between summaries — one measured session spent 591 s before it
+said a word, which is indistinguishable from a wedged run. A one-shot session is asked for
+`--output-format stream-json --include-partial-messages` instead and the supervisor renders
+it: a line per tool call as it happens, the model's prose a token at a time as it is
+generated, and a line for every call the gate refuses. Token by token rather than message by
+message, because at 5-10 tok/s a paragraph is a minute and a minute of nothing is
+indistinguishable from a wedged run. An interactive session is untouched, because the
+harness draws its own screen there.
+
+**Claude Code's prompt budget is the declared window minus `max(MAX_OUTPUT, 4096)`.** It
+keeps 4,096 for a reply whatever it is told to keep, so `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+below that buys nothing back. Bisected by padding a prompt to an exact token count — the
+server's own `/tokenize`, not a character estimate — and reading whether it was refused
+before it was sent, which costs no model time at all. Against a declared 12,288: with 1,024
+reserved the boundary falls between 3,700 and 3,900 tokens of padding on top of a
+~4,390-token preamble, putting it at 8,192; with 6,000 reserved it falls between 1,500 and
+2,500, which is 1,800 lower against the 1,904 the rule predicts.
+
+**Taking the declaration at face value is what killed the sessions this was found on.** A
+budget 3,072 tokens too generous let sessions edit four files each and then die on `Prompt
+is too long` with no handoff written. The declared window has to clear the preamble plus
+that reservation plus the reserve, or `localcode` refuses to start — which rules out the
+12,288 wall the enforcement was first measured at.
+
+**A chain is one invocation, and a repository holds several.** `localcode` given an
+instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
+same step, or until `-sessions` runs out, and each of the three says which happened.
+Starting clean is the default, `-continue` takes the newest chain, `-resume` takes one by
+id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them.
+One handoff per repository was wrong: a second instruction in the same checkout would have
+resumed the first and then overwritten what it knew.
 
 ## The two-tier split, measured
 
@@ -976,6 +1064,24 @@ Each of these has already caused a wrong number in this repo.
   `/private`.** A profile naming an unresolved `TMPDIR` denies every compiler that uses one
   while appearing to allow it, and the failure reads as a broken toolchain rather than as a
   policy. Resolve every path before it reaches the profile.
+- **A test that names one platform's symlink is testing the platform.** The sandbox profile
+  must carry resolved paths, because seatbelt matches the resolved path and `/tmp` is a
+  symlink into `/private` on macOS. Asserting that the literal string `/tmp` is absent says
+  "resolved" only where `/tmp` resolves to something else: on Linux it resolves to itself,
+  so the assertion failed CI over a profile that was correct. State the property — the path
+  in the profile is its own resolution — and it holds on both.
+- **Characters over four is not a token count.** A budget probe that padded prompts by
+  `chars/4` bracketed Claude Code's limit at 9,400–10,200 tokens; the same probe padded
+  through the server's `/tokenize` put it at 8,192. The first number was wrong by a fifth
+  and it was believed for an afternoon, because it agreed with an arithmetic that was also
+  wrong. The server has a tokeniser and it is one HTTP call away.
+- **A hook fires once per tool call, and one turn's calls run at once.** Two bugs came out
+  of that in one afternoon. A counter kept by read-modify-write loses calls — eleven
+  permitted left one reading eight, so a budget silently allowed half again as much as it
+  said. And a hook that reads the transcript reads the same numbers for every call in a
+  turn, so one decision admits a whole batch: a five-call turn carried the context 1,960
+  tokens past a ceiling it had been under when the gate looked. Append a byte and decide on
+  the offset the write returned, and bound the turn as well as the session.
 - **A hook's prose is part of the mechanism.** Relocating the handoff's state was not
   enough: the SessionStart text still told the model to create it "at the root of the
   checkout", so the model did, in the repository being visited. Moving where a file is

@@ -1,9 +1,9 @@
 ---
 id: 0023
 title: Hand off automatically when the context fills
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-21
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-22
 needs:
 ---
 
@@ -49,10 +49,26 @@ budget in prose ignored it, and a session warned about its context ignored that 
 mechanism below asks the model for anything.
 
 **`PreToolUse` spends a budget and then permits only the way out.** It counts a session's
-tool calls and, once the budget is gone, denies every call except writing the handoff. The
-denial names the state and the remedy, and the model receives it verbatim. Measured: the
-third call of a two-call budget was refused and the session peaked at **5,941 tokens of
-12,288 — 48%**, where every earlier design reached compaction.
+tool calls, reads its context out of the transcript, and once either bound is gone denies
+every call except writing the one handoff the session was given. The denial names the state
+and stops there — the remedy is in the appended system prompt, because an instruction
+arriving through a tool result is refused as injection. Measured: the third call of a
+two-call budget was refused and the session peaked at **5,941 tokens of 12,288 — 48%**,
+where every earlier design reached compaction.
+
+**The budget is derived from what the harness keeps, not from what it was told to keep.**
+It reserves 4,096 tokens for a reply whatever `CLAUDE_CODE_MAX_OUTPUT_TOKENS` says, so the
+prompt budget is the declared window less the larger of the two. A window that does not
+clear the preamble and the reserve on top of that is refused rather than run in.
+
+**A turn is bounded as well as a session.** The harness issues a turn's tool calls together
+and the transcript does not change while they run, so one reading otherwise decides any
+number of them: a five-call turn carried the context **1,960 tokens past a ceiling it had
+been under**. Four calls to a turn is what makes the ceiling's reserve a bound rather than
+a hope, and the reserve is a quarter of the window because a measured four-call turn cost
+530 tokens a call. What that bound holds back costs the session nothing: a call deferred to
+be measured again is not a call the session chose to spend, and the appended system prompt
+says so, since a session that did not know would lose most of a batch to it.
 
 **`Stop` refuses to let a session end without a usable handoff.** It checks the file exists,
 clears a size floor and carries a `Next`. Measured: the model tried to stop **twice** without
@@ -65,47 +81,71 @@ The one produced under enforcement recorded the counts themselves — `Productio
 133, Other 127` — and the caveat that words in a free-text field were excluded. That is what
 a fresh session needs and what the extracted handoffs never had.
 
-**The model writes it into the working directory.** Writing to the state directory failed:
-the file tool is confined to the working directory, so the supervisor relocates the handoff
-afterwards rather than asking the session to write outside its tree. `Write` must therefore
-be in `--tools`, which 0022's four already provide.
+**The model writes it outside the repository being visited.** The file tools are confined
+to the workspace, and `--add-dir` is what puts the session's own state directory in it — so
+nothing is relocated afterwards and a visited repository still ends a session with exactly
+the files the work changed. `Write` must be in `--tools`, which 0022's four already provide.
 
 **Tool output is capped, because a budget on calls is not a budget on tokens.** One
-unbounded `cat` fills a window inside a single permitted call. Pi caps a result at 50 KB or
-2,000 lines and spills the rest to a file the model may read; the same cap belongs here, and
-`PostToolUse` is where it goes.
+unbounded `cat` fills a window inside a single permitted call, and the gate decides on the
+context as it stood before that result arrived — so the reserve it holds back and the cap
+on a result are one number. `BASH_MAX_OUTPUT_LENGTH` is where it goes: the harness
+truncates at the tool, which is the last place a result can still be shortened.
 
-**The supervisor chains sessions and owns everything outside the session.** It archives the
-inherited handoff so `session-end.sh` always writes a fresh one, re-issues the original
-instruction verbatim so the goal cannot drift through a chain, and stops when two
+**The supervisor chains sessions and owns everything outside the session.** It is also the
+only clock: a session is stopped if it runs past `-session-timeout`, because a denied call
+costs a turn like any other and nothing else here bounds how many of them a session may
+spend. Each session gets a directory of its own, so the handoff it inherits and the handoff it writes are never
+the same file and `session-end.sh` always finds a fresh one to fill. It re-issues the
+original instruction verbatim so the goal cannot drift through a chain, and stops when two
 consecutive handoffs carry the same `Next`. A chain is one invocation; `-continue`,
 `-resume <id>` and `-fork <id>` choose between chains, and starting clean is the default
 because that is Claude Code's.
+
+**A session shows its work while it runs.** `claude -p` prints its result and nothing
+before it, so a chain is minutes of silence between summaries — measured, 591 s for one
+session at a small wall, and a session at the shipped window is longer. The supervisor
+takes the harness's own event stream and renders it, so what a session is doing is visible
+while it does it rather than only once it has stopped.
+
+**`Read` is capped where `Bash` is capped.** The reserve covers a turn's results because
+`Read` has no bound of its own, and that is why the reserve is a quarter of the window
+rather than an eighth. A cap on `Read` is the narrower fix: the gate already sees the call
+before it runs, and `Read` takes a structured `limit` rather than a shell string, so
+clamping it is precise where rewriting a command would not be.
 
 **Compaction stays refused.** It is not merely slower: on this machine it re-reads the whole
 conversation before generating, and it was measured losing the goal it was summarising.
 
 ## Tasks
 
-- [ ] a `PreToolUse` budget denies further work once spent, permitting only the handoff, and
-      a session under it stays below half the window
-- [ ] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
+- [x] a `PreToolUse` budget denies further work once spent, permitting only the handoff, and
+      what it permits leaves the session room to write it
+- [x] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
       up after two refusals rather than wedging the run
-- [ ] `PostToolUse` caps a tool result and spills the remainder to a file the model may read
-- [ ] the handoff is written in the working directory and relocated by the supervisor, and
-      `session-end.sh` writes for every session in a chain
-- [ ] a chain of sessions finishes a task no single session could, with each handoff
+- [x] a tool result cannot spend more of the window than the gate reserves for one
+- [x] the handoff is written outside the repository being visited, and `session-end.sh`
+      writes one for every session in a chain
+- [x] a chain of sessions finishes a task no single session could, with each handoff
       carrying results rather than commands
-- [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
-- [ ] a repository carries several chains; `localcode` starts a new one, `-continue`,
+- [x] two consecutive handoffs with the same `Next` stop the chain and name the file
+- [x] a repository carries several chains; `localcode` starts a new one, `-continue`,
       `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
-- [ ] the README says what the developer sees when a session hands over
+- [x] the README says what the developer sees when a session hands over
+- [x] a running session shows what it is doing, not only what it concluded
+- [x] a `Read` cannot spend more of the window than the gate reserves for one call
 
 ## Open questions
 
-- Whether the digest should carry each session's `Next` or its `Tried`. `Next` is what the
-  session meant to do and `Tried` is what it did, and only a chain long enough to repeat
-  itself will show which one prevents that.
+- **What a supervisor can check progress against.** `Next` was the candidate and it is
+  weak: two sessions that both surveyed the same eight files and changed nothing wrote
+  different `Next` lines — "apply the eight fixes" against "read title.go, apply the eight
+  fixes" — so the chain ran to its bound rather than stopping at the repeat. `Tried` is
+  free text and would fail the same way. What would not is a definition of progress the
+  supervisor can check without the session's cooperation, and the obvious one — did any
+  file change — is wrong for a chain whose work is a question rather than an edit. The
+  bound is what makes this an optimisation rather than a hole, and it is a `BACKLOG.md`
+  line.
 
 ## Log
 
@@ -137,6 +177,71 @@ conversation before generating, and it was measured losing the goal it was summa
   what to do was refused as injection, correctly: the model will not follow instructions
   arriving through a tool result. The protocol therefore belongs in the appended system
   prompt, which 0022 already sends, and the hook reports only the state.
+- **A denied call still costs a turn, so a session needs a clock as well as a budget.** At
+  this depth a turn is minutes, and nothing in the design bounded how many of them a
+  session could spend being refused: a session that answers a spent budget by trying
+  another tool would run until its thirty calls were gone. `-session-timeout` is the bound,
+  and a session that reaches it ends the chain rather than handing on a guess.
+- **The harness keeps 4,096 tokens for a reply whatever it is told to keep, and the whole
+  budget was derived from the wrong number until that was measured.** Sessions edited four
+  files each and then died on `Prompt is too long` with no handoff written — the failure
+  this feature exists to prevent, reproduced by the feature itself. Bisecting the prompt it
+  refuses to send, with the padding sized by the server's own tokeniser, puts the boundary
+  at the declared window minus `max(MAX_OUTPUT, 4096)`. That makes the 12,288 wall the
+  enforcement was first measured at unworkable: 8,192 of budget does not clear the preamble
+  and the reserve together, and `localcode` now refuses it rather than running in it.
+- **A character count is not a token count, and believing one cost an afternoon.** The
+  first budget probe padded by `chars/4` and bracketed the limit 1,200–2,000 tokens too
+  high, which agreed with the arithmetic that was also wrong and so confirmed it. The
+  second used `/tokenize` and disagreed with both.
+- **The mechanical extractor made an API error the next session's plan.** That is the
+  failure this feature opens with, and it survived into the feature's own chains: a session
+  that dies before writing its handoff says `Prompt is too long`, and `session-end.sh` took
+  the last thing said. It now skips rows the transcript flags as API errors, falls back to
+  the last tool the session ran, and shortens paths against the working directory rather
+  than the state directory — eight absolute paths were most of what it wrote.
+- **The ceiling is the headroom, and the fraction was an arbitrary number that made the
+  feature useless.** At half the window a session's room was one turn wide: it spent it on
+  the reads `Edit` requires and was refused before it could change anything, twice over,
+  so the chain wrote handoffs and never touched a line. The reserve is what makes a ceiling
+  safe, so a fraction below it buys nothing and costs a handoff — about 4,265 tokens. The
+  default is now as high as the arithmetic allows and `-ceiling` only lowers it.
+- **A handoff cannot carry the right to edit, only the diagnosis.** `Edit` fails on a file
+  the session has not `Read` — the harness says so in as many words — so every session pays
+  the read for every file it changes, however well the handoff describes it. That sets the
+  floor on what a session can do: at this wall a read and an edit cost about 350 tokens a
+  file, so a session's working room buys two or three of them and the chain needs a session
+  per two or three files.
+- **Over-reading is the part that was fixable, and the fix is prose.** Sessions read every
+  file in the fixture before changing any, three chains running, and spent their whole
+  ceiling doing it: twelve calls, nine calls, eleven calls, not a line edited. The appended
+  system prompt now tells a session two things it could not otherwise know — that a handoff
+  is established rather than a claim to check, and that `Edit` refuses a file this session
+  has not read, so a read not followed by a change is room spent for nothing. Neither is a
+  bound, and neither has to be: the mechanism keeps the session safe whether it is followed
+  or not. A rule that forbade re-reading would forbid what `Edit` requires.
+- **A count of refused compactions measures turns, not pressure.** `PreCompact` fired once
+  before every turn of an enforced session — at 4,325 tokens of an 11,264 window as readily
+  as at 6,183 — so it is consulted per turn rather than at a threshold, and the twenty
+  refusals this feature opens with are twenty turns rather than twenty attempts to survive.
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` was tried against it and changed nothing, so nothing
+  here sets it.
+- **The cap is a setting rather than a `PostToolUse` hook, and the spill went with it.**
+  That hook runs once the result is already in the conversation, so it can add context and
+  cannot remove any: what it would have capped is spent by the time it is asked. The
+  harness truncates at the tool instead, sized from the window, and a session that needs
+  what was dropped re-runs the command through a filter — which is cheaper here than
+  reading a spill file back in.
+- **A ceiling expressed as a fraction cannot bound a session's peak, so the box asks for
+  what it can.** A whole turn of results and the turn that asked for them land after the
+  last call the gate permits, so a session held at half the window peaks well above half —
+  measured, between 6,434 and 8,558 of an 11,264 window. The 37–48% recorded above is what
+  a two-call budget produced, not what a 50% ceiling guarantees. What a ceiling must
+  reserve is what lands after it, which is what it is now derived from.
+- **The gate is the launcher run as a hook, not a fourth shell script.** It reads a
+  transcript and counts against a budget, which is a decision rather than a record, and
+  0021 put decisions where `make check` covers them. The three hooks 0016 ships stay shell
+  because they extract and record.
 - **Three numbers bound any test of this feature.** Decode is 5–10 tok/s, so a session needs
   ~200 s to generate before it can write a handoff and 600 s is the practical floor;
   Claude Code's prompt budget is the declared window minus the output reservation, so
