@@ -1,9 +1,9 @@
 ---
 id: 0024
 title: Settle the prefill batch against ingest time
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-22
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-22
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 ---
 
