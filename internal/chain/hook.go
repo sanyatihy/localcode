@@ -85,15 +85,20 @@ func Hook(name string, payload io.Reader, dir string) (Verdict, error) {
 // session cannot be pushed past its budget by calls that never ran.
 func gate(p Payload, spec Spec, dir string) Verdict {
 	s := State{Peak: Peak(p.TranscriptPath)}
-	// Counted before it is decided, not after. The harness runs a turn's calls
-	// concurrently, so several of these are deciding at once; taking a number first is what
-	// gives each of them a different one to decide against.
+	// Every counter is bumped before it is decided on, never after. The harness runs a
+	// turn's calls concurrently, so several of these are deciding at once, and taking a
+	// number first is what gives each of them a different one to decide against.
 	if IsHandoff(p.ToolName, p.ToolInput, spec.Handoff) {
 		s.Handoffs = Bump(dir, HandoffsFile(p.SessionID)) - 1
-	} else {
-		s.Calls = Bump(dir, CallsFile(p.SessionID)) - 1
-		s.Batch = Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
+		return Gate(p, spec, s)
 	}
+	// The turn's bound is asked first, and what it refuses is not charged to the session:
+	// a call held back to be measured again is not a call the session chose to spend.
+	s.Batch = Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
+	if v := Turn(spec.Limits, s.Batch); v.Deny {
+		return v
+	}
+	s.Calls = Bump(dir, CallsFile(p.SessionID)) - 1
 	return Gate(p, spec, s)
 }
 

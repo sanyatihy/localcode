@@ -156,17 +156,24 @@ func Gate(p Payload, spec Spec, s State) Verdict {
 		return Verdict{Deny: true, Reason: fmt.Sprintf(
 			"localcode: this session's context reached %d tokens of a %d ceiling. No call "+
 				"other than writing the handoff will be permitted.", s.Peak, l.Ceiling)}
-	case s.Batch >= l.Batch:
-		// A throttle rather than an end: the next turn is measured and decided again.
-		return Verdict{Deny: true, Reason: fmt.Sprintf(
-			"localcode: this turn has spent its %d tool calls. The bound is per turn, and "+
-				"the context is read again before the next one.", l.Batch)}
 	case s.Calls >= l.Calls:
 		return Verdict{Deny: true, Reason: fmt.Sprintf(
 			"localcode: this session has spent %d of %d tool calls. No call other than "+
 				"writing the handoff will be permitted.", s.Calls, l.Calls)}
 	}
 	return Verdict{}
+}
+
+// Turn decides whether a turn may spend another call, and is asked before the session's
+// budget is. A throttle, not an end: what it refuses costs the session nothing, because a
+// turn held to its bound has not decided to do less work — only to be measured again first.
+func Turn(l Limits, spent int) Verdict {
+	if spent < l.Batch {
+		return Verdict{}
+	}
+	return Verdict{Deny: true, Reason: fmt.Sprintf(
+		"localcode: this turn has spent its %d tool calls. The bound is per turn, and the "+
+			"context is read again before the next one.", l.Batch)}
 }
 
 // Stop decides whether a session may end, and refuses until it has left something a fresh
