@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,6 +18,17 @@ import (
 
 // launch is everything a session needs that does not change from one to the next. Built
 // once, so a chain cannot serve its third session a different configuration from its first.
+// progressOut is where the supervisor's own lines go. A var so a test can silence them:
+// a chain under test narrates every session it runs, and thirty of those buried the one
+// real failure in a CI log.
+var progressOut io.Writer = os.Stderr
+
+// narrate writes one of the supervisor's own lines. A terminal that has gone away is not
+// something a chain can act on, and stopping a run to report it would end the work.
+func narrate(format string, args ...any) {
+	_, _ = fmt.Fprintf(progressOut, format, args...)
+}
+
 type launch struct {
 	claude   string
 	sandbox  string
@@ -72,7 +84,8 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 	if goal != "" {
 		// Events rather than a result, because a result arrives once and this machine takes
 		// minutes to reach it. The supervisor renders them, so it owns every line printed.
-		argv = append(argv, "--output-format", "stream-json", "--verbose", "-p", goal)
+		argv = append(argv, "--output-format", "stream-json", "--verbose",
+			"--include-partial-messages", "-p", goal)
 	}
 
 	env := append(append([]string{}, l.env...), "LOCALCODE_HANDOFF_DIR="+dir)
@@ -170,30 +183,30 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 			return 2, err
 		}
 		body := chain.Read(filepath.Join(dir, chain.HandoffName))
-		fmt.Fprintf(os.Stderr, "session %d — %d tool calls, %d of %d tokens, %ds — next: %s\n",
+		narrate("session %d — %d tool calls, %d of %d tokens, %ds — next: %s\n",
 			n, r.Calls, r.Peak, l.limits.Window, r.Seconds, or(r.Next, "nothing recorded"))
 
 		// A session stopped by the clock left whatever it had got to; carrying on from that
 		// is guessing, and the chain has already spent its longest session on it.
 		if r.TimedOut {
-			fmt.Fprintf(os.Stderr, "chain %s stopped: session %d ran past %s — read %s\n",
+			narrate("chain %s stopped: session %d ran past %s — read %s\n",
 				chainID, n, l.timeout, chain.LatestHandoff(chainDir))
 			return 1, nil
 		}
 		if chain.Done(body) {
-			fmt.Fprintf(os.Stderr, "chain %s finished after %s\n", chainID, plural(n-first+1, "session"))
+			narrate("chain %s finished after %s\n", chainID, plural(n-first+1, "session"))
 			return 0, nil
 		}
 		// Two sessions planning the same next step is the shape a chain fails in: it is
 		// still writing handoffs, and none of them is progress.
 		if havePrev && r.Next == prev {
-			fmt.Fprintf(os.Stderr, "chain %s stopped: this session planned what the last one "+
+			narrate("chain %s stopped: this session planned what the last one "+
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
 			return 1, nil
 		}
 		select {
 		case <-interrupted:
-			fmt.Fprintf(os.Stderr, "chain %s interrupted — continue with `localcode -resume %s`\n",
+			narrate("chain %s interrupted — continue with `localcode -resume %s`\n",
 				chainID, chainID)
 			return 1, nil
 		default:
@@ -206,7 +219,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 			inherit = h
 		}
 	}
-	fmt.Fprintf(os.Stderr, "chain %s stopped after %s, which is its bound — "+
+	narrate("chain %s stopped after %s, which is its bound — "+
 		"read %s and continue with `localcode -resume %s`\n",
 		chainID, plural(bound, "session"), chain.LatestHandoff(chainDir), chainID)
 	return 1, nil

@@ -323,10 +323,22 @@ func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	if !strings.Contains(got, resolved) {
 		t.Fatalf("the working directory must be writable:\n%s", got)
 	}
-	// Resolved, because /var and /tmp are symlinks into /private and seatbelt matches the
-	// resolved path — an unresolved entry denies what it appears to allow.
-	if strings.Contains(got, `(subpath "/tmp")`) {
-		t.Fatalf("paths must be resolved before they reach the profile:\n%s", got)
+	// Resolved, because /var and /tmp are symlinks into /private on macOS and seatbelt
+	// matches the resolved path — an unresolved entry denies what it appears to allow.
+	//
+	// Asserted as the property and not as one platform's symlink. Looking for the literal
+	// absence of "/tmp" said "unresolved" on a machine where /tmp resolves to itself, and
+	// failed on Linux for years without anything being wrong.
+	tmp := os.TempDir()
+	resolvedTmp, err := filepath.EvalSymlinks(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, sbplString(resolvedTmp)) {
+		t.Fatalf("the temp directory must reach the profile resolved:\n%s", got)
+	}
+	if resolvedTmp != tmp && strings.Contains(got, sbplString(tmp)) {
+		t.Fatalf("an unresolved path denies what it appears to allow:\n%s", got)
 	}
 }
 
@@ -642,6 +654,7 @@ func TestTheClockDoesNotRunOnAnInteractiveSession(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
+	quiet(t)
 	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, timeout: 50 * time.Millisecond,
 		checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
 	if err != nil || code != 0 {

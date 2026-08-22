@@ -21,10 +21,21 @@ func render(events io.Reader, out io.Writer, cwd string) {
 	// A line here carries a whole tool result. The default 64 KB would end the stream at the
 	// first big one, and silently — which is the failure this exists to remove.
 	scan.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	// Whether a half-written line of the model's prose is still open, so nothing else is
+	// printed onto the end of it, and whether this message's text has already been
+	// streamed a token at a time.
+	open, streamed := false, false
 	for scan.Scan() {
 		line := scan.Bytes()
 		var row struct {
-			Type    string `json:"type"`
+			Type  string `json:"type"`
+			Event struct {
+				Type  string `json:"type"`
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			} `json:"event"`
 			Message struct {
 				Content []struct {
 					Type    string          `json:"type"`
@@ -40,23 +51,48 @@ func render(events io.Reader, out io.Writer, cwd string) {
 			// line is the harness saying something, and swallowing it is how a run goes
 			// quiet for a reason nobody can see.
 			if s := strings.TrimSpace(string(line)); s != "" {
+				open = closeLine(out, open)
 				say(out, s)
 			}
 			continue
 		}
+		// The model's prose arrives a token at a time, which is the whole difference
+		// between watching a session and waiting on one: at 5-10 tok/s a paragraph is a
+		// minute, and a minute of nothing is indistinguishable from a wedged run.
+		if row.Type == "stream_event" {
+			switch {
+			case row.Event.Type == "content_block_delta" && row.Event.Delta.Type == "text_delta":
+				_, _ = io.WriteString(out, row.Event.Delta.Text)
+				open, streamed = true, true
+			case row.Event.Type == "content_block_stop" && open:
+				say(out, "")
+				open = false
+			}
+			continue
+		}
+
 		for _, b := range row.Message.Content {
 			switch b.Type {
 			case "text":
-				if s := strings.TrimSpace(b.Text); s != "" {
-					say(out, s)
+				// The complete message repeats what was streamed, so it is printed only
+				// when nothing was — a harness that sends no partials must still be heard.
+				if !streamed {
+					if s := strings.TrimSpace(b.Text); s != "" {
+						say(out, s)
+					}
 				}
 			case "tool_use":
+				open = closeLine(out, open)
 				say(out, fmt.Sprintf("  → %s %s", b.Name, argOf(b.Name, b.Input, cwd)))
 			case "tool_result":
 				if reason := refusal(b.Content); reason != "" {
+					open = closeLine(out, open)
 					say(out, "  ✗ "+reason)
 				}
 			}
+		}
+		if row.Type == "assistant" {
+			streamed = false
 		}
 	}
 }
@@ -65,6 +101,15 @@ func render(events io.Reader, out io.Writer, cwd string) {
 // on, and stopping the run to report it would end the work this exists to watch.
 func say(out io.Writer, line string) {
 	_, _ = fmt.Fprintln(out, line)
+}
+
+// closeLine ends a streamed line before anything else is written on it, and reports that
+// there is no longer one open.
+func closeLine(out io.Writer, open bool) bool {
+	if open {
+		say(out, "")
+	}
+	return false
 }
 
 // argOf is the one argument worth showing for a call. The same choice session-end.sh makes

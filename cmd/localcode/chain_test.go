@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +52,7 @@ func handoffSaying(next string) string {
 // directory the chain was kept in.
 func runHere(t *testing.T, o opts) (int, string) {
 	t.Helper()
+	quiet(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
 	o.endpoint, o.noServe = healthy(t, http.StatusOK), true
@@ -66,6 +68,15 @@ func runHere(t *testing.T, o opts) (int, string) {
 		t.Fatal(err)
 	}
 	return code, state
+}
+
+// quiet keeps a chain's narration out of the test log. What each session did is asserted,
+// so printing it as well only hides whichever test actually failed.
+func quiet(t *testing.T) {
+	t.Helper()
+	old := progressOut
+	progressOut = io.Discard
+	t.Cleanup(func() { progressOut = old })
 }
 
 func chainDirOf(t *testing.T, state string) string {
@@ -140,6 +151,7 @@ func TestASecondInstructionStartsItsOwnChain(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 	url := healthy(t, http.StatusOK)
 
 	for _, goal := range []string{"count the rows", "fix the tests"} {
@@ -169,6 +181,7 @@ func TestContinueCarriesOnTheNewestChainAndReIssuesItsGoal(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 	url := healthy(t, http.StatusOK)
 
 	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
@@ -200,6 +213,7 @@ func TestForkTakesWhatAChainKnewAndNoneOfItsSessions(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 	url := healthy(t, http.StatusOK)
 
 	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
@@ -236,6 +250,7 @@ func TestResumeRefusesAChainThatIsNotHere(t *testing.T) {
 	chainStub(t, handoffSaying("none"))
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
+	quiet(t)
 	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true, resume: "20200101-000000"})
 	if code != 2 || err == nil {
@@ -252,6 +267,7 @@ func TestContinueRefusesAChainThatSaidItWasFinished(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 	url := healthy(t, http.StatusOK)
 
 	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
@@ -277,6 +293,7 @@ func TestASessionThatWillNotStopIsStoppedAndEndsTheChain(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 
 	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, timeout: 200 * time.Millisecond,
 		checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true,
@@ -322,6 +339,7 @@ func TestContinueCarriesAnInteractiveSessionOnWithoutAPrompt(t *testing.T) {
 	passthroughSandbox(t)
 	repo := t.TempDir()
 	t.Chdir(repo)
+	quiet(t)
 	url := healthy(t, http.StatusOK)
 
 	// No args at all: this is somebody at a keyboard.
