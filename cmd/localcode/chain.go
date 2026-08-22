@@ -178,7 +178,12 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		default:
 		}
 		prev, havePrev = r.Next, true
-		inherit = filepath.Join(dir, chain.HandoffName)
+		// The newest handoff the chain holds, not this session's: a session killed before
+		// either it or `session-end.sh` wrote one leaves an empty directory, and pointing
+		// the next session at that file hands it nothing at all.
+		if h := chain.LatestHandoff(chainDir); h != "" {
+			inherit = h
+		}
 	}
 	fmt.Fprintf(os.Stderr, "chain %s stopped after %s, which is its bound — "+
 		"read %s and continue with `localcode -resume %s`\n",
