@@ -94,6 +94,17 @@ for cell in $CELLS; do
   name="ladder-${ctx}-${kv}"
   cfg="/tmp/$name.env"
   cell_config "$BASE" "$ctx" "$kv" "$cfg"
+  # The prefill batch is the base's, since cell_config moves only the context and the KV
+  # type. It goes on the row and into the name: a base that sets it produces a different
+  # measurement at the same rung, and two rows called `ladder-32768-q8_0` cannot be told
+  # apart. A base that leaves it at llama.cpp's default names nothing and keeps the row
+  # shape every earlier ladder wrote.
+  # `|| true` on both: under `pipefail` a grep that matches nothing fails the whole
+  # substitution, and a base that leaves the batch at llama.cpp's default is the normal
+  # case rather than an error.
+  ubatch=$(grep '^UBATCH_SIZE=' "$cfg" | cut -d'"' -f2 || true)
+  batch=$(grep '^BATCH_SIZE=' "$cfg" | cut -d'"' -f2 || true)
+  if [ -n "$ubatch" ]; then name="$name-ub$ubatch"; fi
   target=$(python3 -c "print(int($ctx * $FILL_FRACTION))")
 
   echo "=== $name  ctx=$ctx kv=$kv  filling to ~$target tokens ===" >&2
@@ -194,6 +205,7 @@ desktop=deskverdict.verdict(desk, "$CONDITION", $DESK_SATURATED, $DESK_STALLED,
 
 print(json.dumps({
   "condition": "$CONDITION", "cell": "$name", "ctx": $ctx, "kv": "$kv",
+  "ubatch": ${ubatch:-None}, "batch": ${batch:-None},
   "fill_target_tokens": $target, "outcome": "$outcome", "http": "$http",
   "fill_seconds": $fill_seconds, "prompt_per_second": $prompt_rate,
   "before": b, "loaded": l, "filled": f,
