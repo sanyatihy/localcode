@@ -64,7 +64,9 @@ Then, in any repository:
 
 ```sh
 localcode                          # start a server if none is running, and work here
-localcode "fix the failing test"   # or answer one prompt and exit
+localcode "fix the failing test"   # or give it one instruction and let it run
+localcode sessions                 # the chains this repository has run
+localcode -continue                # carry on the newest one
 localcode status                   # what is being served, at what context
 localcode stop                     # stop it, waiting for the memory back
 ```
@@ -72,6 +74,29 @@ localcode stop                     # stop it, waiting for the memory back
 Nothing is written to the repository you work in. Session state and the handoff live under
 `~/.local/state/localcode/`, keyed by the repository's path, so two checkouts of one project
 are two boxes of work.
+
+**A session hands over instead of filling up.** Tool calls stop being permitted once the
+session has used half its window, and the only call still allowed is the one that writes
+the handoff — which the session cannot decline, because refusing a tool call is not a
+request. So what you see when a session runs out is not an error, it is a line like:
+
+```
+session 2 — 11 tool calls, 5,993 of 11,264 tokens, 214s — next: fix Clamp
+```
+
+and then a third session starting clean, knowing what the second learned and nothing else.
+Given an instruction, `localcode` runs that chain for you until a handoff says `Next: none`,
+until two sessions in a row plan the same step, or until `-sessions` runs out; interactively
+it hands over once and leaves the next move to you, which is `localcode -continue`.
+
+Resuming re-reads nothing: a handoff costs about **4,265 tokens and 54 s**, where compacting
+the conversation it replaces re-read **37,837 tokens** — 452 s of ingest on this machine
+before a word of summary. That is why compaction is refused here rather than tuned, and why
+`--resume` is not what `-continue` does.
+
+`-resume <id>` picks a chain by name and `-fork <id>` starts a new one from what that chain
+knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls` and
+`-sessions` move the three bounds.
 
 **The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
 Writes reach the working directory, temp and the cache roots; everything else the kernel
