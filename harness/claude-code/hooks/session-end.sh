@@ -19,6 +19,10 @@ python3 - "$payload" "$ROOT" <<'PY'
 import json, os, sys
 
 payload, root = json.loads(sys.argv[1]), sys.argv[2]
+# Paths are shortened against the directory the session worked in, not the one its state
+# went to. Relativising against the state directory leaves every path absolute, and a
+# handoff of eight absolute paths is mostly noise.
+where = payload.get("cwd") or root
 
 WROTE = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 FILES, CALLS, SAID, WIDTH = 8, 6, 400, 100
@@ -36,10 +40,10 @@ def named(args):
 
 
 def short(path):
-    """Relative to the checkout, which is where the next session stands."""
+    """Relative to the working directory, which is where the next session stands."""
     if not os.path.isabs(path):
         return path
-    rel = os.path.relpath(path, root)
+    rel = os.path.relpath(path, where)
     return path if rel.startswith("..") else rel
 
 
@@ -55,6 +59,11 @@ for line in lines:
     except ValueError:
         continue
     if row.get("type") != "assistant":
+        continue
+    # An API error is rendered as an assistant message. Taking the last thing a session
+    # said without this makes `Prompt is too long` the next session's plan, which is what
+    # seven of eight handoffs in the first measured chain carried.
+    if row.get("isApiErrorMessage"):
         continue
     for block in (row.get("message") or {}).get("content") or []:
         if block.get("type") == "text" and block.get("text", "").strip():
@@ -81,7 +90,11 @@ out += ["**Files:** " + (", ".join("`%s` (edited)" % p for p in edited)
 out += ["**Tried:**" + ("" if calls else " nothing — no tool was called")]
 out += ["- `%s`" % c for c in calls[-CALLS:]]
 said = "\n".join(said.splitlines()[:5])[:SAID]
-out += ["", "**Next:** " + (said or "not recorded — the session said nothing.")]
+if not said:
+    # Nothing usable was said, so the last thing done is the only lead there is.
+    said = ("not recorded — the session ended without saying. It last ran `%s`."
+            % calls[-1]) if calls else "not recorded — the session did nothing."
+out += ["", "**Next:** " + said]
 
 with open(os.path.join(root, "HANDOFF.md"), "w") as f:
     f.write("\n".join(out) + "\n")

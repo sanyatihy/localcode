@@ -7,11 +7,16 @@ set -euo pipefail
 # to their root is untracked noise in a tree nobody asked us to touch.
 ROOT="${LOCALCODE_HANDOFF_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 HANDOFF="$ROOT/HANDOFF.md"
+# What a session inherits and what it will write are two files whenever a supervisor is
+# carrying one session's handoff to the next. One file cannot be both: the session reads it,
+# and SessionEnd then finds it already written and leaves the previous session's words in
+# place. With no supervisor they are the same file, which is 0016's case unchanged.
+INHERIT="${LOCALCODE_INHERIT:-$HANDOFF}"
 
-if [ -s "$HANDOFF" ]; then
-  echo "The previous session in this checkout left this in HANDOFF.md:"
+if [ -s "$INHERIT" ]; then
+  echo "The previous session in this chain left this behind:"
   echo
-  cat "$HANDOFF"
+  cat "$INHERIT"
 else
   cat <<EOF
 Nothing was handed to you: the handoff is absent or empty, so you are the first session on
