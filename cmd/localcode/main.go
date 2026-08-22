@@ -8,9 +8,14 @@
 //
 // Exit codes are the contract:
 //
-//	0  the agent ran and exited cleanly, or the subcommand answered yes
-//	1  the agent ran and exited non-zero, or the subcommand answered no
-//	2  the command could not be carried out (no checkout, no server, bad flags)
+//	0  the chain finished the instruction, the session exited cleanly, or the subcommand
+//	   answered yes
+//	1  the chain stopped without finishing — its bound, a stall, its clock or a Ctrl-C —
+//	   or the session exited non-zero, or the subcommand answered no
+//	2  the command could not be carried out (no checkout, no server, bad flags, a window
+//	   too small to work in)
+//
+// A chain that stops on 1 has left a handoff and names it, so `-resume` carries it on.
 package main
 
 import (
