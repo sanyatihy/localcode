@@ -51,4 +51,13 @@ trigger nobody watches is not an idea, it is a hedge.
   than fatal, and does not slow down how fast one fills. Promote when: a session hands over
   more than once on work that should have fitted, or when the cap is cheap enough to try —
   head-limiting Bash output is a hook, not a feature.
+- **Pi under `localcode`** — measured against Claude Code on one profiling task at a 12,288
+  wall: Pi compacted five times and finished; Claude Code died. At a 32,768 window Pi
+  finished without compacting at all, on 22,845 ingested tokens against Claude Code's
+  25,582. It also ships the session model 0023 is building — `--continue`, `--resume`,
+  `--fork` — and caps tool output at 50 KB or 2,000 lines. The sandbox and server lifecycle
+  in `localcode` are harness-agnostic, so driving Pi is a wiring question rather than a
+  rewrite. Against it: 0010 measured 12/15 against 14/15 over five fixtures at three passes,
+  and one task does not overturn that. Promote when: 0023 ships and the handoff chain is
+  still dearer than Pi's compaction, or when a second harness is wanted for any other reason.
 
