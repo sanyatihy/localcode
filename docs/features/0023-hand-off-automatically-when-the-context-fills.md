@@ -1,9 +1,9 @@
 ---
 id: 0023
 title: Hand off automatically when the context fills
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-21
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-22
 needs:
 ---
 
