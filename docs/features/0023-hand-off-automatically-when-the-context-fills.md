@@ -102,6 +102,18 @@ consecutive handoffs carry the same `Next`. A chain is one invocation; `-continu
 `-resume <id>` and `-fork <id>` choose between chains, and starting clean is the default
 because that is Claude Code's.
 
+**A session shows its work while it runs.** `claude -p` prints its result and nothing
+before it, so a chain is minutes of silence between summaries — measured, 591 s for one
+session at a small wall, and a session at the shipped window is longer. The supervisor
+takes the harness's own event stream and renders it, so what a session is doing is visible
+while it does it rather than only once it has stopped.
+
+**`Read` is capped where `Bash` is capped.** The reserve covers a turn's results because
+`Read` has no bound of its own, and that is why the reserve is a quarter of the window
+rather than an eighth. A cap on `Read` is the narrower fix: the gate already sees the call
+before it runs, and `Read` takes a structured `limit` rather than a shell string, so
+clamping it is precise where rewriting a command would not be.
+
 **Compaction stays refused.** It is not merely slower: on this machine it re-reads the whole
 conversation before generating, and it was measured losing the goal it was summarising.
 
@@ -120,6 +132,8 @@ conversation before generating, and it was measured losing the goal it was summa
 - [x] a repository carries several chains; `localcode` starts a new one, `-continue`,
       `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
 - [x] the README says what the developer sees when a session hands over
+- [x] a running session shows what it is doing, not only what it concluded
+- [ ] a `Read` cannot spend more of the window than the gate reserves for one call
 
 ## Open questions
 

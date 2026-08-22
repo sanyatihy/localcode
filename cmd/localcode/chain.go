@@ -26,6 +26,7 @@ type launch struct {
 	limits   chain.Limits
 	briefing string
 	timeout  time.Duration
+	cwd      string
 }
 
 // row is one session of a chain. The file of them is what a chain can be read back from
@@ -69,7 +70,9 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 	// separately, through the hook 0016 already uses, so a chain cannot drift by rewriting
 	// its own goal at each hop.
 	if goal != "" {
-		argv = append(argv, "-p", goal)
+		// Events rather than a result, because a result arrives once and this machine takes
+		// minutes to reach it. The supervisor renders them, so it owns every line printed.
+		argv = append(argv, "--output-format", "stream-json", "--verbose", "-p", goal)
 	}
 
 	env := append(append([]string{}, l.env...), "LOCALCODE_HANDOFF_DIR="+dir)
@@ -89,10 +92,28 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 	}
 	cmd := exec.CommandContext(ctx, l.sandbox, append([]string{"-f", l.profile, l.claude}, argv...)...)
 	cmd.Env = env
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Stderr = os.Stderr
 
 	started := time.Now()
-	err := cmd.Run()
+	var err error
+	if goal == "" {
+		// A developer at a keyboard: the harness draws its own screen and owns the terminal.
+		cmd.Stdin, cmd.Stdout = os.Stdin, os.Stdout
+		err = cmd.Run()
+	} else {
+		// Nobody is typing, and a terminal that never closes makes the harness wait on
+		// stdin it will not get.
+		cmd.Stdin = nil
+		events, pipeErr := cmd.StdoutPipe()
+		if pipeErr != nil {
+			return row{}, pipeErr
+		}
+		if err = cmd.Start(); err != nil {
+			return row{}, fmt.Errorf("could not start claude: %w", err)
+		}
+		render(events, os.Stdout, l.cwd)
+		err = cmd.Wait()
+	}
 	r := row{
 		At: started.UTC().Format(time.RFC3339), Chain: chainID, Session: n,
 		Seconds: int(time.Since(started).Round(time.Second).Seconds()),
