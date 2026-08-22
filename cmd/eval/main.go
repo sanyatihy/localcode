@@ -54,6 +54,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		stream   = fs.Bool("stream", false, "stream the reply so decode is measured apart from prefill")
 		session  = fs.String("session", "", "label pairing this run with the baseline it is read against")
 		fidelity = fs.Bool("fidelity", false, "after the suite, hash fixed greedy probes so the pair can be checked for losslessness")
+		probeSet = fs.String("fidelity-probes", "short", "short|prefill: which fixed probes to hash. prefill uses prompts long enough that a physical batch size divides them differently")
 		thinking = fs.String("thinking", "", "enable_thinking: on, off, or empty for the template default")
 		// Passed through rather than checked against a list: the next model's vocabulary
 		// differs and the server rejects what it does not know. What is guaranteed here
@@ -77,10 +78,19 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 
-	if (*taskPath == "") == (*tasksDir == "") {
+	if *taskPath != "" && *tasksDir != "" {
 		return errors.New("give exactly one of -task or -tasks")
 	}
-	paths := []string{*taskPath}
+	// A fidelity run with no fixtures is a whole run. The probes are an instrument, and a
+	// change to how a prefill is split has to be checked with them before anything
+	// expensive is scored on it — so asking for the instrument alone is not a mistake.
+	if *taskPath == "" && *tasksDir == "" && !*fidelity {
+		return errors.New("give exactly one of -task or -tasks, or -fidelity on its own")
+	}
+	var paths []string
+	if *taskPath != "" {
+		paths = []string{*taskPath}
+	}
 	if *tasksDir != "" {
 		var err error
 		if paths, err = eval.DiscoverTasks(*tasksDir); err != nil {
@@ -200,15 +210,20 @@ func run(args []string, stdout, stderr *os.File) error {
 	// After the suite rather than before it: the probes are an instrument, and running
 	// them first would warm caches the first scored task should pay for itself.
 	if *fidelity {
-		res, err := eval.Fidelity(ctx, client, prof, 256)
+		probes, err := eval.ProbeSet(*probeSet)
+		if err != nil {
+			return err
+		}
+		res, err := eval.Fidelity(ctx, client, prof, 256, probes)
 		if err != nil {
 			return fmt.Errorf("fidelity probe: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "fidelity %s\n", res.Hash[:16])
+		_, _ = fmt.Fprintf(stdout, "fidelity %s %s\n", *probeSet, res.Hash[:16])
 		if *results != "" {
 			row := eval.NewRow(*config, 0, "off", *effort, sampling, props, "fidelity",
 				eval.Result{TaskID: "fidelity-probe", Outcome: eval.Pass})
 			row.Session, row.FidelityHash, row.Forced = *session, res.Hash, *force
+			row.FidelityProbes = *probeSet
 			if err := eval.AppendRow(*results, row); err != nil {
 				return fmt.Errorf("cannot append fidelity row: %w", err)
 			}

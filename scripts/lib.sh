@@ -88,3 +88,18 @@ cell_config() { # base ctx kv out
     printf 'CTX_SIZE="%s"\nCACHE_TYPE_K="%s"\nCACHE_TYPE_V="%s"\n' "$ctx" "$kv" "$kv"
   } > "$out"
 }
+
+# batch_config writes one prefill-batch cell: the base's settings plus the physical batch
+# this cell asks about. The logical ceiling follows only where it would otherwise clamp
+# that value, so below it nothing but the physical batch moves. Generated for the same
+# reason a rung is — two scripts walk these cells, and a second copy of the rule is a
+# second answer to it.
+batch_config() { # base ubatch out
+  local base="$1" ubatch="$2" out="$3" batch=2048   # llama.cpp's own --batch-size default
+  [ "$ubatch" -gt "$batch" ] && batch="$ubatch"
+  {
+    printf '# Generated from %s. Not committed: a cell is derived.\n' "$base"
+    grep -E '^[A-Z_]+=' "$base"
+    printf 'BATCH_SIZE="%s"\nUBATCH_SIZE="%s"\n' "$batch" "$ubatch"
+  } > "$out"
+}
