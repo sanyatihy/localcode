@@ -129,3 +129,17 @@ conversation before generating, and it was measured losing the goal it was summa
   at the committed 32,768; measured, it completed the same task without compacting once, and
   at a 12,288 wall it compacted five times and still finished. Pi under `localcode` is worth
   its own feature and is a `BACKLOG.md` line.
+- **The enforcement was measured across six independent sessions, not one.** Every session
+  stopped at its budget with peak context between 4,512 and 5,941 of 12,288 — 37% to 48% —
+  so "keep the session small" holds without the model's cooperation. The `Stop` hook was
+  refused twice by one session before it complied, which is the reason it exists.
+- **A hook may state a fact but must not give an instruction.** A hook that told the model
+  what to do was refused as injection, correctly: the model will not follow instructions
+  arriving through a tool result. The protocol therefore belongs in the appended system
+  prompt, which 0022 already sends, and the hook reports only the state.
+- **Three numbers bound any test of this feature.** Decode is 5–10 tok/s, so a session needs
+  ~200 s to generate before it can write a handoff and 600 s is the practical floor;
+  Claude Code's prompt budget is the declared window minus the output reservation, so
+  declaring less than about 8 k leaves no room for the preamble; and a fixture whose work
+  collapses into one command never exercises a chain at all.
+
