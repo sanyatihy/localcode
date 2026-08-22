@@ -56,6 +56,11 @@ arriving through a tool result is refused as injection. Measured: the third call
 two-call budget was refused and the session peaked at **5,941 tokens of 12,288 — 48%**,
 where every earlier design reached compaction.
 
+**The budget is derived from what the harness keeps, not from what it was told to keep.**
+It reserves 4,096 tokens for a reply whatever `CLAUDE_CODE_MAX_OUTPUT_TOKENS` says, so the
+prompt budget is the declared window less the larger of the two. A window that does not
+clear the preamble and the reserve on top of that is refused rather than run in.
+
 **A turn is bounded as well as a session.** The harness issues a turn's tool calls together
 and the transcript does not change while they run, so one reading otherwise decides any
 number of them: a five-call turn carried the context **1,960 tokens past a ceiling it had
@@ -163,6 +168,24 @@ conversation before generating, and it was measured losing the goal it was summa
   session could spend being refused: a session that answers a spent budget by trying
   another tool would run until its thirty calls were gone. `-session-timeout` is the bound,
   and a session that reaches it ends the chain rather than handing on a guess.
+- **The harness keeps 4,096 tokens for a reply whatever it is told to keep, and the whole
+  budget was derived from the wrong number until that was measured.** Sessions edited four
+  files each and then died on `Prompt is too long` with no handoff written — the failure
+  this feature exists to prevent, reproduced by the feature itself. Bisecting the prompt it
+  refuses to send, with the padding sized by the server's own tokeniser, puts the boundary
+  at the declared window minus `max(MAX_OUTPUT, 4096)`. That makes the 12,288 wall the
+  enforcement was first measured at unworkable: 8,192 of budget does not clear the preamble
+  and the reserve together, and `localcode` now refuses it rather than running in it.
+- **A character count is not a token count, and believing one cost an afternoon.** The
+  first budget probe padded by `chars/4` and bracketed the limit 1,200–2,000 tokens too
+  high, which agreed with the arithmetic that was also wrong and so confirmed it. The
+  second used `/tokenize` and disagreed with both.
+- **The mechanical extractor made an API error the next session's plan.** That is the
+  failure this feature opens with, and it survived into the feature's own chains: a session
+  that dies before writing its handoff says `Prompt is too long`, and `session-end.sh` took
+  the last thing said. It now skips rows the transcript flags as API errors, falls back to
+  the last tool the session ran, and shortens paths against the working directory rather
+  than the state directory — eight absolute paths were most of what it wrote.
 - **The ceiling is the headroom, and the fraction was an arbitrary number that made the
   feature useless.** At half the window a session's room was one turn wide: it spent it on
   the reads `Edit` requires and was refused before it could change anything, twice over,

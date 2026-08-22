@@ -884,11 +884,20 @@ window, so one unbounded command cannot spend a session inside a single permitte
 `Read` has none, which is why the reserve is a quarter of the window rather than an eighth:
 a measured four-read turn cost 530 tokens a call against the 352 an eighth held back.
 
-**Claude Code's prompt budget is the declared window minus the output reservation, and it
-was probed rather than assumed.** With `CLAUDE_CODE_MAX_CONTEXT_TOKENS` at 12,288 and
-`CLAUDE_CODE_MAX_OUTPUT_TOKENS` at 1,024, it refuses a prompt somewhere between 9,400 and
-10,200 tokens and accepts below that. Refusal costs nothing, so the probe is a padded
-prompt and a stopwatch rather than a run.
+**Claude Code's prompt budget is the declared window minus `max(MAX_OUTPUT, 4096)`.** It
+keeps 4,096 for a reply whatever it is told to keep, so `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+below that buys nothing back. Bisected by padding a prompt to an exact token count — the
+server's own `/tokenize`, not a character estimate — and reading whether it was refused
+before it was sent, which costs no model time at all. Against a declared 12,288: with 1,024
+reserved the boundary falls between 3,700 and 3,900 tokens of padding on top of a
+~4,390-token preamble, putting it at 8,192; with 6,000 reserved it falls between 1,500 and
+2,500, which is 1,800 lower against the 1,904 the rule predicts.
+
+**Taking the declaration at face value is what killed the sessions this was found on.** A
+budget 3,072 tokens too generous let sessions edit four files each and then die on `Prompt
+is too long` with no handoff written. The declared window has to clear the preamble plus
+that reservation plus the reserve, or `localcode` refuses to start — which rules out the
+12,288 wall the enforcement was first measured at.
 
 **A chain is one invocation, and a repository holds several.** `localcode` given an
 instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
@@ -1032,6 +1041,11 @@ Each of these has already caused a wrong number in this repo.
   `/private`.** A profile naming an unresolved `TMPDIR` denies every compiler that uses one
   while appearing to allow it, and the failure reads as a broken toolchain rather than as a
   policy. Resolve every path before it reaches the profile.
+- **Characters over four is not a token count.** A budget probe that padded prompts by
+  `chars/4` bracketed Claude Code's limit at 9,400–10,200 tokens; the same probe padded
+  through the server's `/tokenize` put it at 8,192. The first number was wrong by a fifth
+  and it was believed for an afternoon, because it agreed with an arithmetic that was also
+  wrong. The server has a tokeniser and it is one HTTP call away.
 - **A hook fires once per tool call, and one turn's calls run at once.** Two bugs came out
   of that in one afternoon. A counter kept by read-modify-write loses calls — eleven
   permitted left one reading eight, so a budget silently allowed half again as much as it

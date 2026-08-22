@@ -62,6 +62,16 @@ const (
 	// a handoff has to end rather than spin.
 	handoffGrace = 3
 
+	// outputFloor is what the harness keeps for a reply whatever it was told to keep.
+	// Bisected against a declared 12,288 by padding a prompt to an exact token count and
+	// reading whether it was refused before it was sent: with 1,024 declared the boundary
+	// falls between 3,700 and 3,900 tokens of padding, and with 6,000 declared between
+	// 1,500 and 2,500 — 1,800 lower, against the 1,904 that a floor of this size predicts.
+	// So the reservation is the larger of the declaration and this, and a budget taken from
+	// the declaration alone is 3,072 tokens too generous at the smaller one. Sessions run
+	// on that budget did their work and then died on `Prompt is too long`.
+	outputFloor = 4096
+
 	// stopTries is how often the Stop hook may refuse before it relents and lets the
 	// mechanical extractor be the floor. Measured: the model tried to stop twice without a
 	// handoff and complied on the third.
@@ -87,8 +97,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	}
 
 	// The prompt budget, which is the number a session actually has: the reply shares the
-	// served context with the conversation, so the reservation is not available to it.
-	window := maxContext - maxOutput
+	// served context with the conversation, so the reservation is not available to it — and
+	// the reservation is the larger of what was declared and what the harness keeps anyway.
+	window := maxContext - max(maxOutput, outputFloor)
 	perCall := window / (resultShare * batchLimit)
 	reserve := perCall * batchLimit
 
