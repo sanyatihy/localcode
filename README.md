@@ -76,8 +76,9 @@ Nothing is written to the repository you work in. Session state and the handoff 
 are two boxes of work.
 
 **A session hands over instead of filling up.** Tool calls stop being permitted once the
-session has used half its window, and the only call still allowed is the one that writes
-the handoff — which the session cannot decline, because refusing a tool call is not a
+session's context reaches a ceiling — the window less what a turn of results, the turn that
+asked for them and the turn that writes the handoff still have to fit in — and the only
+call still allowed is the one that writes the handoff — which the session cannot decline, because refusing a tool call is not a
 request. So what you see when a session runs out is not an error, it is a line like:
 
 ```
@@ -95,8 +96,9 @@ before a word of summary. That is why compaction is refused here rather than tun
 `--resume` is not what `-continue` does.
 
 `-resume <id>` picks a chain by name and `-fork <id>` starts a new one from what that chain
-knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls` and
-`-sessions` move the three bounds.
+knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls`, `-sessions` and
+`-session-timeout` move the bounds; the ceiling defaults to as much as the arithmetic
+allows, so `-ceiling` only lowers it.
 
 **The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
 Writes reach the working directory, temp and the cache roots; everything else the kernel

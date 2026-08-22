@@ -61,7 +61,7 @@ flags:
   -config file    the serving config to start (default config/agent.env)
   -no-serve       refuse if no server is running, rather than starting one
   -net            allow outbound network for this session (default: loopback only)
-  -ceiling pct    how much of the window a session may fill before it hands off
+  -ceiling pct    lower the ceiling below what the reserve already allows, in percent
   -calls n        how many tool calls a session may spend
   -sessions n     how many sessions one instruction may take
   -session-timeout d  how long one session may run before it is stopped
@@ -78,7 +78,7 @@ func main() {
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
-	ceiling := fs.Int("ceiling", 50, "how much of the window a session may fill, in percent")
+	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
 	calls := fs.Int("calls", 30, "how many tool calls a session may spend")
 	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
 	timeout := fs.Duration("session-timeout", 30*time.Minute, "how long one session may run")
@@ -224,14 +224,17 @@ func run(o opts) (int, error) {
 
 	l := launch{
 		claude: claudePath, sandbox: sandboxExec, profile: profile, settings: settings,
-		env: env, limits: limits, briefing: sandboxBriefing(cwd), timeout: o.timeout,
+		env: env, limits: limits, briefing: sandboxBriefing(cwd),
 	}
 	if oneShot {
+		// The clock is the supervisor's bound on a session nobody is watching.
+		l.timeout = o.timeout
 		return runChain(l, chainDir, id, goal, o.sessions)
 	}
 
-	// With no instruction this is a developer at a keyboard, so the session is one and
-	// what follows it is their decision rather than a loop's.
+	// With no instruction this is a developer at a keyboard, so the session is one, what
+	// follows it is their decision rather than a loop's, and it ends when they end it —
+	// a timer that stopped a session somebody was using would be the tool's worst bug.
 	n := chain.NextSession(chainDir)
 	dir := filepath.Join(chainDir, fmt.Sprintf("%02d", n))
 	if err := os.MkdirAll(dir, 0o755); err != nil {

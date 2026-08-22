@@ -52,7 +52,7 @@ func runHere(t *testing.T, o opts) (int, string) {
 	t.Chdir(repo)
 	o.endpoint, o.noServe = healthy(t, http.StatusOK), true
 	if o.ceiling == 0 {
-		o.ceiling, o.calls, o.sessions = 50, 30, 8
+		o.ceiling, o.calls, o.sessions = 100, 30, 8
 	}
 	code, err := run(o)
 	if err != nil {
@@ -119,7 +119,7 @@ func TestChainStopsAtItsBound(t *testing.T) {
 	chainStub(t, handoffSaying("one"), handoffSaying("two"), handoffSaying("three"))
 	passthroughSandbox(t)
 
-	code, state := runHere(t, opts{ceiling: 50, calls: 30, sessions: 2,
+	code, state := runHere(t, opts{ceiling: 100, calls: 30, sessions: 2,
 		checkout: root, args: []string{"fix the four tests"}})
 	if code != 1 {
 		t.Fatalf("a chain that ran out of sessions must exit 1, got %d", code)
@@ -140,7 +140,7 @@ func TestASecondInstructionStartsItsOwnChain(t *testing.T) {
 	url := healthy(t, http.StatusOK)
 
 	for _, goal := range []string{"count the rows", "fix the tests"} {
-		if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 			endpoint: url, noServe: true, args: []string{goal}}); err != nil {
 			t.Fatal(err)
 		}
@@ -168,11 +168,11 @@ func TestContinueCarriesOnTheNewestChainAndReIssuesItsGoal(t *testing.T) {
 	t.Chdir(repo)
 	url := healthy(t, http.StatusOK)
 
-	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 1, checkout: root,
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: url, noServe: true, cont: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestForkTakesWhatAChainKnewAndNoneOfItsSessions(t *testing.T) {
 	t.Chdir(repo)
 	url := healthy(t, http.StatusOK)
 
-	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 1, checkout: root,
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestForkTakesWhatAChainKnewAndNoneOfItsSessions(t *testing.T) {
 	if err != nil || len(ids) != 1 {
 		t.Fatalf("chains: %v %v", ids, err)
 	}
-	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: url, noServe: true, fork: ids[0]}); err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestResumeRefusesAChainThatIsNotHere(t *testing.T) {
 	chainStub(t, handoffSaying("none"))
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
-	code, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true, resume: "20200101-000000"})
 	if code != 2 || err == nil {
 		t.Fatalf("an unknown chain must be refused: code %d err %v", code, err)
@@ -251,11 +251,11 @@ func TestContinueRefusesAChainThatSaidItWasFinished(t *testing.T) {
 	t.Chdir(repo)
 	url := healthy(t, http.StatusOK)
 
-	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
 		t.Fatal(err)
 	}
-	code, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
 		endpoint: url, noServe: true, cont: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a finished chain must be refused, got code %d err %v", code, err)
@@ -275,7 +275,7 @@ func TestASessionThatWillNotStopIsStoppedAndEndsTheChain(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
 
-	code, err := run(opts{ceiling: 50, calls: 30, sessions: 4, timeout: 200 * time.Millisecond,
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 4, timeout: 200 * time.Millisecond,
 		checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true,
 		args: []string{"fix the four tests"}})
 	if err != nil || code != 1 {

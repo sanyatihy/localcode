@@ -859,15 +859,23 @@ a session told in prose to spend three commands reached compaction anyway, and o
 transcript last recorded it, and three things arrive after that reading: the results of the
 calls it is permitting, the turn that asked for them, and the turn that answers the denial
 by writing the handoff. So the ceiling is the window less a quarter for results and twice
-the output reservation, and the fraction asked for — half by default — binds only while it
-is the smaller of the two. A window with no room left for the preamble is refused rather
-than clamped: a session started in one spends a cold ingest to say `Prompt is too long`.
+the output reservation, and that is also the default: as high as the arithmetic allows and
+no higher. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
+already buy while costing a handoff — measured at half the window, a session could not both
+read a file and edit it, which `Edit` requires of it, so the chain wrote handoffs and never
+changed a line. A window with no room left for the preamble is refused rather than clamped:
+a session started in one spends a cold ingest to say `Prompt is too long`.
 
 **A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
 decides a whole turn's calls, because the harness issues them together and nothing changes
 while they run. Measured at a 12,288 wall, sessions denied at a 5,632 ceiling peaked at
 6,434, 7,670 and 7,751 of an 11,264 window — an overshoot of about 2,000 tokens, which is
 what the quarter-window reserve is for.
+
+**A handoff cannot carry the right to edit.** `Edit` fails on a file the session has not
+`Read`, so every session in a chain pays the read for every file it changes, however well
+the handoff describes it. A read and an edit cost about 350 tokens a file at a 12,288 wall,
+which is what sets how many files a session can get through before its ceiling.
 
 **Only `Bash` has a cap of its own.** `BASH_MAX_OUTPUT_LENGTH` is set to a sixteenth of the
 window, so one unbounded command cannot spend a session inside a single permitted call.
