@@ -96,8 +96,8 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 	}
 	// The turn's bound is asked first, and what it refuses is not charged to the session:
 	// a call held back to be measured again is not a call the session chose to spend.
-	s.Batch = Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
-	if v := Turn(spec.Limits, s.Batch); v.Deny {
+	spent := Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
+	if v := Turn(spec.Limits, spent); v.Deny {
 		return v
 	}
 	s.Calls = Bump(dir, CallsFile(p.SessionID)) - 1

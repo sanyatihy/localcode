@@ -131,7 +131,6 @@ type Payload struct {
 type State struct {
 	Calls    int
 	Handoffs int
-	Batch    int // calls this turn has already been permitted
 	Peak     int
 }
 
