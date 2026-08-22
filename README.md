@@ -81,10 +81,10 @@ the handoff — which the session cannot decline, because refusing a tool call i
 request. So what you see when a session runs out is not an error, it is a line like:
 
 ```
-session 2 — 11 tool calls, 5,993 of 11,264 tokens, 214s — next: fix Clamp
+session 1 — 11 tool calls, 7670 of 11264 tokens, 271s — next: apply the eight fixes, then run go test
 ```
 
-and then a third session starting clean, knowing what the second learned and nothing else.
+and then a second session starting clean, knowing what the first learned and nothing else.
 Given an instruction, `localcode` runs that chain for you until a handoff says `Next: none`,
 until two sessions in a row plan the same step, or until `-sessions` runs out; interactively
 it hands over once and leaves the next move to you, which is `localcode -continue`.

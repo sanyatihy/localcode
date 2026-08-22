@@ -64,6 +64,7 @@ flags:
   -ceiling pct    how much of the window a session may fill before it hands off
   -calls n        how many tool calls a session may spend
   -sessions n     how many sessions one instruction may take
+  -session-timeout d  how long one session may run before it is stopped
   -continue       carry on this repository's most recent chain
   -resume id      carry on the chain with this id
   -fork id        start a chain from what that chain knew
@@ -80,6 +81,7 @@ func main() {
 	ceiling := fs.Int("ceiling", 50, "how much of the window a session may fill, in percent")
 	calls := fs.Int("calls", 30, "how many tool calls a session may spend")
 	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
+	timeout := fs.Duration("session-timeout", 30*time.Minute, "how long one session may run")
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
@@ -113,6 +115,7 @@ func main() {
 			ceiling:  *ceiling,
 			calls:    *calls,
 			sessions: *sessions,
+			timeout:  *timeout,
 			cont:     *cont,
 			resume:   *resume,
 			fork:     *fork,
@@ -134,6 +137,7 @@ type opts struct {
 	ceiling  int
 	calls    int
 	sessions int
+	timeout  time.Duration
 	cont     bool
 	resume   string
 	fork     string
@@ -220,7 +224,7 @@ func run(o opts) (int, error) {
 
 	l := launch{
 		claude: claudePath, sandbox: sandboxExec, profile: profile, settings: settings,
-		env: env, limits: limits, briefing: sandboxBriefing(cwd),
+		env: env, limits: limits, briefing: sandboxBriefing(cwd), timeout: o.timeout,
 	}
 	if oneShot {
 		return runChain(l, chainDir, id, goal, o.sessions)
@@ -588,7 +592,11 @@ func handoffBriefing(l chain.Limits, path string) string {
 			"**Tried:** what you did and what came of it — the results themselves, not the "+
 			"commands that produced them\n"+
 			"**Next:** the one thing to do next, or `none` when the instruction is finished\n"+
-			"A fresh session inherits that file and nothing else. Keep it under 40 lines.",
+			"A fresh session inherits that file and nothing else. Keep it under 40 lines.\n"+
+			"A handoff you were given is what the session before you established, not a "+
+			"suggestion to check: start from its **Next** rather than re-deriving what it "+
+			"already recorded. Re-reading what it read is how a chain spends every session "+
+			"learning the same thing.",
 		l.Calls, l.Batch, l.Ceiling, l.Window, path)
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -24,21 +25,23 @@ type launch struct {
 	env      []string
 	limits   chain.Limits
 	briefing string
+	timeout  time.Duration
 }
 
 // row is one session of a chain. The file of them is what a chain can be read back from
 // when its last handoff does not explain how it got there.
 type row struct {
-	At      string `json:"at"`
-	Chain   string `json:"chain"`
-	Session int    `json:"session"`
-	Seconds int    `json:"seconds"`
-	Exit    int    `json:"exit"`
-	Peak    int    `json:"peak_context_tokens"`
-	Turns   int    `json:"turns"`
-	Calls   int    `json:"tool_calls"`
-	Handoff int    `json:"handoff_bytes"`
-	Next    string `json:"next"`
+	At       string `json:"at"`
+	Chain    string `json:"chain"`
+	Session  int    `json:"session"`
+	Seconds  int    `json:"seconds"`
+	Exit     int    `json:"exit"`
+	Peak     int    `json:"peak_context_tokens"`
+	Turns    int    `json:"turns"`
+	Calls    int    `json:"tool_calls"`
+	Handoff  int    `json:"handoff_bytes"`
+	Next     string `json:"next"`
+	TimedOut bool   `json:"timed_out,omitempty"`
 }
 
 // session runs one, in its own directory, and returns what the harness exited with.
@@ -74,7 +77,17 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		env = append(env, "LOCALCODE_INHERIT="+inherit)
 	}
 
-	cmd := exec.Command(l.sandbox, append([]string{"-f", l.profile, l.claude}, argv...)...)
+	// A wall-clock bound, because none of the others is one. Denied calls still cost a turn
+	// apiece, and a turn at this depth is minutes: a session that answers a spent budget by
+	// trying another tool rather than by handing off would otherwise run until the budget
+	// of calls ran out, an hour later.
+	ctx := context.Background()
+	if l.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, l.timeout)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, l.sandbox, append([]string{"-f", l.profile, l.claude}, argv...)...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
@@ -84,6 +97,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		At: started.UTC().Format(time.RFC3339), Chain: chainID, Session: n,
 		Seconds: int(time.Since(started).Round(time.Second).Seconds()),
 	}
+	r.TimedOut = ctx.Err() != nil
 	var exit *exec.ExitError
 	switch {
 	case err == nil:
@@ -138,6 +152,13 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		fmt.Fprintf(os.Stderr, "session %d — %d tool calls, %d of %d tokens, %ds — next: %s\n",
 			n, r.Calls, r.Peak, l.limits.Window, r.Seconds, or(r.Next, "nothing recorded"))
 
+		// A session stopped by the clock left whatever it had got to; carrying on from that
+		// is guessing, and the chain has already spent its longest session on it.
+		if r.TimedOut {
+			fmt.Fprintf(os.Stderr, "chain %s stopped: session %d ran past %s — read %s\n",
+				chainID, n, l.timeout, chain.LatestHandoff(chainDir))
+			return 1, nil
+		}
 		if chain.Done(body) {
 			fmt.Fprintf(os.Stderr, "chain %s finished after %s\n", chainID, plural(n-first+1, "session"))
 			return 0, nil
@@ -289,6 +310,14 @@ func selectChain(state string, o opts) (dir, id, goal string, err error) {
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", "", err
+	}
+
+	// Carrying on a chain that said it was finished would start a session whose whole
+	// inheritance is `Next: none`, which does nothing and writes another one. Refused with
+	// the two things that are not nothing.
+	if goal == "" && (o.cont || o.resume != "") && chain.Done(chain.Read(chain.LatestHandoff(dir))) {
+		return "", "", "", fmt.Errorf("chain %s finished: give a new instruction to carry on "+
+			"in it, or `localcode -fork %s` to start again from what it knew", id, id)
 	}
 
 	// An instruction given now replaces the one the chain was started with; given none, the
