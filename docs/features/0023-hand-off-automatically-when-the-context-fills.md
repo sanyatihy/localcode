@@ -118,9 +118,15 @@ conversation before generating, and it was measured losing the goal it was summa
 
 ## Open questions
 
-- Whether the digest should carry each session's `Next` or its `Tried`. `Next` is what the
-  session meant to do and `Tried` is what it did, and only a chain long enough to repeat
-  itself will show which one prevents that.
+- **What a supervisor can check progress against.** `Next` was the candidate and it is
+  weak: two sessions that both surveyed the same eight files and changed nothing wrote
+  different `Next` lines — "apply the eight fixes" against "read title.go, apply the eight
+  fixes" — so the chain ran to its bound rather than stopping at the repeat. `Tried` is
+  free text and would fail the same way. What would not is a definition of progress the
+  supervisor can check without the session's cooperation, and the obvious one — did any
+  file change — is wrong for a chain whose work is a question rather than an edit. The
+  bound is what makes this an optimisation rather than a hole, and it is a `BACKLOG.md`
+  line.
 
 ## Log
 

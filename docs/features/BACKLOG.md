@@ -54,6 +54,14 @@ trigger nobody watches is not an idea, it is a hedge.
   seen handing over on one long file, or when a `PreToolUse` hook is confirmed able to
   rewrite a tool's input, which would let the gate clamp `Read`'s `limit` rather than
   reserve against it.
+- **A progress signal a supervisor can check** — 0023 stops a chain when two sessions in a
+  row plan the same `Next`, which is weak: two sessions that both surveyed the same files
+  and changed nothing wrote different `Next` lines, so the chain ran to its `-sessions`
+  bound instead. The obvious mechanical alternative — did any file change — is wrong for a
+  chain whose work is a question rather than an edit, so this needs a definition of
+  progress that covers both. Promote when: a chain is seen spending its bound on sessions
+  that achieved nothing, often enough that the wasted sessions cost more than the
+  measurement would.
 - **Pi under `localcode`** — measured against Claude Code on one profiling task at a 12,288
   wall: Pi compacted five times and finished; Claude Code died. At a 32,768 window Pi
   finished without compacting at all, on 22,845 ingested tokens against Claude Code's
