@@ -83,6 +83,11 @@ turn that writes the handoff. So what you see when a session runs out is not an 
 is a line like:
 
 ```
+  → Read median.go
+  → Edit median.go
+  → Bash go test ./...
+  ✗ this session's context reached 8292 tokens of a 7168 ceiling. No call other than…
+  → Write HANDOFF.md
 session 1 — 17 tool calls, 10090 of 12288 tokens, 591s — next: apply these exact replacements, then run go test
 ```
 

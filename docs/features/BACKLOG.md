@@ -44,16 +44,6 @@ trigger nobody watches is not an idea, it is a hedge.
   category of rule as doing the topmost one. Promote when: a second project wants it, or the box
   parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
   shell hooks at all, or only the rule.
-- **Bounding what a `Read` may put in the context** — one real session reached its limit
-  with 74.6% of the window spent on tool results and 23.6% on the calls themselves, against
-  1.7% of the model's own text and two user messages. 0023 caps `Bash` at a sixteenth of the
-  window through `BASH_MAX_OUTPUT_LENGTH`, so `seq 1 100000` no longer costs a session.
-  `Read` has no equivalent: its 2,000-line default is a bound in lines rather than tokens,
-  and a measured four-read turn cost 530 tokens a call against the 352 an eighth-of-window
-  reserve held back — which is why that reserve is now a quarter. Promote when: a session is
-  seen handing over on one long file, or when a `PreToolUse` hook is confirmed able to
-  rewrite a tool's input, which would let the gate clamp `Read`'s `limit` rather than
-  reserve against it.
 - **A progress signal a supervisor can check** — 0023 stops a chain when two sessions in a
   row plan the same `Next`, which is weak: two sessions that both surveyed the same files
   and changed nothing wrote different `Next` lines, so the chain ran to its `-sessions`

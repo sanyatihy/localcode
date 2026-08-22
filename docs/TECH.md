@@ -886,10 +886,23 @@ which is what sets how many files a session can get through before its ceiling. 
 appended system prompt says so, because a session that surveys before it acts spends its
 whole ceiling on reads it cannot follow up — measured, three times over.
 
-**Only `Bash` has a cap of its own.** `BASH_MAX_OUTPUT_LENGTH` is set to a sixteenth of the
-window, so one unbounded command cannot spend a session inside a single permitted call.
-`Read` has none, which is why the reserve is a quarter of the window rather than an eighth:
-a measured four-read turn cost 530 tokens a call against the 352 an eighth held back.
+**Both unbounded tools are capped, each where it can be.** `BASH_MAX_OUTPUT_LENGTH` is set
+to a sixteenth of the window, so one unbounded command cannot spend a session inside a
+single permitted call. `Read` has no such setting — its own bound is two thousand lines,
+which bounds lines rather than the window — so the gate narrows the call instead: a
+`PreToolUse` hook may rewrite a tool's input, and `Read` takes a structured `limit`. How
+many of a file's lines fit in the reserve is computed from the file, not from a
+tokens-per-line guess. Measured against a 108,893-byte file in a 12,288-token window: the
+model asked for `limit: 1200` on every call — 65 KB apiece — and each came back at about
+3,230 bytes against a 3,072-byte reserve, the excess being the line numbers the harness
+adds. Unclamped, the first call would have ended the session.
+
+**A session shows its work.** `claude -p` prints its result and nothing before it, so a
+chain was minutes of silence between summaries — one measured session spent 591 s before it
+said a word, which is indistinguishable from a wedged run. A one-shot session is asked for
+`--output-format stream-json` instead and the supervisor renders it: a line per tool call
+as it happens, the model's text as it arrives, and a line for every call the gate refuses.
+An interactive session is untouched, because the harness draws its own screen there.
 
 **Claude Code's prompt budget is the declared window minus `max(MAX_OUTPUT, 4096)`.** It
 keeps 4,096 for a reply whatever it is told to keep, so `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
