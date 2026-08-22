@@ -875,7 +875,9 @@ what the quarter-window reserve is for.
 **A handoff cannot carry the right to edit.** `Edit` fails on a file the session has not
 `Read`, so every session in a chain pays the read for every file it changes, however well
 the handoff describes it. A read and an edit cost about 350 tokens a file at a 12,288 wall,
-which is what sets how many files a session can get through before its ceiling.
+which is what sets how many files a session can get through before its ceiling. The
+appended system prompt says so, because a session that surveys before it acts spends its
+whole ceiling on reads it cannot follow up — measured, three times over.
 
 **Only `Bash` has a cap of its own.** `BASH_MAX_OUTPUT_LENGTH` is set to a sixteenth of the
 window, so one unbounded command cannot spend a session inside a single permitted call.

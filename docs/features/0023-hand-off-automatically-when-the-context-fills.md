@@ -169,11 +169,14 @@ conversation before generating, and it was measured losing the goal it was summa
   floor on what a session can do: at this wall a read and an edit cost about 350 tokens a
   file, so a session's working room buys two or three of them and the chain needs a session
   per two or three files.
-- **Over-reading is the part that was fixable, and it was prose.** One session read all
-  eight files when its room bought four edits, and was denied the moment it tried the
-  fifth: twelve calls, none of them work. Nothing had told it that a handoff is established
-  rather than a claim to check. The appended system prompt now says so, which is the
-  trusted channel; a mechanism that forbade re-reading would forbid what `Edit` requires.
+- **Over-reading is the part that was fixable, and the fix is prose.** Sessions read every
+  file in the fixture before changing any, three chains running, and spent their whole
+  ceiling doing it: twelve calls, nine calls, eleven calls, not a line edited. The appended
+  system prompt now tells a session two things it could not otherwise know — that a handoff
+  is established rather than a claim to check, and that `Edit` refuses a file this session
+  has not read, so a read not followed by a change is room spent for nothing. Neither is a
+  bound, and neither has to be: the mechanism keeps the session safe whether it is followed
+  or not. A rule that forbade re-reading would forbid what `Edit` requires.
 - **A count of refused compactions measures turns, not pressure.** `PreCompact` fired once
   before every turn of an enforced session — at 4,325 tokens of an 11,264 window as readily
   as at 6,183 — so it is consulted per turn rather than at a threshold, and the twenty
