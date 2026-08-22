@@ -93,12 +93,12 @@ conversation before generating, and it was measured losing the goal it was summa
 - [x] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
       up after two refusals rather than wedging the run
 - [x] a tool result cannot spend more of the window than the gate reserves for one
-- [ ] the handoff is written outside the repository being visited, and `session-end.sh`
+- [x] the handoff is written outside the repository being visited, and `session-end.sh`
       writes one for every session in a chain
 - [ ] a chain of sessions finishes a task no single session could, with each handoff
       carrying results rather than commands
-- [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
-- [ ] a repository carries several chains; `localcode` starts a new one, `-continue`,
+- [x] two consecutive handoffs with the same `Next` stop the chain and name the file
+- [x] a repository carries several chains; `localcode` starts a new one, `-continue`,
       `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
 - [ ] the README says what the developer sees when a session hands over
 
@@ -138,6 +138,12 @@ conversation before generating, and it was measured losing the goal it was summa
   what to do was refused as injection, correctly: the model will not follow instructions
   arriving through a tool result. The protocol therefore belongs in the appended system
   prompt, which 0022 already sends, and the hook reports only the state.
+- **A count of refused compactions measures turns, not pressure.** `PreCompact` fired once
+  before every turn of an enforced session — at 4,325 tokens of an 11,264 window as readily
+  as at 6,183 — so it is consulted per turn rather than at a threshold, and the twenty
+  refusals this feature opens with are twenty turns rather than twenty attempts to survive.
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` was tried against it and changed nothing, so nothing
+  here sets it.
 - **The cap is a setting rather than a `PostToolUse` hook, and the spill went with it.**
   That hook runs once the result is already in the conversation, so it can add context and
   cannot remove any: what it would have capped is spent by the time it is asked. The
