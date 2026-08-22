@@ -49,10 +49,21 @@ budget in prose ignored it, and a session warned about its context ignored that 
 mechanism below asks the model for anything.
 
 **`PreToolUse` spends a budget and then permits only the way out.** It counts a session's
-tool calls and, once the budget is gone, denies every call except writing the handoff. The
-denial names the state and the remedy, and the model receives it verbatim. Measured: the
-third call of a two-call budget was refused and the session peaked at **5,941 tokens of
-12,288 — 48%**, where every earlier design reached compaction.
+tool calls, reads its context out of the transcript, and once either bound is gone denies
+every call except writing the one handoff the session was given. The denial names the state
+and stops there — the remedy is in the appended system prompt, because an instruction
+arriving through a tool result is refused as injection. Measured: the third call of a
+two-call budget was refused and the session peaked at **5,941 tokens of 12,288 — 48%**,
+where every earlier design reached compaction.
+
+**A turn is bounded as well as a session.** The harness issues a turn's tool calls together
+and the transcript does not change while they run, so one reading otherwise decides any
+number of them: a five-call turn carried the context **1,960 tokens past a ceiling it had
+been under**. Four calls to a turn is what makes the ceiling's reserve a bound rather than
+a hope, and the reserve is a quarter of the window because a measured four-call turn cost
+530 tokens a call. What that bound holds back costs the session nothing: a call deferred to
+be measured again is not a call the session chose to spend, and the appended system prompt
+says so, since a session that did not know would lose most of a batch to it.
 
 **`Stop` refuses to let a session end without a usable handoff.** It checks the file exists,
 clears a size floor and carries a `Next`. Measured: the model tried to stop **twice** without
@@ -76,9 +87,10 @@ context as it stood before that result arrived — so the reserve it holds back 
 on a result are one number. `BASH_MAX_OUTPUT_LENGTH` is where it goes: the harness
 truncates at the tool, which is the last place a result can still be shortened.
 
-**The supervisor chains sessions and owns everything outside the session.** It archives the
-inherited handoff so `session-end.sh` always writes a fresh one, re-issues the original
-instruction verbatim so the goal cannot drift through a chain, and stops when two
+**The supervisor chains sessions and owns everything outside the session.** Each session
+gets a directory of its own, so the handoff it inherits and the handoff it writes are never
+the same file and `session-end.sh` always finds a fresh one to fill. It re-issues the
+original instruction verbatim so the goal cannot drift through a chain, and stops when two
 consecutive handoffs carry the same `Next`. A chain is one invocation; `-continue`,
 `-resume <id>` and `-fork <id>` choose between chains, and starting clean is the default
 because that is Claude Code's.

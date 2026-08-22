@@ -577,9 +577,10 @@ func newChain(state string) (dir, id string, err error) {
 // injection — correctly, which is why the gate itself only reports a state.
 func handoffBriefing(l chain.Limits, path string) string {
 	return fmt.Sprintf(
-		"This session is budgeted. It may spend %d tool calls, and its context may reach %d "+
-			"tokens of the %d it has; past either, every call is refused except writing the "+
-			"handoff. A refusal is the budget, not a fault to work around.\n"+
+		"This session is budgeted. It may spend %d tool calls, at most %d of them in any one "+
+			"turn, and its context may reach %d tokens of the %d it has; past the session's "+
+			"bounds every call is refused except writing the handoff. A refusal is the budget, "+
+			"not a fault to work around.\n"+
 			"Write the handoff to %s with the Write tool before you stop, in this shape:\n"+
 			"# Handoff\n"+
 			"**Box:** what you were asked to do, in one line\n"+
@@ -588,7 +589,7 @@ func handoffBriefing(l chain.Limits, path string) string {
 			"commands that produced them\n"+
 			"**Next:** the one thing to do next, or `none` when the instruction is finished\n"+
 			"A fresh session inherits that file and nothing else. Keep it under 40 lines.",
-		l.Calls, l.Ceiling, l.Window, path)
+		l.Calls, l.Batch, l.Ceiling, l.Window, path)
 }
 
 // sandboxExec is macOS's own. A var so a test can substitute a pass-through: the CI that

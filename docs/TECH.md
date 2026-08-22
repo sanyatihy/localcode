@@ -824,10 +824,14 @@ is in [`harness/claude-code/`](../harness/claude-code/README.md) with the rest o
 configuration.
 
 **A refused compaction does not end the session.** The turn completes and `PreCompact` fires
-again on the next one, once per turn while the conversation stays over the threshold. What
-ends a session is `CLAUDE_CODE_MAX_CONTEXT_TOKENS` refusing a send it cannot fit, so the
-refusal buys the generation a summary would have cost and nothing else — bounding a session
-is the driver's job. Measured at 2.1.233, on both triggers.
+again on the next one, once per turn. Not only over a threshold: under 0023's gate it fired
+before every turn of a session whose context ran 4,325 to 6,183 of an 11,264 window, so a
+count of refusals measures turns rather than pressure, and the twenty refusals 0016 opened
+with are twenty turns. `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` was tried against it and changed
+nothing, so nothing here sets it. What ends a session is
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` refusing a send it cannot fit, so the refusal buys the
+generation a summary would have cost and nothing else — bounding a session is the driver's
+job. Measured at 2.1.233, on both triggers.
 
 **`SessionStart` sends `source`, not `session_start_reason`.** All three events fire in a
 print session, which is the form the driver runs.
@@ -841,6 +845,48 @@ with the mechanism and without it, and
 [0011](features/0011-split-planning-and-grinding-across-frontier-and-local-models.md) is
 where boxes are driven locally, so it is where those runs happen. Until then this is
 apparatus, not a result.
+
+## A session is budgeted rather than left to fill up
+
+0016 made a full context survivable; this keeps a session from reaching one. Every session
+`localcode` starts carries a budget derived from the window the harness was declared, and
+two hooks enforce it — `localcode hook gate` on `PreToolUse`, `localcode hook stop` on
+`Stop`. Neither asks the model for anything, because instruction was measured not to work:
+a session told in prose to spend three commands reached compaction anyway, and one warned at
+45% of its window acknowledged the warning and carried on.
+
+**The ceiling is derived from what lands after it.** The gate decides on the context as the
+transcript last recorded it, and three things arrive after that reading: the results of the
+calls it is permitting, the turn that asked for them, and the turn that answers the denial
+by writing the handoff. So the ceiling is the window less a quarter for results and twice
+the output reservation, and the fraction asked for — half by default — binds only while it
+is the smaller of the two. A window with no room left for the preamble is refused rather
+than clamped: a session started in one spends a cold ingest to say `Prompt is too long`.
+
+**A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
+decides a whole turn's calls, because the harness issues them together and nothing changes
+while they run. Measured at a 12,288 wall, sessions denied at a 5,632 ceiling peaked at
+6,434, 7,670 and 7,751 of an 11,264 window — an overshoot of about 2,000 tokens, which is
+what the quarter-window reserve is for.
+
+**Only `Bash` has a cap of its own.** `BASH_MAX_OUTPUT_LENGTH` is set to a sixteenth of the
+window, so one unbounded command cannot spend a session inside a single permitted call.
+`Read` has none, which is why the reserve is a quarter of the window rather than an eighth:
+a measured four-read turn cost 530 tokens a call against the 352 an eighth held back.
+
+**Claude Code's prompt budget is the declared window minus the output reservation, and it
+was probed rather than assumed.** With `CLAUDE_CODE_MAX_CONTEXT_TOKENS` at 12,288 and
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` at 1,024, it refuses a prompt somewhere between 9,400 and
+10,200 tokens and accepts below that. Refusal costs nothing, so the probe is a padded
+prompt and a stopwatch rather than a run.
+
+**A chain is one invocation, and a repository holds several.** `localcode` given an
+instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
+same step, or until `-sessions` runs out, and each of the three says which happened.
+Starting clean is the default, `-continue` takes the newest chain, `-resume` takes one by
+id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them.
+One handoff per repository was wrong: a second instruction in the same checkout would have
+resumed the first and then overwritten what it knew.
 
 ## The two-tier split, measured
 
@@ -976,6 +1022,13 @@ Each of these has already caused a wrong number in this repo.
   `/private`.** A profile naming an unresolved `TMPDIR` denies every compiler that uses one
   while appearing to allow it, and the failure reads as a broken toolchain rather than as a
   policy. Resolve every path before it reaches the profile.
+- **A hook fires once per tool call, and one turn's calls run at once.** Two bugs came out
+  of that in one afternoon. A counter kept by read-modify-write loses calls — eleven
+  permitted left one reading eight, so a budget silently allowed half again as much as it
+  said. And a hook that reads the transcript reads the same numbers for every call in a
+  turn, so one decision admits a whole batch: a five-call turn carried the context 1,960
+  tokens past a ceiling it had been under when the gate looked. Append a byte and decide on
+  the offset the write returned, and bound the turn as well as the session.
 - **A hook's prose is part of the mechanism.** Relocating the handoff's state was not
   enough: the SessionStart text still told the model to create it "at the root of the
   checkout", so the model did, in the repository being visited. Moving where a file is

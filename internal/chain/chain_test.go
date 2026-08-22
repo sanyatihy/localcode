@@ -119,18 +119,17 @@ func TestGateStillBoundsASessionItCannotMeasure(t *testing.T) {
 // The harness issues a turn's calls together and the transcript does not change while they
 // run, so one reading decides all of them. Measured without this bound: a five-call turn
 // carried the context 1,960 tokens past a ceiling it had been under when the gate looked.
-func TestGateBoundsOneTurnsCallsSoOneReadingCannotDecideAnyNumber(t *testing.T) {
-	spec := limits(t)
-	l := spec.Limits
-	if v := Gate(work(), spec, State{Batch: l.Batch - 1, Peak: 10}); v.Deny {
+func TestTurnBoundsItsCallsSoOneReadingCannotDecideAnyNumber(t *testing.T) {
+	l := limits(t).Limits
+	if v := Turn(l, l.Batch-1); v.Deny {
 		t.Fatalf("a turn under its bound must be permitted: %s", v.Reason)
 	}
-	v := Gate(work(), spec, State{Batch: l.Batch, Peak: 10})
+	v := Turn(l, l.Batch)
 	if !v.Deny {
 		t.Fatal("a turn past its bound must be refused")
 	}
-	// A throttle, not an end: saying otherwise would tell the session to hand off when it
-	// has most of its window left.
+	// A throttle, not an end: saying otherwise would tell a session with most of its window
+	// left to hand over.
 	if strings.Contains(v.Reason, "other than writing the handoff") {
 		t.Fatalf("a turn's bound is not the session's: %q", v.Reason)
 	}
