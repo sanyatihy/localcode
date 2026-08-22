@@ -65,15 +65,16 @@ The one produced under enforcement recorded the counts themselves — `Productio
 133, Other 127` — and the caveat that words in a free-text field were excluded. That is what
 a fresh session needs and what the extracted handoffs never had.
 
-**The model writes it into the working directory.** Writing to the state directory failed:
-the file tool is confined to the working directory, so the supervisor relocates the handoff
-afterwards rather than asking the session to write outside its tree. `Write` must therefore
-be in `--tools`, which 0022's four already provide.
+**The model writes it outside the repository being visited.** The file tools are confined
+to the workspace, and `--add-dir` is what puts the session's own state directory in it — so
+nothing is relocated afterwards and a visited repository still ends a session with exactly
+the files the work changed. `Write` must be in `--tools`, which 0022's four already provide.
 
 **Tool output is capped, because a budget on calls is not a budget on tokens.** One
-unbounded `cat` fills a window inside a single permitted call. Pi caps a result at 50 KB or
-2,000 lines and spills the rest to a file the model may read; the same cap belongs here, and
-`PostToolUse` is where it goes.
+unbounded `cat` fills a window inside a single permitted call, and the gate decides on the
+context as it stood before that result arrived — so the reserve it holds back and the cap
+on a result are one number. `BASH_MAX_OUTPUT_LENGTH` is where it goes: the harness
+truncates at the tool, which is the last place a result can still be shortened.
 
 **The supervisor chains sessions and owns everything outside the session.** It archives the
 inherited handoff so `session-end.sh` always writes a fresh one, re-issues the original
@@ -87,13 +88,13 @@ conversation before generating, and it was measured losing the goal it was summa
 
 ## Tasks
 
-- [ ] a `PreToolUse` budget denies further work once spent, permitting only the handoff, and
-      a session under it stays below half the window
-- [ ] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
+- [x] a `PreToolUse` budget denies further work once spent, permitting only the handoff, and
+      what it permits leaves the session room to write it
+- [x] a `Stop` hook refuses to end a session without a handoff carrying a `Next`, and gives
       up after two refusals rather than wedging the run
-- [ ] `PostToolUse` caps a tool result and spills the remainder to a file the model may read
-- [ ] the handoff is written in the working directory and relocated by the supervisor, and
-      `session-end.sh` writes for every session in a chain
+- [x] a tool result cannot spend more of the window than the gate reserves for one
+- [ ] the handoff is written outside the repository being visited, and `session-end.sh`
+      writes one for every session in a chain
 - [ ] a chain of sessions finishes a task no single session could, with each handoff
       carrying results rather than commands
 - [ ] two consecutive handoffs with the same `Next` stop the chain and name the file
@@ -137,6 +138,23 @@ conversation before generating, and it was measured losing the goal it was summa
   what to do was refused as injection, correctly: the model will not follow instructions
   arriving through a tool result. The protocol therefore belongs in the appended system
   prompt, which 0022 already sends, and the hook reports only the state.
+- **The cap is a setting rather than a `PostToolUse` hook, and the spill went with it.**
+  That hook runs once the result is already in the conversation, so it can add context and
+  cannot remove any: what it would have capped is spent by the time it is asked. The
+  harness truncates at the tool instead, sized from the window, and a session that needs
+  what was dropped re-runs the command through a filter — which is cheaper here than
+  reading a spill file back in.
+- **A ceiling expressed as a fraction cannot bound a session's peak, so the box asks for
+  what it can.** One tool result and one assistant turn land after the last call the gate
+  permits, so a session held at half the window peaks above half; the 37–48% that was
+  measured is what a two-call budget produced, not what a 50% ceiling guarantees. The
+  ceiling is therefore derived from what has to fit after it — one capped result, the turn
+  that asked for it, and the turn that writes the handoff — and the requested fraction
+  binds only while it is the smaller of the two.
+- **The gate is the launcher run as a hook, not a fourth shell script.** It reads a
+  transcript and counts against a budget, which is a decision rather than a record, and
+  0021 put decisions where `make check` covers them. The three hooks 0016 ships stay shell
+  because they extract and record.
 - **Three numbers bound any test of this feature.** Decode is 5–10 tok/s, so a session needs
   ~200 s to generate before it can write a handoff and 600 s is the practical floor;
   Claude Code's prompt budget is the declared window minus the output reservation, so
