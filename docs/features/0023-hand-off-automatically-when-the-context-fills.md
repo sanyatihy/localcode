@@ -100,7 +100,7 @@ conversation before generating, and it was measured losing the goal it was summa
 - [x] two consecutive handoffs with the same `Next` stop the chain and name the file
 - [x] a repository carries several chains; `localcode` starts a new one, `-continue`,
       `-resume <id>` and `-fork <id>` choose one, and `localcode sessions` lists them
-- [ ] the README says what the developer sees when a session hands over
+- [x] the README says what the developer sees when a session hands over
 
 ## Open questions
 
