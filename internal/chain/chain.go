@@ -8,8 +8,11 @@
 package chain
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -150,6 +153,10 @@ type State struct {
 type Verdict struct {
 	Deny   bool
 	Reason string
+	// Input is a permitted call held to what the reserve allows, and nil when the call goes
+	// through as it was made. Narrowing beats refusing where it is possible: the session
+	// gets what it asked for, bounded, rather than an error to work around.
+	Input map[string]any
 }
 
 // Gate decides whether a session may spend another tool call.
@@ -250,4 +257,88 @@ func Next(handoff []byte) string {
 func Done(handoff []byte) bool {
 	next := strings.ToLower(strings.Trim(Next(handoff), " .`"))
 	return next == "none" || next == "nothing" || next == "done"
+}
+
+// ClampRead holds a `Read` to what the gate reserved for one call, and reports whether it
+// changed anything.
+//
+// `Bash` takes its cap from the harness and `Read` has none of its own: its default bound
+// is two thousand lines, which is a bound on lines rather than on the window. The clamp is
+// computed from the file rather than from a tokens-per-line guess — how many lines of this
+// file fit in the reserve is a question the file answers.
+//
+// The count is of the file's own bytes, and the harness numbers the lines it returns, so a
+// clamped result lands a few percent above the cap: measured, 3,229 bytes against 3,072.
+// The reserve carries that, and counting the prefixes here would be guessing at the
+// harness's formatting.
+func ClampRead(input map[string]any, capBytes int) (map[string]any, bool) {
+	path, _ := input["file_path"].(string)
+	if path == "" || capBytes <= 0 {
+		return nil, false
+	}
+	offset := intOf(input["offset"], 1)
+	lines, err := linesWithin(path, offset, capBytes)
+	if err != nil {
+		return nil, false // unreadable here is the tool's problem to report, not the gate's
+	}
+	// The model's own limit binds when it is the smaller: a session that asked for ten
+	// lines wanted ten, and widening it would spend the window on its behalf.
+	if want := intOf(input["limit"], 0); want > 0 && want <= lines {
+		return nil, false
+	}
+	if lines <= 0 {
+		lines = 1 // a line too long for the reserve is still the smallest read there is
+	}
+	out := make(map[string]any, len(input)+1)
+	for k, v := range input {
+		out[k] = v
+	}
+	out["limit"] = lines
+	return out, true
+}
+
+// linesWithin counts how many lines from offset fit in a byte budget, and stops counting
+// once they do not: the answer is a small number and the file may not be.
+func linesWithin(path string, offset, capBytes int) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+
+	scan := bufio.NewScanner(f)
+	scan.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	at, spent, lines := 1, 0, 0
+	for scan.Scan() {
+		if at < offset {
+			at++
+			continue
+		}
+		spent += len(scan.Bytes()) + 1
+		if spent > capBytes {
+			break
+		}
+		lines++
+		at++
+	}
+	if err := scan.Err(); err != nil {
+		return 0, err
+	}
+	// The whole of what was asked for fits, so there is nothing to clamp.
+	if spent <= capBytes {
+		return 0, errNothingToClamp
+	}
+	return lines, nil
+}
+
+var errNothingToClamp = errors.New("the read fits the reserve")
+
+func intOf(v any, fallback int) int {
+	switch n := v.(type) {
+	case float64: // every number out of encoding/json
+		return int(n)
+	case int:
+		return n
+	}
+	return fallback
 }

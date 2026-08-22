@@ -101,7 +101,17 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 		return v
 	}
 	s.Calls = Bump(dir, CallsFile(p.SessionID)) - 1
-	return Gate(p, spec, s)
+	v := Gate(p, spec, s)
+	if v.Deny || p.ToolName != "Read" {
+		return v
+	}
+	// `Bash` takes its cap from the harness and `Read` has none, so the gate is where it
+	// gets one. Narrowed rather than refused: the session reads what it asked for, up to
+	// what the reserve holds for a call.
+	if input, clamped := ClampRead(p.ToolInput, spec.Limits.ResultCap); clamped {
+		v.Input = input
+	}
+	return v
 }
 
 // stop counts its refusals rather than reading the harness's stop_hook_active, because the
