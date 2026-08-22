@@ -64,6 +64,11 @@ flags only when set. They exist for clients that build their own request bodies.
 scorer sends sampling and the thinking toggle per request and must be served by a
 config that sets none of them, or the run measures something the row does not say.
 
+**A config may also size the prefill batch.** `BATCH_SIZE` and `UBATCH_SIZE` become
+`--batch-size` and `--ubatch-size` only when set. Every committed config leaves both
+unset, so every number this repo holds was measured at llama.cpp's own defaults — 2048
+logical, 512 physical.
+
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
 
