@@ -51,6 +51,7 @@ usage:
   localcode serve              start the server here, in the foreground
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
+  localcode sessions           the chains this repository has run
   localcode hook <name>        run one of this binary's own session hooks
   localcode --help
 
@@ -62,6 +63,10 @@ flags:
   -net            allow outbound network for this session (default: loopback only)
   -ceiling pct    how much of the window a session may fill before it hands off
   -calls n        how many tool calls a session may spend
+  -sessions n     how many sessions one instruction may take
+  -continue       carry on this repository's most recent chain
+  -resume id      carry on the chain with this id
+  -fork id        start a chain from what that chain knew
 `
 
 func main() {
@@ -74,6 +79,10 @@ func main() {
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 50, "how much of the window a session may fill, in percent")
 	calls := fs.Int("calls", 30, "how many tool calls a session may spend")
+	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
+	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
+	resume := fs.String("resume", "", "carry on the chain with this id")
+	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -92,6 +101,8 @@ func main() {
 		code, err = script(*checkoutFlag, "stop.sh")
 	case len(args) > 1 && args[0] == "hook":
 		code, err = hook(args[1])
+	case len(args) > 0 && args[0] == "sessions":
+		code, err = sessionsHere()
 	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,
@@ -101,6 +112,10 @@ func main() {
 			net:      *net,
 			ceiling:  *ceiling,
 			calls:    *calls,
+			sessions: *sessions,
+			cont:     *cont,
+			resume:   *resume,
+			fork:     *fork,
 			args:     args,
 		})
 	}
@@ -118,6 +133,10 @@ type opts struct {
 	net      bool
 	ceiling  int
 	calls    int
+	sessions int
+	cont     bool
+	resume   string
+	fork     string
 	args     []string
 }
 
@@ -158,25 +177,16 @@ func run(o opts) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	// One directory per session, holding what it was budgeted, what it spent and what it
-	// hands on. Fresh, because a handoff left in it by the session before is a stale
-	// instruction the next one obeys.
-	chainDir, _, err := newChain(state)
+	chainDir, id, goal, err := selectChain(state, o)
 	if err != nil {
-		return 2, err
-	}
-	session := filepath.Join(chainDir, "01")
-	handoffPath := filepath.Join(session, chain.HandoffName)
-	if err := chain.WriteSpec(session, chain.Spec{
-		Limits: limits, Handoff: handoffPath, Chain: filepath.Base(chainDir), Session: 1,
-	}); err != nil {
 		return 2, err
 	}
 
 	// Whether there is an instruction decides more than what the harness is told. A
 	// session answering one ends once; an interactive session ends every time it hands the
-	// keyboard back. Only the first can be refused permission to stop without a handoff.
-	oneShot := len(o.args) > 0
+	// keyboard back. Only the first can be chained, and only the first can be refused
+	// permission to stop without leaving a handoff.
+	oneShot := goal != ""
 	settings, err := writeSettings(root, chainDir, oneShot)
 	if err != nil {
 		return 2, err
@@ -206,41 +216,47 @@ func run(o opts) (int, error) {
 	// inside a single permitted call, and the gate decides on the context as it stood
 	// before that result arrived. This is the harness's own cap on the one tool whose
 	// result has no bound of its own, sized from the window it is protecting.
-	env = append(env, "LOCALCODE_HANDOFF_DIR="+session,
-		fmt.Sprintf("BASH_MAX_OUTPUT_LENGTH=%d", limits.ResultCap))
+	env = append(env, fmt.Sprintf("BASH_MAX_OUTPUT_LENGTH=%d", limits.ResultCap))
 
-	argv := []string{
-		"--tools", agentTools, "--allowedTools", agentTools,
-		"--settings", settings,
-		// The handoff is written outside the repository being visited, so a session leaves
-		// it with exactly the files the work changed. Claude Code confines its file tools
-		// to the workspace, and this is what puts that one directory in it.
-		"--add-dir", session,
-		// The model is the only thing that sees a denied write: claude gives a tool's
-		// stderr to it rather than passing it through. So the fix has to be knowledge the
-		// session already has, not something printed afterwards by a process that never
-		// learns the write was refused.
-		"--append-system-prompt", sandboxBriefing(cwd) + "\n\n" + handoffBriefing(limits, handoffPath),
+	l := launch{
+		claude: claudePath, sandbox: sandboxExec, profile: profile, settings: settings,
+		env: env, limits: limits, briefing: sandboxBriefing(cwd),
 	}
-	// The instruction goes last and only when there is one: with no prompt this is an
-	// interactive session, which is the common case for a developer in their own repo.
 	if oneShot {
-		argv = append(argv, "-p")
-		argv = append(argv, o.args...)
+		return runChain(l, chainDir, id, goal, o.sessions)
 	}
 
-	cmd := exec.Command(sandboxExec, append([]string{"-f", profile, claudePath}, argv...)...)
-	cmd.Env = env
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			return exit.ExitCode(), nil
-		}
-		return 2, fmt.Errorf("could not start claude: %w", err)
+	// With no instruction this is a developer at a keyboard, so the session is one and
+	// what follows it is their decision rather than a loop's.
+	n := chain.NextSession(chainDir)
+	dir := filepath.Join(chainDir, fmt.Sprintf("%02d", n))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return 2, err
 	}
-	return 0, nil
+	r, err := l.session(dir, n, id, "", chain.LatestHandoff(chainDir))
+	if err != nil {
+		return 2, err
+	}
+	if r.Handoff > 0 {
+		fmt.Fprintf(os.Stderr, "\nhanded off in %s — carry on with `localcode -continue`\n",
+			filepath.Join(dir, chain.HandoffName))
+	}
+	return r.Exit, nil
+}
+
+// sessionsHere lists what this repository has been asked to do. Keyed by the repository,
+// because two checkouts of one project are the normal case here and they are not the same
+// box of work.
+func sessionsHere() (int, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return 2, fmt.Errorf("no working directory: %w", err)
+	}
+	state, err := repoState(cwd)
+	if err != nil {
+		return 2, err
+	}
+	return listChains(state)
 }
 
 // resolveCheckout prefers the flag, then the stamped path. It refuses rather than
