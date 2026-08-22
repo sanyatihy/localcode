@@ -75,11 +75,12 @@ Nothing is written to the repository you work in. Session state and the handoff 
 `~/.local/state/localcode/`, keyed by the repository's path, so two checkouts of one project
 are two boxes of work.
 
-**A session hands over instead of filling up.** Tool calls stop being permitted once the
-session's context reaches a ceiling — the window less what a turn of results, the turn that
-asked for them and the turn that writes the handoff still have to fit in — and the only
-call still allowed is the one that writes the handoff — which the session cannot decline, because refusing a tool call is not a
-request. So what you see when a session runs out is not an error, it is a line like:
+**A session hands over instead of filling up.** Once its context reaches a ceiling, a
+session is refused every tool call but the one that writes its handoff — and it cannot
+decline that, because a refused tool call is not a request. The ceiling is the window less
+what still has to fit after it: a turn of results, the turn that asked for them, and the
+turn that writes the handoff. So what you see when a session runs out is not an error, it
+is a line like:
 
 ```
 session 1 — 11 tool calls, 7670 of 11264 tokens, 271s — next: apply the eight fixes, then run go test
@@ -87,8 +88,9 @@ session 1 — 11 tool calls, 7670 of 11264 tokens, 271s — next: apply the eigh
 
 and then a second session starting clean, knowing what the first learned and nothing else.
 Given an instruction, `localcode` runs that chain for you until a handoff says `Next: none`,
-until two sessions in a row plan the same step, or until `-sessions` runs out; interactively
-it hands over once and leaves the next move to you, which is `localcode -continue`.
+until two sessions in a row plan the same step, until a session runs past its clock, or
+until `-sessions` runs out — and it says which. Interactively it hands over once and leaves
+the next move to you, which is `localcode -continue`.
 
 Resuming re-reads nothing: a handoff costs about **4,265 tokens and 54 s**, where compacting
 the conversation it replaces re-read **37,837 tokens** — 452 s of ingest on this machine
@@ -96,9 +98,9 @@ before a word of summary. That is why compaction is refused here rather than tun
 `--resume` is not what `-continue` does.
 
 `-resume <id>` picks a chain by name and `-fork <id>` starts a new one from what that chain
-knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls`, `-sessions` and
-`-session-timeout` move the bounds; the ceiling defaults to as much as the arithmetic
-allows, so `-ceiling` only lowers it.
+knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls`, `-sessions` and `-session-timeout` move the bounds. The ceiling
+defaults to as much as the arithmetic allows, so `-ceiling` only lowers it — and lowering
+it costs a handoff every time it cuts a session short.
 
 **The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
 Writes reach the working directory, temp and the cache roots; everything else the kernel

@@ -102,19 +102,6 @@ func Read(path string) []byte {
 	return body
 }
 
-// Archive files a session's handoff under the chain that produced it, so a chain that goes
-// wrong can be read back one session at a time rather than through its last file only.
-func Archive(dir string, session int, body []byte) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, fmt.Sprintf("%02d.md", session))
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		return fmt.Errorf("archive the handoff: %w", err)
-	}
-	return nil
-}
-
 // Chains lists a repository's chains, newest first. The id is a timestamp, so sorting the
 // names is sorting the runs — which is what `-continue` needs and what `localcode
 // sessions` prints.

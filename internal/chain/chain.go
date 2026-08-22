@@ -187,7 +187,7 @@ func Turn(l Limits, spent int) Verdict {
 // wedged by the hook that exists to protect it; the mechanical extractor is the floor
 // under that.
 func Stop(handoff []byte, path string, tries int) Verdict {
-	if Usable(handoff) || tries >= stopTries {
+	if usable(handoff) || tries >= stopTries {
 		return Verdict{}
 	}
 	return Verdict{Deny: true, Reason: fmt.Sprintf(
@@ -195,10 +195,10 @@ func Stop(handoff []byte, path string, tries int) Verdict {
 			"so this session has handed nothing on.", path, handoffFloor)}
 }
 
-// Usable reports whether a handoff is one. Size and a `**Next:**` line, because those are
+// usable reports whether a handoff is one. Size and a `**Next:**` line, because those are
 // what the failure looked like: a chain of eight sessions wrote eight handoffs of which
 // seven carried `Prompt is too long` as their next step.
-func Usable(handoff []byte) bool {
+func usable(handoff []byte) bool {
 	return len(handoff) >= handoffFloor && bytes.Contains(handoff, []byte("**Next:**"))
 }
 
