@@ -67,7 +67,7 @@ under test. The check is cheap and it gates the expensive one.
 
 ## Tasks
 
-- [ ] `scripts/serve.sh` passes `--batch-size` and `--ubatch-size` when a config sets them, and a config that sets neither produces the process line it produces today
+- [x] `scripts/serve.sh` passes `--batch-size` and `--ubatch-size` when a config sets them, and a config that sets neither produces the process line it produces today
 - [ ] the admissible `--ubatch-size` range is found by walking up from the default until the allocator or 0014's desktop rule refuses, with wired peak and desktop verdict recorded per cell
 - [ ] fixed prompts at temperature zero hash identically across the admissible cells, or the divergence is recorded and the sweep stops there
 - [ ] cold ingest at depth is scored for every admissible cell at both profiles' contexts, into `docs/data/`
