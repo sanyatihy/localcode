@@ -87,8 +87,10 @@ context as it stood before that result arrived — so the reserve it holds back 
 on a result are one number. `BASH_MAX_OUTPUT_LENGTH` is where it goes: the harness
 truncates at the tool, which is the last place a result can still be shortened.
 
-**The supervisor chains sessions and owns everything outside the session.** Each session
-gets a directory of its own, so the handoff it inherits and the handoff it writes are never
+**The supervisor chains sessions and owns everything outside the session.** It is also the
+only clock: a session is stopped if it runs past `-session-timeout`, because a denied call
+costs a turn like any other and nothing else here bounds how many of them a session may
+spend. Each session gets a directory of its own, so the handoff it inherits and the handoff it writes are never
 the same file and `session-end.sh` always finds a fresh one to fill. It re-issues the
 original instruction verbatim so the goal cannot drift through a chain, and stops when two
 consecutive handoffs carry the same `Next`. A chain is one invocation; `-continue`,
@@ -150,6 +152,18 @@ conversation before generating, and it was measured losing the goal it was summa
   what to do was refused as injection, correctly: the model will not follow instructions
   arriving through a tool result. The protocol therefore belongs in the appended system
   prompt, which 0022 already sends, and the hook reports only the state.
+- **A denied call still costs a turn, so a session needs a clock as well as a budget.** At
+  this depth a turn is minutes, and nothing in the design bounded how many of them a
+  session could spend being refused: a session that answers a spent budget by trying
+  another tool would run until its thirty calls were gone. `-session-timeout` is the bound,
+  and a session that reaches it ends the chain rather than handing on a guess.
+- **A chain can spend every session learning the same thing.** The second session of a
+  chain re-read all eight files its predecessor had diagnosed, and was denied the moment it
+  tried to edit — twelve calls, none of them work. The handoff said what each bug was;
+  nothing told the session that a handoff is established rather than a claim to check. The
+  appended system prompt now says so, which is the trusted channel; the alternative, a
+  mechanism that forbids re-reading, would forbid the one thing a session sometimes has to
+  do.
 - **A count of refused compactions measures turns, not pressure.** `PreCompact` fired once
   before every turn of an enforced session — at 4,325 tokens of an 11,264 window as readily
   as at 6,183 — so it is consulted per turn rather than at a threshold, and the twenty

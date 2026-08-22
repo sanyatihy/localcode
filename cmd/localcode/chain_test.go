@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sanyatihy/localcode/internal/chain"
 )
@@ -236,5 +237,56 @@ func TestResumeRefusesAChainThatIsNotHere(t *testing.T) {
 		endpoint: healthy(t, http.StatusOK), noServe: true, resume: "20200101-000000"})
 	if code != 2 || err == nil {
 		t.Fatalf("an unknown chain must be refused: code %d err %v", code, err)
+	}
+}
+
+// Carrying on a finished chain would start a session whose whole inheritance is `Next:
+// none`: it does nothing and writes another one. The refusal names the two things that are
+// not nothing.
+func TestContinueRefusesAChainThatSaidItWasFinished(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	code, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, cont: true})
+	if code != 2 || err == nil {
+		t.Fatalf("a finished chain must be refused, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "-fork") {
+		t.Fatalf("the refusal must name the way on: %v", err)
+	}
+}
+
+// None of the other bounds is a clock. A denied call still costs a turn, and a turn at
+// depth is minutes, so a session that answers a spent budget by trying another tool would
+// run until its calls ran out rather than until it had anything to say.
+func TestASessionThatWillNotStopIsStoppedAndEndsTheChain(t *testing.T) {
+	root := fakeCheckout(t)
+	stubClaude(t, "sleep 30")
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	code, err := run(opts{ceiling: 50, calls: 30, sessions: 4, timeout: 200 * time.Millisecond,
+		checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true,
+		args: []string{"fix the four tests"}})
+	if err != nil || code != 1 {
+		t.Fatalf("a chain whose session ran past the clock must stop: code %d err %v", code, err)
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One session, not four: a chain does not spend its bound on a session that hangs.
+	if got := chain.NextSession(chainDirOf(t, state)); got != 2 {
+		t.Fatalf("the chain must stop at the first timeout, next is %d", got)
 	}
 }

@@ -93,9 +93,10 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	reserve := perCall * batchLimit
 
 	// What the gate can permit and still be sure the session survives to write its
-	// handoff. Three things land after the reading the gate makes its decision on: the
-	// result of the call it is permitting, the turn that asked for it, and the turn that
-	// answers the denial by writing the handoff.
+	// handoff. Three things land after the reading it decides on: the results of the calls
+	// it is permitting — a whole turn of them, which is what the batch bound makes finite —
+	// the turn that asked for them, and the turn that answers the denial by writing the
+	// handoff.
 	headroom := window - reserve - 2*maxOutput
 
 	ceiling := window * ceilingPct / 100
