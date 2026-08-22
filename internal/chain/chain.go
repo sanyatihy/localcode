@@ -141,8 +141,9 @@ type Verdict struct {
 // The reason states the session's state and stops there. A hook that told the model what
 // to do was refused as injection — correctly, because it arrived through a tool result.
 // What to do about a spent budget belongs in the appended system prompt, which is trusted.
-func Gate(p Payload, l Limits, s State) Verdict {
-	if IsHandoff(p.ToolName, p.ToolInput) {
+func Gate(p Payload, spec Spec, s State) Verdict {
+	l := spec.Limits
+	if IsHandoff(p.ToolName, p.ToolInput, spec.Handoff) {
 		if s.Handoffs >= handoffGrace {
 			return Verdict{Deny: true, Reason: fmt.Sprintf(
 				"localcode: the handoff has been written %d times and this session is over.",
@@ -190,12 +191,19 @@ func Usable(handoff []byte) bool {
 
 // IsHandoff reports whether a call is the session writing its way out. It is never part of
 // the work, so it is never denied for the reasons work is.
-func IsHandoff(tool string, input map[string]any) bool {
+//
+// The one path the session was given, not any file named like it: a spent budget opens
+// exactly one door, and "somewhere called HANDOFF.md" is a wider door than the supervisor
+// will ever read from.
+func IsHandoff(tool string, input map[string]any, handoff string) bool {
 	if tool != "Write" && tool != "Edit" {
 		return false
 	}
 	path, _ := input["file_path"].(string)
-	return filepath.Base(path) == HandoffName
+	if path == "" || handoff == "" {
+		return false
+	}
+	return filepath.Clean(path) == filepath.Clean(handoff)
 }
 
 // HandoffName is the file, everywhere. One name so the gate, the supervisor and the two

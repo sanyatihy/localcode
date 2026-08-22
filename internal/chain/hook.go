@@ -88,13 +88,13 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 	// Counted before it is decided, not after. The harness runs a turn's calls
 	// concurrently, so several of these are deciding at once; taking a number first is what
 	// gives each of them a different one to decide against.
-	if IsHandoff(p.ToolName, p.ToolInput) {
+	if IsHandoff(p.ToolName, p.ToolInput, spec.Handoff) {
 		s.Handoffs = Bump(dir, HandoffsFile(p.SessionID)) - 1
 	} else {
 		s.Calls = Bump(dir, CallsFile(p.SessionID)) - 1
 		s.Batch = Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
 	}
-	return Gate(p, spec.Limits, s)
+	return Gate(p, spec, s)
 }
 
 // stop counts its refusals rather than reading the harness's stop_hook_active, because the
