@@ -96,8 +96,9 @@ conversation, which is the whole point — see [why not compaction](#why-a-hando
 ### One instruction, run until it is done
 
 `localcode "…"` starts a **chain**: sessions back to back, each inheriting the last one's
-handoff, with the instruction re-issued word for word so it cannot drift. You see every call
-as it happens, and every refusal:
+handoff, with the instruction re-issued word for word so it cannot drift. You watch it work
+— the model's reasoning arrives a token at a time as it is written, and every call and every
+refusal as it happens:
 
 ```
   → Read median.go

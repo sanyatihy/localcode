@@ -250,7 +250,7 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 	if r.Handoff > 0 {
-		fmt.Fprintf(os.Stderr, "\nhanded off in %s — carry on with `localcode -continue`\n",
+		narrate("\nhanded off in %s — carry on with `localcode -continue`\n",
 			filepath.Join(dir, chain.HandoffName))
 	}
 	return r.Exit, nil

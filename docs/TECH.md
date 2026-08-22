@@ -900,9 +900,12 @@ adds. Unclamped, the first call would have ended the session.
 **A session shows its work.** `claude -p` prints its result and nothing before it, so a
 chain was minutes of silence between summaries — one measured session spent 591 s before it
 said a word, which is indistinguishable from a wedged run. A one-shot session is asked for
-`--output-format stream-json` instead and the supervisor renders it: a line per tool call
-as it happens, the model's text as it arrives, and a line for every call the gate refuses.
-An interactive session is untouched, because the harness draws its own screen there.
+`--output-format stream-json --include-partial-messages` instead and the supervisor renders
+it: a line per tool call as it happens, the model's prose a token at a time as it is
+generated, and a line for every call the gate refuses. Token by token rather than message by
+message, because at 5-10 tok/s a paragraph is a minute and a minute of nothing is
+indistinguishable from a wedged run. An interactive session is untouched, because the
+harness draws its own screen there.
 
 **Claude Code's prompt budget is the declared window minus `max(MAX_OUTPUT, 4096)`.** It
 keeps 4,096 for a reply whatever it is told to keep, so `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
@@ -1061,6 +1064,12 @@ Each of these has already caused a wrong number in this repo.
   `/private`.** A profile naming an unresolved `TMPDIR` denies every compiler that uses one
   while appearing to allow it, and the failure reads as a broken toolchain rather than as a
   policy. Resolve every path before it reaches the profile.
+- **A test that names one platform's symlink is testing the platform.** The sandbox profile
+  must carry resolved paths, because seatbelt matches the resolved path and `/tmp` is a
+  symlink into `/private` on macOS. Asserting that the literal string `/tmp` is absent says
+  "resolved" only where `/tmp` resolves to something else: on Linux it resolves to itself,
+  so the assertion failed CI over a profile that was correct. State the property — the path
+  in the profile is its own resolution — and it holds on both.
 - **Characters over four is not a token count.** A budget probe that padded prompts by
   `chars/4` bracketed Claude Code's limit at 9,400–10,200 tokens; the same probe padded
   through the server's `/tokenize` put it at 8,192. The first number was wrong by a fifth
