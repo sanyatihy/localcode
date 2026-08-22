@@ -63,49 +63,102 @@ pager, not the model.
 Then, in any repository:
 
 ```sh
-localcode                          # start a server if none is running, and work here
-localcode "fix the failing test"   # or give it one instruction and let it run
-localcode sessions                 # the chains this repository has run
-localcode -continue                # carry on the newest one
+localcode                          # a session here, with you at the keyboard
+localcode "fix the failing test"   # one instruction, run until it is done
 localcode status                   # what is being served, at what context
 localcode stop                     # stop it, waiting for the memory back
 ```
 
-Nothing is written to the repository you work in. Session state and the handoff live under
+Nothing is written to the repository you work in. Session state and handoffs live under
 `~/.local/state/localcode/`, keyed by the repository's path, so two checkouts of one project
 are two boxes of work.
 
-**A session hands over instead of filling up.** Once its context reaches a ceiling, a
-session is refused every tool call but the one that writes its handoff — and it cannot
-decline that, because a refused tool call is not a request. The ceiling is the window less
-what still has to fit after it: a turn of results, the turn that asked for them, and the
-turn that writes the handoff. So what you see when a session runs out is not an error, it
-is a line like:
+**Whichever mode you use, a session hands over instead of filling up.** A 27B model on this
+machine has a small window, and a session that reaches the end of it dies holding everything
+it learned. So every session is given a budget; when it runs out, every tool call is refused
+except the one that writes a handoff, and the next session starts clean with that handoff and
+nothing else. The two modes differ only in who starts that next session.
+
+### With you at the keyboard
+
+`localcode` with no instruction is an ordinary Claude Code session — its own screen, its own
+prompt, ended when you end it. When it reaches its budget it says so and stops being able to
+work. A handoff is written either way: by the session, or out of its transcript when it does
+not. Pick it up where it left off:
+
+```sh
+localcode -continue
+```
+
+That starts a **fresh** session that has read the handoff. It has not re-read the
+conversation, which is the whole point — see [why not compaction](#why-a-handoff-and-not-a-summary).
+
+### One instruction, run until it is done
+
+`localcode "…"` starts a **chain**: sessions back to back, each inheriting the last one's
+handoff, with the instruction re-issued word for word so it cannot drift. You see every call
+as it happens, and every refusal:
 
 ```
   → Read median.go
   → Edit median.go
   → Bash go test ./...
-  ✗ this session's context reached 8292 tokens of a 7168 ceiling. No call other than…
+  ✗ this session's context reached 7280 tokens of a 7168 ceiling. No call other than…
   → Write HANDOFF.md
-session 1 — 17 tool calls, 10090 of 12288 tokens, 591s — next: apply these exact replacements, then run go test
+session 1 — 14 tool calls, 9123 of 12288 tokens, 453s — next: apply the six remaining fixes
 ```
 
-and then a second session starting clean, knowing what the first learned and nothing else.
-Given an instruction, `localcode` runs that chain for you until a handoff says `Next: none`,
-until two sessions in a row plan the same step, until a session runs past its clock, or
-until `-sessions` runs out — and it says which. Interactively it hands over once and leaves
-the next move to you, which is `localcode -continue`.
+The `✗` is the budget doing its job, not an error. The last line is the summary of a session
+that has finished; then a new one starts. A chain ends in one of four ways, and says which:
 
-Resuming re-reads nothing: a handoff costs about **4,265 tokens and 54 s**, where compacting
-the conversation it replaces re-read **37,837 tokens** — 452 s of ingest on this machine
-before a word of summary. That is why compaction is refused here rather than tuned, and why
-`--resume` is not what `-continue` does.
+| what happened | exit | what to do |
+|---|---|---|
+| a handoff says `Next: none` | 0 | nothing — the work is done |
+| two sessions in a row plan the same step | 1 | read the handoff it names |
+| a session ran past `-session-timeout` | 1 | read the handoff it names |
+| `-sessions` ran out | 1 | `localcode -resume <id>` to carry on |
 
-`-resume <id>` picks a chain by name and `-fork <id>` starts a new one from what that chain
-knew, so a second attempt does not have to relearn the first. `-ceiling`, `-calls`, `-sessions` and `-session-timeout` move the bounds. The ceiling
-defaults to as much as the arithmetic allows, so `-ceiling` only lowers it — and lowering
-it costs a handoff every time it cuts a session short.
+Measured on eight independent bugs in eight files, at a deliberately small window: three
+sessions, 999 s, all eight tests passing, with the first two sessions both cut off mid-work.
+The rows are in
+[`docs/data/`](docs/data/2026-08-22-m2max-32gb-0023-chain.jsonl).
+
+### Picking up an earlier chain
+
+A repository can hold as many chains as you have given it instructions. Starting fresh is the
+default, which is what `claude` does too:
+
+```sh
+localcode sessions          # every chain here: id, sessions, and where it got to
+localcode -continue         # carry on the newest one
+localcode -resume <id>      # carry on that one
+localcode -fork <id>        # start a new chain from what that one knew
+```
+
+### The bounds you can move
+
+| flag | default | what it does |
+|---|---|---|
+| `-ceiling <pct>` | as much as fits | how full a session may get before it hands over. Only lowers |
+| `-calls <n>` | 30 | tool calls one session may spend |
+| `-sessions <n>` | 8 | sessions one instruction may take |
+| `-session-timeout <d>` | 30m | how long one session may run. Off when you are at the keyboard |
+
+The ceiling defaults to as much as the arithmetic allows, so `-ceiling` only ever lowers it —
+and lowering it costs a handoff every time it cuts a session short. Reach for `-ceiling 20` to
+watch a handover happen on work that would otherwise fit in one session.
+
+**Two tools are capped so that one call cannot spend a session.** A command's output is
+truncated, and a `Read` of a long file comes back as a slice rather than the whole thing — ask
+again with an offset for more. Both caps are sized from the window, so they widen with it.
+
+### Why a handoff and not a summary
+
+Resuming re-reads nothing. A handoff costs about **4,265 tokens and 54 s**, where compacting
+the conversation it replaces re-read **37,837 tokens** — 452 s of ingest on this machine before
+a word of summary, and it was measured losing the goal it was summarising. So compaction is
+refused here rather than tuned, and `-continue` is not `claude --resume`, which would re-ingest
+the conversation that had just failed to fit.
 
 **The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
 Writes reach the working directory, temp and the cache roots; everything else the kernel
