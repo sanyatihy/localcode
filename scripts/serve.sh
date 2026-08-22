@@ -39,6 +39,13 @@ add_opt --top-k "${TOP_K:-}"
 add_opt --presence-penalty "${PRESENCE_PENALTY:-}"
 add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
 
+# Prefill batching, absent from every config that leaves llama.cpp's defaults. --ubatch-size
+# is the physical batch: it sizes the compute buffer and the Metal dispatch, and so it is the
+# flag prefill time answers to. --batch-size is the logical ceiling on it. Both live in the
+# config, because a number produced by a flag at the call site is attributable to no config.
+add_opt --batch-size "${BATCH_SIZE:-}"
+add_opt --ubatch-size "${UBATCH_SIZE:-}"
+
 # Speculative decoding, absent from every config that does not use it. The draft model and
 # the mechanism are part of how a measurement was produced, so they live in the config with
 # everything else rather than being passed at the call site.

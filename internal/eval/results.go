@@ -90,6 +90,10 @@ type Row struct {
 	// speed ratio between them is void whatever it says.
 	FidelityHash string `json:"fidelity_hash,omitempty"`
 
+	// FidelityProbes names the probe set the hash is over. Two sets on one results file
+	// would otherwise read as a divergence: a hash means nothing apart from its questions.
+	FidelityProbes string `json:"fidelity_probes,omitempty"`
+
 	// Session pairs a candidate with the baseline it is to be read against. An unpaired
 	// before-and-after measures host drift as well as the change; rows sharing a session
 	// were measured on one machine state, back to back, and only those may be divided.

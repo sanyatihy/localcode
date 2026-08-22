@@ -64,6 +64,12 @@ flags only when set. They exist for clients that build their own request bodies.
 scorer sends sampling and the thinking toggle per request and must be served by a
 config that sets none of them, or the run measures something the row does not say.
 
+**A config may also size the prefill batch.** `BATCH_SIZE` and `UBATCH_SIZE` become
+`--batch-size` and `--ubatch-size` only when set. Every committed config leaves both
+unset, and that is a decision rather than an omission: see
+[the prefill batch](#the-prefill-batch-was-swept-and-the-default-kept). The defaults are
+2048 logical and 512 physical.
+
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
 
@@ -267,6 +273,60 @@ it would not have bought context.
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
 does not care how much memory is spare.
+
+## The prefill batch was swept, and the default kept
+
+`--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,
+and it governs the half of a turn that prefill owns. It had never been set. Both profiles
+were swept upward from llama.cpp's default of 512, and **neither config changed.**
+
+**Where the range stops is the allocator, not a number anybody chose.** The walk doubles
+until the machine refuses, and both profiles refuse the same way — the Metal command buffer
+fails `kIOGPUCommandBufferCallbackErrorOutOfMemory` on the first prefill batch, at a wired
+peak of 22.27 GB. The editor profile reaches that peak one doubling earlier, because its KV
+reservation is larger. The server answers `/health` with 200 either way, so the screen that
+decides is whether the config can generate a token at all.
+
+| profile | context | admissible | refuses at |
+|---|---|---|---|
+| `config/tuned.env` | 32 768 | 512–4096 | 8192 |
+| `config/agent.env` | 49 152 | 512–2048 | 4096 |
+
+**A batch size does not change what the model answers.** Fixed greedy prompts hash
+identically at every admissible cell on both profiles, each against a control that is the
+same cell loaded twice. This gated the depth sweep rather than accompanying it: the batch
+size changes how a prefill is split, floating-point reductions are not order-independent,
+and a batch size that moved the answer would make every number recorded at 512 describe a
+different model. The probes have to be long enough to be split differently — a probe that
+fits in one physical batch is dispatched identically at every cell and can only report a
+match.
+
+**Cold ingest at depth barely moves, and on the profile that motivated the sweep it does
+not move at all.**
+
+| profile | 512 | 1024 | 2048 | 4096 |
+|---|---|---|---|---|
+| grind, 29 491 tokens cold | 352 s | 341 s | 342 s | 343 s |
+| editor, 44 236 tokens cold | 573 s | 570 s | 570 s | inadmissible |
+
+The editor profile spans **0.5%** across its whole admissible range. That is the profile
+whose 36,309-token turn spent 434 s on ingest, and this axis returns about two seconds of it.
+
+The grind profile moves once, 512 → 1024, and then stops: **3%**, or 11 s off a 352 s fill.
+**It was measured once.** No cell has a repeat, so the run-to-run spread is unmeasured; what
+bounds it is that 1024, 2048 and 4096 agree within 2 s across three independent cold loads.
+Read the 512 cells against that cluster rather than against a repeat they do not have.
+
+**What moving would cost in wired memory.** 1024 costs +0.17 GB over the default. 4096 costs
++0.85 GB and returns nothing over 1024, peaking at 22.12 GB against the 22.29 GB where 0014
+lost the desktop — so the top of the admissible range is ruled out on cost wherever it is
+admissible at all.
+
+**What would reverse this:** a second pass reproducing 341 s at 1024 against 352 s at 512 on
+the grind profile. 3% for 0.17 GB is worth taking once it is a measurement rather than a
+single observation. Every cell here was screened `unattended`, so the desktop verdict at
+these batch sizes is untaken — a batch size adopted later needs that verdict before it
+serves a machine somebody is using.
 
 ## A conversation is ingested once, and traffic beside it changes nothing
 

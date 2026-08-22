@@ -1,9 +1,9 @@
 ---
 id: 0024
 title: Settle the prefill batch against ingest time
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-22
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-22
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 ---
 
@@ -67,20 +67,35 @@ under test. The check is cheap and it gates the expensive one.
 
 ## Tasks
 
-- [ ] `scripts/serve.sh` passes `--batch-size` and `--ubatch-size` when a config sets them, and a config that sets neither produces the process line it produces today
-- [ ] the admissible `--ubatch-size` range is found by walking up from the default until the allocator or 0014's desktop rule refuses, with wired peak and desktop verdict recorded per cell
-- [ ] fixed prompts at temperature zero hash identically across the admissible cells, or the divergence is recorded and the sweep stops there
-- [ ] cold ingest at depth is scored for every admissible cell at both profiles' contexts, into `docs/data/`
-- [ ] a decision is recorded in `docs/TECH.md` with the numbers, the wired cost of the chosen value and what would reverse it, and the configs carry the winner or keep the default and say why
+- [x] `scripts/serve.sh` passes `--batch-size` and `--ubatch-size` when a config sets them, and a config that sets neither produces the process line it produces today
+- [x] the admissible `--ubatch-size` range is found by walking up from the default until the allocator or 0014's desktop rule refuses, with wired peak and desktop verdict recorded per cell
+- [x] fixed prompts at temperature zero hash identically across the admissible cells, or the divergence is recorded and the sweep stops there
+- [x] cold ingest at depth is scored for every admissible cell at both profiles' contexts, into `docs/data/`
+- [x] a decision is recorded in `docs/TECH.md` with the numbers, the wired cost of the chosen value and what would reverse it, and the configs carry the winner or keep the default and say why
 
 ## Open questions
 
-- If the two profiles want different values, do they get different values? Leaning **yes** —
-  they already differ in context, and 0017 adopted a mechanism for the grind profile while
-  refusing it for the editor, so per-profile is a shape this repo already ships.
-- The desktop screen needs somebody at the machine, and every screen 0017 ran was
-  `unattended`. Leaning: screen this sweep the same way and record the attended verdict as
-  untaken, since that is the gap `BACKLOG.md` already names against the MTP config rather
-  than a new one.
+- ~~If the two profiles want different values, do they get different values?~~ **Moot:**
+  neither profile moved, so the question never fired. The editor profile spans 0.5% across
+  its whole admissible range and the grind profile's 3% was measured once.
+- ~~Does the desktop screen need somebody at the machine?~~ **Answered: swept `unattended`,
+  and the attended verdict is untaken.** Nothing is adopted, so there is no new config owed
+  an attended screen; `BACKLOG.md`'s line against the MTP config still names that gap, and
+  `docs/TECH.md` records that a batch size adopted later needs the verdict first.
 
 ## Log
+
+- 2026-08-22 — the fidelity gate needed probes of its own. The short set 0017 hashes is a few
+  dozen tokens, which is one physical batch at every size worth testing here, so it compares
+  identical splits and can only ever report a match. `PrefillProbes` are 6,000 and 12,000
+  tokens of the retrieval generator's haystack, and each profile's first cell is hashed twice
+  so the match has a control behind it. Fidelity rows now name their probe set, because a
+  hash compared against different questions is not a comparison.
+- 2026-08-22 — **the depth sweep ran one pass, not the repeat the design assumed.** The second
+  pass was started and stopped by hand. No cell has a repeat, so the run-to-run spread is
+  unmeasured and the grind profile's 3% rests on 1024, 2048 and 4096 agreeing within 2 s
+  across three independent cold loads rather than on a repetition. `docs/TECH.md` names that
+  repeat as what would reverse the decision.
+- 2026-08-22 — **the default was kept on both profiles**, which the non-goals named as one of
+  this feature's outcomes. The output is the decision and the numbers behind it, not a config
+  change.
