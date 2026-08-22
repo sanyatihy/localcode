@@ -16,6 +16,7 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`ladder.sh`](ladder.sh) | walk each **derived** rung to a genuinely full context and record what it cost |
 | [`screen.sh`](screen.sh) | judge one config admissible or not for the price of a load, instead of a full ladder cell |
 | [`batchsweep.sh`](batchsweep.sh) | walk `--ubatch-size` up from llama.cpp's default until this machine refuses, screening each cell |
+| [`batchfidelity.sh`](batchfidelity.sh) | hash fixed greedy prompts at every admissible `--ubatch-size`, and refuse the depth sweep if the batch size moves the answer |
 | [`pair.sh`](pair.sh) | run a candidate and its baseline back to back on one machine state, then report the ratio |
 | [`prefixrun.sh`](prefixrun.sh) | walk one config through the prefix-cache conditions, restarting the server between them |
 | [`memprobe.sh`](memprobe.sh) | one JSON object of the memory facts that decide whether a config is viable |
