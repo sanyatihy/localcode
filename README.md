@@ -83,7 +83,7 @@ turn that writes the handoff. So what you see when a session runs out is not an 
 is a line like:
 
 ```
-session 1 — 11 tool calls, 7670 of 11264 tokens, 271s — next: apply the eight fixes, then run go test
+session 1 — 17 tool calls, 10090 of 12288 tokens, 591s — next: apply these exact replacements, then run go test
 ```
 
 and then a second session starting clean, knowing what the first learned and nothing else.

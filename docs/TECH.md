@@ -868,9 +868,16 @@ a session started in one spends a cold ingest to say `Prompt is too long`.
 
 **A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
 decides a whole turn's calls, because the harness issues them together and nothing changes
-while they run. Measured at a 12,288 wall, sessions denied at a 5,632 ceiling peaked at
-6,434, 7,670 and 7,751 of an 11,264 window — an overshoot of about 2,000 tokens, which is
-what the quarter-window reserve is for.
+while they run.
+
+**Measured end to end.** Eight independent Go bugs, one per file, at a 16,384 wall — a
+12,288 prompt budget and a 7,168 ceiling. Three sessions, 1,115 s, 20,565 tokens ingested,
+all eight tests passing, and the first two both denied at their ceiling mid-work so no
+single session could have done it. Peaks of 10,090, 8,819 and 5,834 against a 12,288
+budget: the overshoot past the ceiling is about 2,900 tokens, which is what the
+quarter-window reserve is for. Each handoff carried results — which files were fixed, which
+test still failed, what `go test` said — and the rows are in
+[data/2026-08-22-m2max-32gb-0023-chain.jsonl](data/2026-08-22-m2max-32gb-0023-chain.jsonl).
 
 **A handoff cannot carry the right to edit.** `Edit` fails on a file the session has not
 `Read`, so every session in a chain pays the read for every file it changes, however well
