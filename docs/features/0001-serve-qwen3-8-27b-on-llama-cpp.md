@@ -4,9 +4,6 @@ title: Serve Qwen3.8-27B on llama.cpp
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-17
-check:
-checked:
-review:
 needs:
 related: 0003
 ---

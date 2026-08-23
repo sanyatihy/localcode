@@ -4,9 +4,6 @@ title: Generalise the scorer beyond one model and one backend
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-18
-check:
-checked:
-review:
 needs: 0002
 related: 0006, 0007
 ---

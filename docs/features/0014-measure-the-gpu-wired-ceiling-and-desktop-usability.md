@@ -4,9 +4,6 @@ title: Measure the GPU wired ceiling and desktop usability
 status: Shipped
 created: 2026-08-18
 shipped: 2026-08-18
-check:
-checked:
-review:
 needs:
 related: 0004, 0010
 ---

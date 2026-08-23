@@ -4,9 +4,6 @@ title: Establish the memory and context ceiling
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-17
-check:
-checked:
-review:
 needs: 0001
 related: 0004
 ---
