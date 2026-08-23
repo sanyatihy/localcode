@@ -1,7 +1,7 @@
 ---
 id: 0026
 title: Judge a session by the repository, not by what it reports
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Dropped
 created: 2026-08-23
 shipped:             # written by kit ship, never by hand
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
@@ -81,3 +81,4 @@ configured the chain behaves exactly as it does today; the flag is what opts in.
   stop the one instruction most worth giving — "fix the build".
 
 ## Log
+- 2026-08-23 — dropped: verification of the deliverable is kit's side of the line. localcode owns runtime — window, ceiling, handoff, sandbox — and nothing about what a session delivered. The rule already exists in prose (run the gate, then kit audit, then kit ship) and went unenforced; the fix is that a task box names how it is checked and kit ship refuses on red, which closes it where it happens rather than one layer downstream and for autonomous sessions only.
