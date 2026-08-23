@@ -128,6 +128,22 @@ func TestChainStopsWhenTwoSessionsPlanTheSameThing(t *testing.T) {
 	}
 }
 
+// Two handoffs the supervisor could not read are not one plan written twice. Read as
+// that, they stopped a seven-session chain with a session of its bound unspent.
+func TestChainCarriesOnWhenItCouldNotReadTwoNextSteps(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying(""), handoffSaying(""), handoffSaying("none"))
+	passthroughSandbox(t)
+
+	code, state := runHere(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	if code != 0 {
+		t.Fatalf("an unreadable pair is not a stall, got %d", code)
+	}
+	if got := chain.NextSession(chainDirOf(t, state)); got != 4 {
+		t.Fatalf("the chain must have run all three sessions, next is %d", got)
+	}
+}
+
 func TestChainStopsAtItsBound(t *testing.T) {
 	root := fakeCheckout(t)
 	chainStub(t, handoffSaying("one"), handoffSaying("two"), handoffSaying("three"))
