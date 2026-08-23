@@ -14,8 +14,10 @@ Do this only when you are asked to plan.
 2. **A feature is one shipped increase in what the project can do, or can be trusted to
    do.** Name it in one sentence an operator would recognise: "the board no longer hands one
    feature to two agents", not "refactor `Mine`". No such sentence means it is a task box in
-   another feature, or a chore commit. A sentence that needs an "and" is two features. A
-   change nobody could review in one sitting is too big — split it by value, not by layer.
+   another feature, or a chore commit that rides on a pull request under a branch name
+   carrying no id. A separate doc earns its place when it holds a decision someone must read
+   before building, that is not recoverable from the code or the commit. A change nobody
+   could review in one sitting is too big — split it by value, not by layer.
 3. **Draft the whole set in one session, not the first one only.** Write every doc with
    `kit new "<title>"`. Never copy the template by hand.
 4. **Fill `needs:` on every draft.** List the feature ids that must ship before this one
@@ -28,62 +30,46 @@ Do this only when you are asked to plan.
    change a status. Never edit `status:` or `shipped:` by hand.
 7. **Never invent a product decision on the human's behalf.** What you cannot settle goes in
    `## Open questions`; what only a human can answer goes to `kit block <id> "<question>"`.
-8. **The round must reach the default branch before anything on it can be claimed.**
-   `kit claim` refuses otherwise.
-
-**Work that is not a feature** — a fix to something already shipped, a chore, a data
-update — goes on a branch whose name contains no four-digit id, and needs no doc. Only a
-feature gets one.
 
 ### Taking work
 
-9. **Take a feature with `kit claim <id>`.** It pushes the branch that claims it. Read the
+8. **Take a feature with `kit claim <id>`.** It pushes the branch that claims it. Read the
    exit code:
    - **0** — the feature is yours. Work it.
    - **1** — it is not yours. Run `kit next` and take a different feature. Do not retry.
    - **2** — the command could not run. Read the error, fix it, claim again.
-10. **Never create a claim branch by hand.** A branch only you can see is not a claim.
-11. **A feature `kit next` lists as `taken` is not yours.** Do not work it, do not tick a
-    box in it, do not help with it. Two agents in one feature produce one branch nobody
-    can review.
-12. **Work one feature per checkout, in the worktree `kit claim` prints.** If `kit next`
+9. **A feature `kit next` lists as `taken` is not yours.** Do not work it, do not tick a
+   box in it, do not help with it. Two agents in one feature produce one branch nobody
+   can review.
+10. **Work one feature per checkout, in the worktree `kit claim` prints.** If `kit next`
     lists features under **free, but not in this checkout**, do not start them here.
-13. **If nothing is free, stop and say so.** Claimed or waiting is a real answer.
 
 ### Doing the work
 
-14. **Read the feature doc for the design, and nowhere else.** It is the one home for it.
-15. **Do the topmost unticked `## Tasks` box, and only that one.** List order is the order
+11. **Read the feature doc for the design, and nowhere else.** It is the one home for it.
+12. **Do the topmost unticked `## Tasks` box, and only that one.** List order is the order
     of work.
-16. **Tick the box in the commit that implements it.** One box, one commit. Nobody re-reads
+13. **Tick the box in the commit that implements it.** One box, one commit. Nobody re-reads
     the branch to check, so the commit is what has to be honest.
-17. **Discovered work becomes a new box, a new doc, or a `BACKLOG.md` line — never a `TODO`
+14. **Discovered work becomes a new box, a new doc, or a `BACKLOG.md` line — never a `TODO`
     in the code.** Append it, unless it blocks the boxes below.
-18. **A box that turns out wrong may be rewritten, split or deleted.** Own commit, reason in
+15. **A box that turns out wrong may be rewritten, split or deleted.** Own commit, reason in
     `## Log`. Never silently drop one you could not finish. A whole feature that should not
     be built is `kit drop <id> "<why>"`.
-19. **Stopping mid-feature is `kit release <id>`.** It refuses while the branch carries
+16. **Stopping mid-feature is `kit release <id>`.** It refuses while the branch carries
     work: that is a pause, so push the branch and open the pull request unfinished instead.
-20. **Never put a real secret in a doc.** Name the variable and where the value lives, never
+17. **Never put a real secret in a doc.** Name the variable and where the value lives, never
     the value. A pushed commit cannot be unpublished.
-21. **Never edit a doc whose status is `Shipped`.** It is frozen history.
+18. **Never edit a doc whose status is `Shipped`.** It is frozen history.
 
 ### Finishing
 
-22. **When the last box is ticked, run these three in order:** `make check`,
-    `kit audit --strict`, `kit ship <id>`.
-23. **Every `kit ship` refusal is expected; `kit ship --help` lists every one.** The four
-    you will meet: a box still unticked, a file uncommitted or untracked, a `needs:` that
-    has not shipped, a claim another checkout holds. Fix the cause and run it again.
-24. **Move durable facts to `docs/TECH.md`** — one line each, only what stays true after
-    this ships.
-25. **Push the branch, open the pull request, and stop. You never merge your own work.**
+19. **When the last box is ticked, run this project's own gate, then `kit audit --strict`,
+    then `kit ship <id>`.** In that order: `ship` freezes the doc, so anything the other
+    two would have made you change has to be found before it.
+20. **Push the branch, open the pull request, and stop. You never merge your own work.**
     Opening a pull request is not approving it. With no remote, say so and leave the work
     on the branch.
-26. **Merging somebody else's finished work is real work.** `kit next` lists it under
-    `awaiting review`.
-27. **Cut a release tag when a round lands on the trunk.** An install resolves to the
-    newest tag, so a round that merged and was never tagged reaches nobody.
 
 ### Where two agents can still collide
 
@@ -111,3 +97,11 @@ before claiming either: give one doc a free id, rename its file, and rename its 
   you worked.
 - **Every fact has one home.** True after this ships → `docs/TECH.md`, one line. Changed
   this doc's plan → one `## Log` entry naming the change. Neither → the pull request.
+
+### Where the rest lives
+
+These rules are the judgement no refusal can make. Everything else the kit knows, it
+prints: `kit help checks` for what `audit` reports, `kit help template` for the doc format,
+`kit help backlog` for what a deferred entry looks like, and **`kit help go-checklist` for
+the engineering practice a Go project is held to** — read that before writing code, not
+after.
