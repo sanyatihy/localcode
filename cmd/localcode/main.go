@@ -665,9 +665,9 @@ func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\")\n")
 	b.WriteString("  (literal \"/dev/dtracehelper\") (literal \"/dev/tty\"))\n")
 
-	// A worktree beside the repository, and nothing else beside it. `kit claim` prints
-	// `git worktree add ../<repo>-<id>`, which failed with `Operation not permitted`
-	// because writes stopped at the working directory: the model recovered by putting the
+	// A worktree beside the repository, and nothing else beside it. `git worktree add
+	// ../<repo>-<name>` is the common form and it failed with `Operation not permitted`,
+	// because writes stopped at the working directory: the session recovered by putting the
 	// worktree inside the repository, which works and is where nobody looks for it.
 	//
 	// Named after the repository rather than the parent opened up, because the parent is
@@ -776,14 +776,16 @@ func extraWritable() []string {
 }
 
 // worktreeBriefing names where a git worktree may go, because the session cannot find out
-// except by being refused: `kit claim` prints `git worktree add ../<repo>-<id>`, and a
-// session that met `Operation not permitted` there put the worktree somewhere nobody looks
-// for it. `.worktrees/` is named first where the repository already keeps one, since a
+// except by being refused, and the one that was refused put it somewhere nobody looks for
+// it. `.worktrees/` is named first where the repository already keeps one, since a
 // repository with that directory has decided where they go.
+//
+// The rule is the repository's own name, not any tool's convention. That it matches what
+// `kit claim` prints is why the gap was found and not what the policy is for.
 func worktreeBriefing(cwd string) string {
-	where := "beside it, named after it — `../" + filepath.Base(cwd) + "-<id>`"
+	where := "beside it, named after it — `../" + filepath.Base(cwd) + "-<name>`"
 	if info, err := os.Stat(filepath.Join(cwd, ".worktrees")); err == nil && info.IsDir() {
-		where = "`.worktrees/<id>` inside it, or " + where
+		where = "`.worktrees/<name>` inside it, or " + where
 	}
 	return "A git worktree may go in " + where + ", and nowhere else. "
 }

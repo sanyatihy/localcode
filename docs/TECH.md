@@ -1045,7 +1045,7 @@ unchanged.
 **A worktree goes in `.worktrees/` or beside the repository, and the session is told
 which.** `.worktrees/` inside the checkout was always writable — it is under the working
 directory — but nothing said so, and a session that met `Operation not permitted` on
-kit's `../<repo>-<id>` put the worktree where nobody looks for it instead. The appended
+`../<repo>-<name>` put the worktree where nobody looks for it instead. The appended
 briefing now names both places, `.worktrees/` first where the repository already keeps one,
 because a repository with that directory has decided where they go.
 
