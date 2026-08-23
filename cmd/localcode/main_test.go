@@ -721,3 +721,30 @@ func TestSiblingWorktreePatternEscapesTheRepositorysName(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+// A session cannot find out where a worktree may go except by being refused, and the one
+// that was refused put it somewhere nobody looks for it. The briefing is the trusted
+// channel, so it is where the two permitted places are named.
+func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
+	plain := t.TempDir()
+	got := sandboxBriefing(plain)
+	if !strings.Contains(got, "../"+filepath.Base(plain)+"-<id>") {
+		t.Fatalf("the sibling the sandbox allows must be named: %s", got)
+	}
+	if strings.Contains(got, ".worktrees") {
+		t.Fatalf("a repository that keeps no .worktrees must not be told to use one: %s", got)
+	}
+
+	// A repository that already keeps one has decided where they go.
+	kept := t.TempDir()
+	if err := os.Mkdir(filepath.Join(kept, ".worktrees"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got = sandboxBriefing(kept)
+	if !strings.Contains(got, "`.worktrees/<id>`") {
+		t.Fatalf(".worktrees must be named first where it exists: %s", got)
+	}
+	if strings.Index(got, ".worktrees") > strings.Index(got, "../"+filepath.Base(kept)) {
+		t.Fatalf("the repository's own choice comes first: %s", got)
+	}
+}

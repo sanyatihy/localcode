@@ -1042,6 +1042,13 @@ names the paths their ecosystems need — the tool learns no language.
 `LOCALCODE_HANDOFF_DIR` and still default to the checkout, so working on localcode itself is
 unchanged.
 
+**A worktree goes in `.worktrees/` or beside the repository, and the session is told
+which.** `.worktrees/` inside the checkout was always writable — it is under the working
+directory — but nothing said so, and a session that met `Operation not permitted` on
+kit's `../<repo>-<id>` put the worktree where nobody looks for it instead. The appended
+briefing now names both places, `.worktrees/` first where the repository already keeps one,
+because a repository with that directory has decided where they go.
+
 **A worktree beside the repository is writable; the parent is not.** `kit claim` prints
 `git worktree add ../<repo>-<id>`, which the working-directory-only policy refused with
 `Operation not permitted` on a real repository — the session recovered by putting the
