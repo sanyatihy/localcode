@@ -665,6 +665,17 @@ func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\")\n")
 	b.WriteString("  (literal \"/dev/dtracehelper\") (literal \"/dev/tty\"))\n")
 
+	// A worktree beside the repository, and nothing else beside it. `kit claim` prints
+	// `git worktree add ../<repo>-<id>`, which failed with `Operation not permitted`
+	// because writes stopped at the working directory: the model recovered by putting the
+	// worktree inside the repository, which works and is where nobody looks for it.
+	//
+	// Named after the repository rather than the parent opened up, because the parent is
+	// where every other project of this developer's lives.
+	if siblings := siblingWorktrees(cwd); siblings != "" {
+		fmt.Fprintf(&b, "(allow file-write* (regex #\"%s\"))\n", siblings)
+	}
+
 	// Loopback reaches the model and nothing else reaches anywhere. It is what makes the
 	// repository's source unable to leave the machine, and it is VISION's offline property
 	// enforced rather than configured. -net is for the session that has to install
@@ -681,6 +692,43 @@ func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 		return "", fmt.Errorf("could not write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// siblingWorktrees is the pattern matching directories beside the repository and named
+// after it — `repo-0001` next to `repo` — and "" when there is no such place to name.
+//
+// Resolved first, for the reason every other path here is: seatbelt matches the resolved
+// path, and a pattern built from an unresolved one denies what it appears to allow.
+func siblingWorktrees(cwd string) string {
+	resolved, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return ""
+	}
+	parent, base := filepath.Dir(resolved), filepath.Base(resolved)
+	if parent == resolved || parent == "/" || base == "" {
+		return ""
+	}
+	return "^" + sbplRegex(filepath.Join(parent, base)) + "-[^/]+"
+}
+
+// sbplRegex escapes a literal path for use inside a seatbelt regex. The path comes from
+// the filesystem rather than from a person, and a repository called `foo.bar` would
+// otherwise match `fooxbar` — and a `+` or a `(` would change the pattern outright.
+func sbplRegex(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune(`\.+*?()[]{}^$|`, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return sbplEscape(b.String())
+}
+
+// sbplEscape makes a string safe inside the profile's double quotes, as sbplString does
+// for a path.
+func sbplEscape(s string) string {
+	return strings.NewReplacer(`"`, `\"`).Replace(s)
 }
 
 // sbplString quotes a path for the profile. A path is attacker-adjacent here only in the
