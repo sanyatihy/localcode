@@ -4,9 +4,6 @@ title: Wire the winning config into the coding agent
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-19
-check:
-checked:
-review:
 needs: 0005
 related: 0010, 0005
 ---

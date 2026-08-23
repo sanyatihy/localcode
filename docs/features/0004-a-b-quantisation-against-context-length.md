@@ -4,9 +4,6 @@ title: A/B quantisation against context length
 status: Dropped
 created: 2026-08-17
 shipped:
-check:
-checked:
-review:
 needs: 0014
 related: 0001
 ---

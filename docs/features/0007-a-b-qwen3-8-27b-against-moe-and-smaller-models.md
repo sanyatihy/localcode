@@ -4,9 +4,6 @@ title: A/B Qwen3.8-27B against MoE and smaller models
 status: Dropped
 created: 2026-08-17
 shipped:
-check:
-checked:
-review:
 needs: 0002, 0003, 0012
 related: 0004
 ---

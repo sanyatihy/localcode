@@ -4,9 +4,6 @@ title: A/B llama.cpp against MLX
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-19
-check:
-checked:
-review:
 needs: 0002, 0012
 related: 0007
 ---

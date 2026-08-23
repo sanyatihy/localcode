@@ -4,21 +4,8 @@ title: Take the decode speedup the driver's own preamble makes admissible
 status: Shipped
 created: 2026-08-23
 shipped: 2026-08-23
-needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
+needs:
 ---
-
-<!-- `needs:` is the only field that changes what `kit next` offers, so it earns care.
-     Leave it empty if this could be built today against what already exists — that is
-     the common case, and several empty ones is what lets agents work in parallel.
-
-     Judge it by whether the work could START now, not by what it touches. Clean
-     boundaries hide couplings that make a feature dependent anyway:
-       - a shared composition root or wiring function both features must edit
-       - a shared router, registry, or dispatch table both add an entry to
-       - numbered files in one sequence — migrations above all. Two features each
-         adding "the next number" merge cleanly and break at runtime.
-     Any of those means the second feature needs the first, however separate they look. -->
-
 
 ## Problem
 
