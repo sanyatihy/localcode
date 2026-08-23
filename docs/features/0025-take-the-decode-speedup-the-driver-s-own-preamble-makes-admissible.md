@@ -69,6 +69,8 @@ already screened against it in 0017.
 
 - [x] a driver serving config at 32,768 with the MTP head, refused loudly if the allocator
       or the desktop rule says no
+- [x] a session's budget derived from the context the server reports, so naming a config
+      moves the wall and the budget together
 - [ ] one instruction run to completion under both configs, scored by the repository's own
       tests rather than by what the sessions reported
 - [ ] the two chains compared on wall clock to the finished instruction, sessions spent,
@@ -82,3 +84,12 @@ already screened against it in 0017.
   cannot separate them, and a second would double the wall clock of the sweep.
 
 ## Log
+
+- **Added a box above the run: the budget must follow the served context.** `localcode`
+  takes the wall a session is held to from `CLAUDE_CODE_MAX_CONTEXT_TOKENS` in
+  `harness/claude-code/claude-code.env`, a fixed 45,056 written for `config/agent.env`.
+  `-config` moves what is served and does not move that, and nothing refuses the
+  disagreement — so the 32,768 side of this comparison would run sessions budgeted for a
+  window 16,384 tokens larger than the one they have, and die on `Prompt is too long`
+  having written no handoff. That is the failure `docs/TECH.md` already records from a
+  budget 3,072 tokens too generous. The comparison cannot be run before it is fixed.

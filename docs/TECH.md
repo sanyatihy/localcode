@@ -922,6 +922,14 @@ is too long` with no handoff written. The declared window has to clear the pream
 that reservation plus the reserve, or `localcode` refuses to start — which rules out the
 12,288 wall the enforcement was first measured at.
 
+**And the declaration is read off the server, not off the file.** `harness/claude-code/`
+carries one `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `-config` chooses which context is served,
+so a number written for one server is a claim about the other. `localcode` asks `/props`
+what is served, declares that less the output reservation, and overrides the variable for
+the session it starts — saying so when the two disagree. A server that will not report a
+context is refused rather than guessed at. The file's own value stands for the flow it is
+sourced into by hand.
+
 **A chain is one invocation, and a repository holds several.** `localcode` given an
 instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
 same step, or until `-sessions` runs out, and each of the three says which happened.
