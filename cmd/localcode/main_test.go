@@ -728,7 +728,7 @@ func TestSiblingWorktreePatternEscapesTheRepositorysName(t *testing.T) {
 func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
 	plain := t.TempDir()
 	got := sandboxBriefing(plain)
-	if !strings.Contains(got, "../"+filepath.Base(plain)+"-<id>") {
+	if !strings.Contains(got, "../"+filepath.Base(plain)+"-<name>") {
 		t.Fatalf("the sibling the sandbox allows must be named: %s", got)
 	}
 	if strings.Contains(got, ".worktrees") {
@@ -741,7 +741,7 @@ func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	got = sandboxBriefing(kept)
-	if !strings.Contains(got, "`.worktrees/<id>`") {
+	if !strings.Contains(got, "`.worktrees/<name>`") {
 		t.Fatalf(".worktrees must be named first where it exists: %s", got)
 	}
 	if strings.Index(got, ".worktrees") > strings.Index(got, "../"+filepath.Base(kept)) {
