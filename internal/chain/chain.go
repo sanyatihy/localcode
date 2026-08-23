@@ -9,7 +9,6 @@ package chain
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -208,15 +207,20 @@ func Stop(handoff []byte, path string, tries int) Verdict {
 		return Verdict{}
 	}
 	return Verdict{Deny: true, Reason: fmt.Sprintf(
-		"localcode: %s is missing, shorter than %d bytes, or carries no `**Next:**` line, "+
-			"so this session has handed nothing on.", path, handoffFloor)}
+		"localcode: %s is missing, shorter than %d bytes, or carries no step under its "+
+			"`**Next:**` marker, so this session has handed nothing on.", path, handoffFloor)}
 }
 
-// usable reports whether a handoff is one. Size and a `**Next:**` line, because those are
-// what the failure looked like: a chain of eight sessions wrote eight handoffs of which
-// seven carried `Prompt is too long` as their next step.
+// usable reports whether a handoff is one. Size and a step the supervisor can read,
+// because those are what the failures looked like: a chain of eight sessions wrote eight
+// handoffs of which seven carried `Prompt is too long` as their next step, and a later
+// one ended two sessions on handoffs whose marker carried nothing this could find.
+//
+// The step is `Next`'s answer and not a substring, so the hook and the supervisor cannot
+// disagree about what was handed on. They did, and that is what made the second failure
+// silent: both sessions were told they had handed something on, and neither had.
 func usable(handoff []byte) bool {
-	return len(handoff) >= handoffFloor && bytes.Contains(handoff, []byte("**Next:**"))
+	return len(handoff) >= handoffFloor && Next(handoff) != ""
 }
 
 // IsHandoff reports whether a call is the session writing its way out. It is never part of
@@ -240,15 +244,56 @@ func IsHandoff(tool string, input map[string]any, handoff string) bool {
 // hooks 0016 already ships are talking about the same file.
 const HandoffName = "HANDOFF.md"
 
-// Next is the one line a supervisor reads back out of a handoff: what the session that
-// wrote it meant to do next. Empty when the handoff carries none.
+// Next is what a supervisor reads back out of a handoff: what the session that wrote it
+// meant to do next. Empty when the handoff carries none.
+//
+// The marker's own line first, and the lines under it when that line ends there. A
+// session that writes the marker as a heading over a numbered list has written a next
+// step, and reading none of it is what stops the chain: two such handoffs compare equal,
+// so the repeat guard reports a plan that was never repeated.
 func Next(handoff []byte) string {
-	for _, line := range strings.Split(string(handoff), "\n") {
-		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "**Next:**"); ok {
-			return strings.TrimSpace(rest)
+	lines := strings.Split(string(handoff), "\n")
+	for i, line := range lines {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "**Next:**")
+		if !ok {
+			continue
 		}
+		if rest = strings.TrimSpace(rest); rest != "" {
+			return rest
+		}
+		return below(lines[i+1:])
 	}
 	return ""
+}
+
+// below is the step written under the marker rather than on it, joined into the one line
+// the supervisor compares and displays.
+//
+// It ends at the next field or at the blank line after the step, so a handoff whose
+// closing prose follows one does not become the step. Blank lines before the step are
+// skipped instead, because a marker written as a heading is often spaced like one.
+func below(lines []string) string {
+	var step []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		switch {
+		case field(line):
+			return strings.Join(step, " ")
+		case line == "" && len(step) == 0:
+			continue
+		case line == "":
+			return strings.Join(step, " ")
+		}
+		step = append(step, line)
+	}
+	return strings.Join(step, " ")
+}
+
+// field reports whether a line opens one of the handoff's own sections, which is where
+// the step under a marker stops.
+func field(line string) bool {
+	rest, ok := strings.CutPrefix(line, "**")
+	return ok && strings.Index(rest, ":**") > 0
 }
 
 // Done reports whether a handoff says the instruction is finished. The word is the
