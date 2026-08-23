@@ -1042,6 +1042,20 @@ names the paths their ecosystems need — the tool learns no language.
 `LOCALCODE_HANDOFF_DIR` and still default to the checkout, so working on localcode itself is
 unchanged.
 
+**A worktree goes in `.worktrees/` or beside the repository, and the session is told
+which.** `.worktrees/` inside the checkout was always writable — it is under the working
+directory — but nothing said so, and a session that met `Operation not permitted` on
+`../<repo>-<name>` put the worktree where nobody looks for it instead. The appended
+briefing now names both places, `.worktrees/` first where the repository already keeps one,
+because a repository with that directory has decided where they go.
+
+**A worktree beside the repository is writable; the parent is not.** `kit claim` prints
+`git worktree add ../<repo>-<id>`, which the working-directory-only policy refused with
+`Operation not permitted` on a real repository — the session recovered by putting the
+worktree inside the repository, which works and is where nobody looks for it. The profile
+now carries a regex for siblings named after the repository, escaped, and resolved like
+every other path. The parent stays closed, because it is where every other project lives.
+
 ## Gotchas
 
 Each of these has already caused a wrong number in this repo.
@@ -1077,12 +1091,11 @@ Each of these has already caused a wrong number in this repo.
   bound rather than its success. The test is now the first clause of the line, with a short
   allowlist of qualifiers, because "none of the tests pass" is the opposite of done and
   begins the same way.
-- **kit's worktrees and the agent sandbox disagree about where work goes.** `kit claim`
-  prints a sibling worktree, and `git worktree add ../name` under `localcode` fails with
-  `Operation not permitted`: writes are confined to the working directory. The model
-  recovered by putting the worktree inside the repository, which works and is not where
-  anybody would look for it. A kit-driven repository wants that path named in the
-  instruction, or the sibling directory added to `~/.config/localcode/writable`.
+- **A sandbox test written inside the temp directory proves nothing.** `os.TempDir()` is
+  writable by the profile, so a refusal asserted against a fixture under `t.TempDir()`
+  passes whatever the policy says. Put the fixture under the home directory, where the
+  denial is real. The test that found this was asserting the parent of a repository stays
+  closed; it was writable for a reason that had nothing to do with the rule under test.
 - **Characters over four is not a token count.** A budget probe that padded prompts by
   `chars/4` bracketed Claude Code's limit at 9,400–10,200 tokens; the same probe padded
   through the server's `/tokenize` put it at 8,192. The first number was wrong by a fifth
