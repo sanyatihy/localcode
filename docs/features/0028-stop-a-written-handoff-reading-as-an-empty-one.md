@@ -1,9 +1,9 @@
 ---
 id: 0028
 title: Stop a written handoff reading as an empty one
-status: Draft
+status: Shipped
 created: 2026-08-23
-shipped:
+shipped: 2026-08-23
 needs:
 ---
 
@@ -50,3 +50,7 @@ This is the second line of defence, kept because the first one parses prose.
 - [x] the chain does not stop on two handoffs whose next step it could not read
 
 ## Log
+
+- 2026-08-23 — the step under a marker also ends at the blank line after it, which the
+  design did not say. Ending only at the next field made a handoff's closing prose part
+  of the step, and `**Next:**` is the last field a handoff writes.
