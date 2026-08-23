@@ -779,6 +779,15 @@ the count of them is printed beside it. Tokens and turns are indifferent to pagi
 
 ## Claude Code against the local endpoint
 
+**The driver serves 32,768 and the editor serves 49,152, and the number that decided it is
+4,395.** That is `localcode`'s preamble, against the 36,309 tokens an extension session's
+first request measures — so the capacity 49,152 exists to provide is capacity the driver does
+not use, and spending it costs the MTP head, which the allocator refuses above 38,912. Driven
+end to end the smaller context finished the same instruction in 661 s against 824, paying the
+second session it was always going to pay: [the chain, both
+ways](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). `localcode`
+therefore defaults to `config/driver-mtp-32k.env`, and `-config` is what moves it.
+
 `config/agent.env` is the serving config for an editor agent. It serves **49,152**
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
 what it loads. The context is capacity, not tuning: an extension session's first request

@@ -65,4 +65,9 @@ trigger nobody watches is not an idea, it is a hedge.
   rewrite. Against it: 0010 measured 12/15 against 14/15 over five fixtures at three passes,
   and one task does not overturn that. Promote when: 0023 ships and the handoff chain is
   still dearer than Pi's compaction, or when a second harness is wanted for any other reason.
+- **`serverUp`'s error text reaches nobody** — it composes a message naming the command that
+  fixes a dead endpoint, and both callers in `cmd/localcode/main.go` test it with `== nil` and
+  throw it away. What a user actually sees is `no server at <url>, and -no-serve was given`, or
+  a twenty-minute wait. Two call sites, one line each. Promote when: someone hits a dead
+  endpoint and cannot tell from the output what to start — or when that file is open anyway.
 

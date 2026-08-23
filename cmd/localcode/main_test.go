@@ -262,6 +262,35 @@ func TestStatusAnswersNoWhenNothingIsServing(t *testing.T) {
 	}
 }
 
+// A config the machine cannot serve must be reported when the server dies, not waited out:
+// the default names a build that is not the binary on PATH, so this is the failure a machine
+// without it meets first.
+func TestEnsureServerReportsAServerThatDiedInsteadOfWaiting(t *testing.T) {
+	root := fakeCheckout(t)
+	dir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "#!/bin/sh\necho 'names a server that is not there' >&2\nexit 2\n"
+	if err := os.WriteFile(filepath.Join(dir, "serve.sh"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close() // nothing is listening, so the only thing that can end the wait is the exit
+
+	done := make(chan error, 1)
+	go func() { done <- ensureServer(root, url, "config/driver-mtp-32k.env", false) }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "exited before it was ready") {
+			t.Fatalf("want the exit reported, got %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("ensureServer waited out a server that had already exited")
+	}
+}
+
 // serve and stop must reach the checkout's own scripts, not a second implementation:
 // stop.sh waits for ~17 GB to be released, and a launcher that re-solved that would be
 // the fifth home for one fact.
