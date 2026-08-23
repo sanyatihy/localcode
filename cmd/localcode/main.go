@@ -775,6 +775,19 @@ func extraWritable() []string {
 	return out
 }
 
+// worktreeBriefing names where a git worktree may go, because the session cannot find out
+// except by being refused: `kit claim` prints `git worktree add ../<repo>-<id>`, and a
+// session that met `Operation not permitted` there put the worktree somewhere nobody looks
+// for it. `.worktrees/` is named first where the repository already keeps one, since a
+// repository with that directory has decided where they go.
+func worktreeBriefing(cwd string) string {
+	where := "beside it, named after it — `../" + filepath.Base(cwd) + "-<id>`"
+	if info, err := os.Stat(filepath.Join(cwd, ".worktrees")); err == nil && info.IsDir() {
+		where = "`.worktrees/<id>` inside it, or " + where
+	}
+	return "A git worktree may go in " + where + ", and nowhere else. "
+}
+
 // sandboxBriefing tells the session what it is inside, so a refusal comes back as an
 // explanation with a fix rather than as a puzzle. Kept to a few lines: it is paid for on
 // every request in a context this small.
@@ -785,6 +798,7 @@ func sandboxBriefing(cwd string) string {
 	}
 	return "You are running in a sandbox that confines writes to " + cwd +
 		", temp directories and cache roots. Reading anywhere is allowed. " +
+		worktreeBriefing(cwd) +
 		"If a command fails with `operation not permitted` on a path outside those, " +
 		"do not work around it: report the path, and tell the user it is allowed by " +
 		"adding that path to " + cfg + "."
