@@ -13,10 +13,11 @@ A variant is a new file, never an edit to an existing one.
 | [`harness.env`](harness.env) | 65 536 | the harness comparison — the one context all four candidates accept, and **unattended only** |
 | [`mtp-32k.env`](mtp-32k.env) | 32 768 | the target's own multi-token-prediction head. **Adopted for the grind profile** at 1.26–1.57× |
 | [`mtp-49k.env`](mtp-49k.env) | 49 152 | the same at the editor profile, **refused** — the allocator fails on the first prefill batch |
+| [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | the driver flow: `agent.env`'s served defaults moved to the context the MTP head is admissible at. **A candidate** until 0025's chain scores it |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
 
-The four speculative configs name a `SERVER_BIN` that is **not** the binary on `PATH`: the
+The five speculative configs name a `SERVER_BIN` that is **not** the binary on `PATH`: the
 mechanism exists only in llama.cpp PR #27342, and the config says which build served it.
 
 ## What is deliberately not a file here

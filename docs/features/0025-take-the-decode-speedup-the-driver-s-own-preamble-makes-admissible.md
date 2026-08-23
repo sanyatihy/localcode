@@ -67,7 +67,7 @@ already screened against it in 0017.
 
 ## Tasks
 
-- [ ] a driver serving config at 32,768 with the MTP head, refused loudly if the allocator
+- [x] a driver serving config at 32,768 with the MTP head, refused loudly if the allocator
       or the desktop rule says no
 - [ ] one instruction run to completion under both configs, scored by the repository's own
       tests rather than by what the sessions reported
