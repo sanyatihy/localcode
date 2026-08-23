@@ -21,7 +21,11 @@ what moves it, and only `localcode` sets it.
 
 ## It needs the server configured for it
 
-Serve **[`config/agent.env`](../../config/agent.env), not `config/tuned.env`**. Two things it
+Serve **[`config/agent.env`](../../config/agent.env), not `config/tuned.env`**, for the
+extension and terminal flows this page describes. `localcode` starts
+[`config/driver-mtp-32k.env`](../../config/driver-mtp-32k.env) instead — the same served
+defaults at 32,768, where the model's own MTP head is admissible — because a driver session's
+preamble is a tenth of an extension session's first request. Two things `agent.env`
 does are not optional: it serves sampling and the thinking toggle as defaults, because this
 client sends neither; and it names the chat-template override, because Qwen3.8's own template
 raises on the mid-conversation system message this client sends on every request.
