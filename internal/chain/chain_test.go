@@ -200,6 +200,57 @@ func TestNextAndDoneReadTheChainsOnlySignals(t *testing.T) {
 	}
 }
 
+// The hook that lets a session end and the supervisor that reads what it left must mean
+// the same thing by a handoff. They did not: the hook matched the marker as a substring
+// and the supervisor read the step after it, so two sessions were told they had handed
+// something on while the chain read nothing in either.
+func TestTheStopHookAndTheSupervisorAgreeOnAUsableHandoff(t *testing.T) {
+	bare := []byte(strings.Replace(good, "**Next:** fix Clamp", "**Next:**", 1))
+	if len(bare) < handoffFloor {
+		t.Fatalf("the case must clear the size floor to test the other half: %d bytes", len(bare))
+	}
+	if v := Stop(bare, "/s/HANDOFF.md", 0); !v.Deny {
+		t.Fatal("a marker carrying no step hands nothing on, whatever the file's size")
+	}
+	// What the hook lets end is what the supervisor can read, in both directions.
+	for _, h := range []string{good, strings.Replace(good, "fix Clamp", "\n1. fix Clamp", 1)} {
+		ended := !Stop([]byte(h), "/s/HANDOFF.md", 0).Deny
+		if read := Next([]byte(h)) != ""; ended != read {
+			t.Fatalf("hook let it end: %v, supervisor read a step: %v, for %q", ended, read, h)
+		}
+	}
+}
+
+// A marker written as a heading over a list is still a next step. Measured on a chain
+// that stopped at seven of eight sessions: two handoffs read as empty, and the repeat
+// guard took the two empties for a plan written twice.
+func TestNextReadsTheStepWrittenBelowTheMarker(t *testing.T) {
+	block := "# Handoff\n\n**Box:** the third one\n**Next:**\n1. fix Clamp\n2. then ship it\n"
+	if got := Next([]byte(block)); got != "1. fix Clamp 2. then ship it" {
+		t.Fatalf("Next: got %q", got)
+	}
+	spaced := "**Next:**\n\n  fix Clamp\n"
+	if got := Next([]byte(spaced)); got != "fix Clamp" {
+		t.Fatalf("a marker spaced like a heading still carries its step: got %q", got)
+	}
+	closing := "**Next:**\nfix Clamp\n\nthe worktree is left in place.\n"
+	if got := Next([]byte(closing)); got != "fix Clamp" {
+		t.Fatalf("the step ends at the blank line, not at the file: got %q", got)
+	}
+	fields := "**Next:**\nfix Clamp\n**Files:** `median.go`\n"
+	if got := Next([]byte(fields)); got != "fix Clamp" {
+		t.Fatalf("the step ends at the next field: got %q", got)
+	}
+	if got := Next([]byte("**Next:**\n")); got != "" {
+		t.Fatalf("a marker with nothing under it carries no step: got %q", got)
+	}
+	// The completion signal is read out of the same place, so it is unreadable for the
+	// same reason until this is.
+	if !Done([]byte("**Next:**\nnone \u2014 every box is ticked and the branch is pushed.\n")) {
+		t.Fatal("`none` under the marker is the same completion signal as `none` on it")
+	}
+}
+
 // A spent budget opens exactly one door, and it is the door the supervisor reads from.
 func TestOnlyTheOneHandoffTheSessionWasGivenCounts(t *testing.T) {
 	if !IsHandoff("Write", map[string]any{"file_path": "/state/01/./HANDOFF.md"}, handoffPath) {
