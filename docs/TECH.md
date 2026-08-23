@@ -673,6 +673,33 @@ that changed the answer would be measuring something else.
   `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
   has not been taken against this config. It peaks at 22.10 GB where the desktop died at
   22.29, so the margin is 0.19 GB and the answer is not obvious.
+- **Driver, 32,768 served**: adopt. Measured on a whole chain rather than on a decode rate,
+  and the chain is what the trade is between.
+
+**A driver chain is faster at the smaller context, having paid the extra session.** The
+"record, do not adopt" verdict above rests on an agent session's prompt being deep, and the
+driver's is not: its preamble is 4,395 tokens against the 36,309 an editor session's first
+request measured, so 49,152 was capacity chosen for a flow this is not. One instruction —
+twenty independent Go bugs, one per file — driven to completion on each config, scored by
+`go test` and not by what the sessions said:
+
+| | sessions | wall to the answer | ingested | generated | peak context |
+|---|---|---|---|---|---|
+| `config/agent.env`, 49,152 | 1 | 824 s | 14,234 | 4,311 | 16,294 of a 40,960 window |
+| `config/driver-mtp-32k.env`, 32,768 | 2 | **661 s** | 17,119 | 4,108 | 11,611 and 7,341 of 24,576 |
+
+**163 seconds, or 20%, for a second session and 2,885 more ingested tokens.** That is the
+arithmetic working out the way it was not obvious it would: three times the handoffs against
+a decode ratio near 1.3. Per generated token the chain ran 0.191 s against 0.161 — 1.19×,
+below the 1.26× pure decode gives at 32,000 tokens of prompt, because a chain's clock holds
+ingest and tool time as well.
+
+**One run a side, no repeat.** At the served sampling the two chains did not do identical
+work — 46 tool calls against 35 — so the wall clock is read against the generated tokens,
+which agree within 5%. The builds differ too, since the comparator is the shipped config:
+`PATH`'s `llama-server` served 49,152 and PR #27342's build served 32,768. Both finished
+20/20, and `fixme_test.go` was byte-identical to a freshly generated one in both checkouts
+afterwards.
 
 **One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
 Once is not a characterisation, and it is recorded rather than explained.
@@ -751,6 +778,15 @@ and a run whose swap grew measured the pager — so wall is averaged over clean 
 the count of them is printed beside it. Tokens and turns are indifferent to paging.
 
 ## Claude Code against the local endpoint
+
+**The driver serves 32,768 and the editor serves 49,152, and the number that decided it is
+4,395.** That is `localcode`'s preamble, against the 36,309 tokens an extension session's
+first request measures — so the capacity 49,152 exists to provide is capacity the driver does
+not use, and spending it costs the MTP head, which the allocator refuses above 38,912. Driven
+end to end the smaller context finished the same instruction in 661 s against 824, paying the
+second session it was always going to pay: [the chain, both
+ways](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). `localcode`
+therefore defaults to `config/driver-mtp-32k.env`, and `-config` is what moves it.
 
 `config/agent.env` is the serving config for an editor agent. It serves **49,152**
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
@@ -921,6 +957,14 @@ budget 3,072 tokens too generous let sessions edit four files each and then die 
 is too long` with no handoff written. The declared window has to clear the preamble plus
 that reservation plus the reserve, or `localcode` refuses to start — which rules out the
 12,288 wall the enforcement was first measured at.
+
+**And the declaration is read off the server, not off the file.** `harness/claude-code/`
+carries one `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `-config` chooses which context is served,
+so a number written for one server is a claim about the other. `localcode` asks `/props`
+what is served, declares that less the output reservation, and overrides the variable for
+the session it starts — saying so when the two disagree. A server that will not report a
+context is refused rather than guessed at. The file's own value stands for the flow it is
+sourced into by hand.
 
 **A chain is one invocation, and a repository holds several.** `localcode` given an
 instruction runs sessions until a handoff says `Next: none`, until two in a row plan the

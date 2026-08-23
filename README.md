@@ -174,8 +174,14 @@ write names the path and the line that allows it:
 echo ~/.cargo >> ~/.config/localcode/writable
 ```
 
-**`agent.env`, never `tuned.env`:** it serves the sampling, thinking toggle and
-chat-template override Claude Code never sends itself. `localcode` serves it by default.
+**Never `tuned.env`:** Claude Code sends no sampling, no thinking toggle and no
+chat-template override, so a config that does not serve all three serves something nobody
+chose. `localcode` starts [`config/driver-mtp-32k.env`](config/driver-mtp-32k.env) by
+default — those defaults at 32,768, plus the model's own MTP head, which the allocator
+admits there and refuses at 49,152. It needs the llama.cpp build that carries that head, and
+says so rather than hanging if it is missing; `-config config/agent.env` is the same defaults
+at 49,152 on the binary on your `PATH`. The editor flows want `agent.env`, whose extra
+capacity their much larger first request needs.
 
 Moving this checkout means running `make install` again — the path is compiled in, not
 searched for.

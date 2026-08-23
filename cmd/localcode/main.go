@@ -63,7 +63,7 @@ usage:
 flags:
   -checkout dir      the localcode checkout to read configuration from
   -endpoint url      the server to use
-  -config file       the serving config to start (default config/agent.env)
+  -config file       the serving config to start (default config/driver-mtp-32k.env)
   -no-serve          refuse if no server is running, rather than starting one
   -net               allow outbound network for this session (loopback only by default)
   -ceiling pct       lower the ceiling below what the reserve already allows
@@ -80,7 +80,7 @@ func main() {
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
-	config := fs.String("config", "config/agent.env", "the serving config to start")
+	config := fs.String("config", "config/driver-mtp-32k.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
@@ -171,10 +171,20 @@ func run(o opts) (int, error) {
 	// The budget is derived from the window the harness was declared, so a served config
 	// and the enforcement over it cannot disagree. Refused rather than guessed: a session
 	// started in a window nothing fits in spends a cold ingest to say `Prompt is too long`.
-	maxContext, maxOutput, err := declared(env)
+	fileContext, maxOutput, err := declared(env)
 	if err != nil {
 		return 2, err
 	}
+	// And the declaration is read off the server rather than off the file, because the
+	// file carries one number and `-config` chooses which context is served. The prompt
+	// and the reply share the served context, so the window is what is served less the
+	// reservation — the same arithmetic the file's own comment states, applied to the
+	// server that is actually running instead of to the one it was written for.
+	maxContext, err := declaredFromServer(o.endpoint, maxOutput, fileContext)
+	if err != nil {
+		return 2, err
+	}
+	env = setEnv(env, "CLAUDE_CODE_MAX_CONTEXT_TOKENS", strconv.Itoa(maxContext))
 	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
 	if err != nil {
 		return 2, err
@@ -296,9 +306,9 @@ func serverUp(endpoint string) error {
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
-			return fmt.Errorf("no answer from %s: start one with `make serve CONFIG=config/agent.env`", endpoint)
+			return fmt.Errorf("no answer from %s: start one with `make serve CONFIG=config/driver-mtp-32k.env`", endpoint)
 		}
-		return fmt.Errorf("no server at %s: start one with `make serve CONFIG=config/agent.env`", endpoint)
+		return fmt.Errorf("no server at %s: start one with `make serve CONFIG=config/driver-mtp-32k.env`", endpoint)
 	}
 	defer resp.Body.Close() //nolint:errcheck // reading the code is the whole check
 	if resp.StatusCode != http.StatusOK {
@@ -307,32 +317,55 @@ func serverUp(endpoint string) error {
 	return nil
 }
 
-// status reports what the endpoint is actually serving, rather than that something is
-// listening. The served context is the number worth printing: it is the one limit a
-// session hits without warning, and it comes from the server rather than from a config
-// file that may not be the one running.
-func status(endpoint string) (int, error) {
+// props is what the endpoint says it is serving. The served context is the number that
+// matters: it is the one limit a session hits without warning, and it is a property of the
+// running server rather than of a config file that may not be the one that started it.
+type props struct {
+	ModelPath string `json:"model_path"`
+	Settings  struct {
+		NCtx int `json:"n_ctx"`
+	} `json:"default_generation_settings"`
+}
+
+// readProps asks the endpoint. A server that is not there is `nil, nil`: `status` answers
+// that as "no", and `run` never sees it because `ensureServer` has already been past.
+func readProps(endpoint string) (*props, error) {
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get(endpoint + "/props")
 	if err != nil {
-		fmt.Printf("no server at %s\n", endpoint)
-		return 1, nil
+		return nil, nil
 	}
 	defer resp.Body.Close() //nolint:errcheck // the body is decoded below or the call failed
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("server at %s is not ready: HTTP %d\n", endpoint, resp.StatusCode)
+		return nil, fmt.Errorf("%w: server at %s answered HTTP %d", errNotReady, endpoint, resp.StatusCode)
+	}
+	var p props
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("could not read %s/props: %w", endpoint, err)
+	}
+	return &p, nil
+}
+
+// errNotReady separates a server that is still loading from one whose answer could not be
+// read: the first is a state to report and wait out, the second is a command that could
+// not be carried out.
+var errNotReady = errors.New("not ready")
+
+// status reports what the endpoint is actually serving, rather than that something is
+// listening.
+func status(endpoint string) (int, error) {
+	p, err := readProps(endpoint)
+	switch {
+	case errors.Is(err, errNotReady):
+		fmt.Println(err)
+		return 1, nil
+	case err != nil:
+		return 2, err
+	case p == nil:
+		fmt.Printf("no server at %s\n", endpoint)
 		return 1, nil
 	}
-	var props struct {
-		ModelPath string `json:"model_path"`
-		Settings  struct {
-			NCtx int `json:"n_ctx"`
-		} `json:"default_generation_settings"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&props); err != nil {
-		return 2, fmt.Errorf("could not read %s/props: %w", endpoint, err)
-	}
-	fmt.Printf("serving %s at %d ctx on %s\n", filepath.Base(props.ModelPath), props.Settings.NCtx, endpoint)
+	fmt.Printf("serving %s at %d ctx on %s\n", filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint)
 	return 0, nil
 }
 
@@ -372,20 +405,30 @@ func ensureServer(root, endpoint, config string, noServe bool) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start the server: %w", err)
 	}
-	if err := waitHealthy(endpoint, 20*time.Minute); err != nil {
+	// serve.sh validates the config and then execs the server, so this process is the
+	// server and its death is the config being refused. Watched rather than waited out: the
+	// default config names a build that is not the binary on PATH, and a machine without it
+	// would otherwise poll a health endpoint for twenty minutes before saying so.
+	died := make(chan error, 1)
+	go func() { died <- cmd.Wait() }()
+	if err := waitHealthy(endpoint, 20*time.Minute, died); err != nil {
 		return fmt.Errorf("%w — see %s", err, logPath)
 	}
 	fmt.Fprintln(os.Stderr, "server ready")
 	return nil
 }
 
-func waitHealthy(endpoint string, limit time.Duration) error {
+func waitHealthy(endpoint string, limit time.Duration, died <-chan error) error {
 	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
 		if serverUp(endpoint) == nil {
 			return nil
 		}
-		time.Sleep(2 * time.Second)
+		select {
+		case err := <-died:
+			return fmt.Errorf("the server exited before it was ready: %w", err)
+		case <-time.After(2 * time.Second):
+		}
 	}
 	return fmt.Errorf("the server did not become ready within %s", limit)
 }
@@ -567,6 +610,64 @@ func declared(env []string) (maxContext, maxOutput int, err error) {
 			"and CLAUDE_CODE_MAX_OUTPUT_TOKENS: a session's budget is derived from them")
 	}
 	return maxContext, maxOutput, nil
+}
+
+// declaredFromServer is the window to declare against the context the endpoint reports.
+//
+// The wall a session hits is the served context, and `-config` moves it — so a declaration
+// taken from a file is a claim about whichever server that file was written for. Taking it
+// at face value is what killed the sessions the enforcement was first measured on: a budget
+// 3,072 tokens too generous let them edit four files each and then die on `Prompt is too
+// long` with no handoff written.
+//
+// It says so when the file disagrees, because the file is what an operator reading the
+// configuration would believe, and a number silently overridden is a number nobody can
+// account for afterwards.
+func declaredFromServer(endpoint string, maxOutput, fileContext int) (int, error) {
+	p, err := readProps(endpoint)
+	if err != nil {
+		return 0, err
+	}
+	if p == nil || p.Settings.NCtx <= 0 {
+		return 0, fmt.Errorf("%s serves no context it will report, so a session cannot be "+
+			"budgeted against it: what a session may spend is derived from what is served",
+			endpoint)
+	}
+	served := p.Settings.NCtx
+	if served <= maxOutput {
+		return 0, fmt.Errorf("%s serves %d tokens against a %d-token output reservation, "+
+			"which leaves a session nothing at all: serve more context, or reserve less output",
+			endpoint, served, maxOutput)
+	}
+	declared := served - maxOutput
+	if declared != fileContext {
+		fmt.Fprintf(os.Stderr, "window: %d tokens, from the %d %s serves less the %d "+
+			"reserved for a reply — claude-code.env declares %d, which is not this server\n",
+			declared, served, endpoint, maxOutput, fileContext)
+	}
+	return declared, nil
+}
+
+// setEnv replaces a variable rather than appending a second one. Two entries for one name
+// leave which of them the child reads to the C library, and the whole point of this one is
+// that the session is held to the window it actually has.
+func setEnv(env []string, name, value string) []string {
+	entry := name + "=" + value
+	out := make([]string, 0, len(env)+1)
+	replaced := false
+	for _, kv := range env {
+		if k, _, _ := strings.Cut(kv, "="); k == name {
+			if replaced {
+				continue
+			}
+			kv, replaced = entry, true
+		}
+		out = append(out, kv)
+	}
+	if !replaced {
+		out = append(out, entry)
+	}
+	return out
 }
 
 // newChain makes the directory one run of the tool keeps its sessions in, and names it.
