@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/handoff"
 )
 
@@ -37,6 +38,10 @@ func chainOnDisk(t *testing.T, id string, sessions ...[]string) string {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(sessionDir, "calls-"+sessionID), []byte("."), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		spec := chain.Spec{Limits: chain.Limits{Window: 24576, Ceiling: 10240}, Chain: id, Session: n + 1}
+		if err := chain.WriteSpec(sessionDir, spec); err != nil {
 			t.Fatal(err)
 		}
 		project := filepath.Join(config, "projects", "a-repo")
@@ -88,7 +93,7 @@ func TestAccountReportsWhatAWholeChainCost(t *testing.T) {
 		},
 	)
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	for _, want := range []string{
@@ -111,7 +116,7 @@ func TestAccountTakesTheNewestChainWhenNoneIsNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	if !strings.Contains(out.String(), "chain 20260823-104105") {
@@ -121,7 +126,7 @@ func TestAccountTakesTheNewestChainWhenNoneIsNamed(t *testing.T) {
 
 func TestAccountRefusesAChainThatIsNotHere(t *testing.T) {
 	chainOnDisk(t, "20260823-104105", []string{transcriptRow("2026-08-23T06:41:00.000Z")})
-	code, err := accountHere(io.Discard, "20260101-000000")
+	code, err := accountHere(io.Discard, "20260101-000000", "")
 	if code != 2 || err == nil {
 		t.Fatalf("account = %d, %v; want a refusal", code, err)
 	}
@@ -188,7 +193,7 @@ func TestAccountRepeatsTheColumnsPerSession(t *testing.T) {
 		},
 	)
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	rows := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
@@ -210,7 +215,7 @@ func TestAccountLeavesOutTheBreakdownOfASingleSession(t *testing.T) {
 		transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
 	})
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	if strings.Contains(out.String(), "session  calls") {
@@ -236,7 +241,7 @@ func TestAccountReadsAChainThatIsStillRunning(t *testing.T) {
 	endFirstSessionOnly(t, dir)
 
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	for _, want := range []string{
@@ -266,7 +271,7 @@ func TestAccountReadsAChainBeforeItsFirstSessionEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	if !strings.Contains(out.String(), "1 session, 1 still running, 0 s recorded") {
@@ -290,7 +295,7 @@ func TestAccountSurvivesATranscriptBeingWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+	if code, err := accountHere(&out, "", ""); code != 0 || err != nil {
 		t.Fatalf("account = %d, %v", code, err)
 	}
 	if !strings.Contains(out.String(), "generated  80 tokens") {
@@ -311,4 +316,86 @@ func endFirstSessionOnly(t *testing.T, dir string) {
 	if err := os.WriteFile(path, []byte(first), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// The rows a chain is committed to docs/data/ as: the chain, then a row per session, in
+// the field names 0025 already used, so the same chain measured two ways can be compared.
+func TestAccountWritesTheRowsDocsDataTakes(t *testing.T) {
+	chainOnDisk(t, "20260823-104105",
+		[]string{
+			transcriptRow("2026-08-23T06:41:00.000Z"),
+			transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+			transcriptRow("2026-08-23T06:41:41.000Z"),
+			transcriptCall("a2", "2026-08-23T06:42:01.000Z", 500, 4080, 120),
+		},
+		[]string{
+			transcriptRow("2026-08-23T06:50:00.000Z"),
+			transcriptCall("b1", "2026-08-23T06:50:45.000Z", 4400, 0, 90),
+		},
+	)
+	out := filepath.Join(t.TempDir(), "0027-chain-account.jsonl")
+	if code, err := accountHere(io.Discard, "", out); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	rows := readRows(t, out)
+	if len(rows) != 3 {
+		t.Fatalf("wrote %d rows, want a chain and its 2 sessions: %v", len(rows), rows)
+	}
+	if rows[0]["record"] != "chain" || rows[1]["record"] != "session" {
+		t.Fatalf("the chain is not the first row: %v", rows)
+	}
+	for field, want := range map[string]any{
+		"chain": "20260823-104105", "sessions": 2.0, "wall_seconds": 200.0,
+		"prompt_tokens_ingested": 8900.0, "prompt_tokens_cached": 4080.0,
+		"tokens_generated": 290.0, "preamble_tokens": 8400.0, "model_seconds": 105.0,
+		"model_calls": 3.0, "peak_context_tokens": 4700.0, "rates_fitted": true,
+	} {
+		if rows[0][field] != want {
+			t.Errorf("the chain row's %s is %v, want %v", field, rows[0][field], want)
+		}
+	}
+	// A window is a session's, and the budget it ran under is in the spec and nowhere else.
+	if rows[1]["window_tokens"] != 24576.0 || rows[1]["ceiling_tokens"] != 10240.0 {
+		t.Errorf("the session row does not carry its budget: %v", rows[1])
+	}
+	if _, ok := rows[0]["window_tokens"]; ok {
+		t.Errorf("the chain row claims a window: %v", rows[0])
+	}
+}
+
+// A rate that could not be fitted is absent, not zero: a zero decode rate in a results
+// file reads as a measurement of a server that answered nothing.
+func TestAccountLeavesOutARateItCouldNotFit(t *testing.T) {
+	chainOnDisk(t, "20260823-104105", []string{
+		transcriptRow("2026-08-23T06:41:00.000Z"),
+		transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+	})
+	out := filepath.Join(t.TempDir(), "0027-chain-account.jsonl")
+	if code, err := accountHere(io.Discard, "", out); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	rows := readRows(t, out)
+	if rows[0]["rates_fitted"] != false {
+		t.Errorf("one call claimed a fit: %v", rows[0])
+	}
+	if _, ok := rows[0]["decode_per_second"]; ok {
+		t.Errorf("a rate that was not fitted was written anyway: %v", rows[0])
+	}
+}
+
+func readRows(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []map[string]any
+	for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
+		var r map[string]any
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("row %q: %v", line, err)
+		}
+		rows = append(rows, r)
+	}
+	return rows
 }
