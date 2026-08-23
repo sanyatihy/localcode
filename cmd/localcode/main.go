@@ -57,6 +57,7 @@ usage:
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
   localcode sessions           the chains this repository has run
+  localcode account [id]       what one chain cost: minutes, tokens, its rates
   localcode hook <name>        run one of this binary's own session hooks
   localcode --help
 
@@ -110,6 +111,8 @@ func main() {
 		code, err = hook(args[1])
 	case len(args) > 0 && args[0] == "sessions":
 		code, err = sessionsHere()
+	case len(args) > 0 && args[0] == "account":
+		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""))
 	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,
