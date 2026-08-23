@@ -661,3 +661,90 @@ func TestTheClockDoesNotRunOnAnInteractiveSession(t *testing.T) {
 		t.Fatalf("an interactive session must not be stopped by the clock: code %d err %v", code, err)
 	}
 }
+
+// `kit claim` prints `git worktree add ../<repo>-<id>`, and that failed under the sandbox
+// with `Operation not permitted` on a real repository: writes stopped at the working
+// directory. The model recovered by putting the worktree inside the repository, which is
+// where nobody looks for it. Asserted against the kernel, because the profile being
+// readable is not the same as the boundary being where it says.
+func TestSandboxAllowsAWorktreeBesideTheRepositoryAndNothingElseBesideIt(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip("no seatbelt on this platform")
+	}
+	// Under the home directory, not under a temp one: the temp directory is writable
+	// anyway, so a refusal asserted there would prove nothing. A parent with a dot in its
+	// name, as a real one has: gitlab.ubnk.uz.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(home, ".localcode-test-"+filepath.Base(t.TempDir()), "gitlab.example.uz")
+	cwd := filepath.Join(parent, "slack-stats")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(parent)) })
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkdir := func(path string) error {
+		return exec.Command("/usr/bin/sandbox-exec", "-f", profile, "/bin/mkdir", path).Run()
+	}
+
+	// The worktree kit asks for.
+	if err := mkdir(filepath.Join(parent, "slack-stats-0001")); err != nil {
+		t.Fatalf("a worktree beside the repository must be allowed: %v", err)
+	}
+	// Every other project of this developer's lives beside it too, and stays out of reach.
+	if err := mkdir(filepath.Join(parent, "somebody-elses-repo")); err == nil {
+		t.Fatal("the parent directory must not be opened up, only the repository's own siblings")
+	}
+	// And a name that merely looks like one: `slack-statsX-1` must not match `slack-stats`.
+	if err := mkdir(filepath.Join(parent, "slack-statsX-1")); err == nil {
+		t.Fatal("the separator is part of the name, not a wildcard")
+	}
+}
+
+// A repository whose name carries regex punctuation must not widen the pattern.
+func TestSiblingWorktreePatternEscapesTheRepositorysName(t *testing.T) {
+	dir := t.TempDir()
+	cwd := filepath.Join(dir, "a.b+c")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := siblingWorktrees(cwd)
+	if strings.Contains(got, "a.b+c") {
+		t.Fatalf("the name must reach the pattern escaped: %s", got)
+	}
+	if !strings.HasSuffix(got, `a\.b\+c-[^/]+`) {
+		t.Fatalf("got %s", got)
+	}
+}
+
+// A session cannot find out where a worktree may go except by being refused, and the one
+// that was refused put it somewhere nobody looks for it. The briefing is the trusted
+// channel, so it is where the two permitted places are named.
+func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
+	plain := t.TempDir()
+	got := sandboxBriefing(plain)
+	if !strings.Contains(got, "../"+filepath.Base(plain)+"-<name>") {
+		t.Fatalf("the sibling the sandbox allows must be named: %s", got)
+	}
+	if strings.Contains(got, ".worktrees") {
+		t.Fatalf("a repository that keeps no .worktrees must not be told to use one: %s", got)
+	}
+
+	// A repository that already keeps one has decided where they go.
+	kept := t.TempDir()
+	if err := os.Mkdir(filepath.Join(kept, ".worktrees"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got = sandboxBriefing(kept)
+	if !strings.Contains(got, "`.worktrees/<name>`") {
+		t.Fatalf(".worktrees must be named first where it exists: %s", got)
+	}
+	if strings.Index(got, ".worktrees") > strings.Index(got, "../"+filepath.Base(kept)) {
+		t.Fatalf("the repository's own choice comes first: %s", got)
+	}
+}
