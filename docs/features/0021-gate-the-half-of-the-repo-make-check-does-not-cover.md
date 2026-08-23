@@ -4,9 +4,6 @@ title: Gate the half of the repo make check does not cover
 status: Shipped
 created: 2026-08-21
 shipped: 2026-08-21
-check:               # optional — date to check whether this worked. Only for bets.
-checked:             # written by kit check <id> "<outcome>", never by hand
-review:              # optional — `human` means a person merges this one. kit accept --review
 needs:
 related: 0002, 0019, 0020
 ---

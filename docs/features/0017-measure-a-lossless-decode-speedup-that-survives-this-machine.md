@@ -5,8 +5,6 @@ status: Shipped
 created: 2026-08-20
 shipped: 2026-08-20
 check: 2026-09-03
-checked:
-review:
 needs:
 related: 0005, 0006, 0014
 ---

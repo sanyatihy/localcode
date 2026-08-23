@@ -4,9 +4,6 @@ title: Build the agentic coding eval harness
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-18
-check:
-checked:
-review:
 needs:
 related: 0010, 0001
 ---

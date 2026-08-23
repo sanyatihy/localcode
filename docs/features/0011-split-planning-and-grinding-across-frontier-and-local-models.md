@@ -4,8 +4,6 @@ title: Split planning and grinding across frontier and local models
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-20
-check:
-checked:
 review: human
 needs: 0008, 0010
 related: 0002

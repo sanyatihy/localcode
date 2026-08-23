@@ -4,9 +4,6 @@ title: Hand off between sessions instead of compacting
 status: Shipped
 created: 2026-08-19
 shipped: 2026-08-20
-check:
-checked:
-review:
 needs:
 related: 0008, 0011
 ---

@@ -4,9 +4,6 @@ title: Stop small calls evicting the conversation's prefix
 status: Shipped
 created: 2026-08-20
 shipped: 2026-08-20
-check:
-checked:
-review:
 needs:
 related: 0003, 0008, 0016
 ---

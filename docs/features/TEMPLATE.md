@@ -1,10 +1,10 @@
 ---
 id: NNNN
 title: <short imperative name>
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Draft
 created: YYYY-MM-DD
-shipped:             # written by kit ship, never by hand
-needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
+shipped:
+needs:
 ---
 
 <!-- `needs:` is the only field that changes what `kit next` offers, so it earns care.
