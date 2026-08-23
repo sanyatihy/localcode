@@ -59,6 +59,15 @@ remembered.
 - **No fine-tuning.** Not LoRA, not QLoRA, not continued pre-training. The model is
   taken as it ships; everything here is launch, serve and drive. An idea that requires
   touching weights is out of scope, not a backlog item.
+- **Not a second `kit`.** `kit` owns the work protocol: what a feature is, which one is
+  next, who has claimed it, and when it is shipped. It writes `AGENTS.md` and publishes
+  `kit next --json`. Nothing here re-derives any of that. This project owns how the model is
+  launched, served and driven — a session's budget, its handoff, the sandbox it runs in, and
+  the numbers each of those was settled by. Where the two meet, the driver runs a command
+  and reads an exit code; it does not read a doc format, and it does not decide what work
+  exists. **0016's `## Tasks` parser is on the wrong side of this line and predates it**,
+  which is why retiring it is a `BACKLOG.md` entry rather than a rule nobody wrote down.
+
 - **Not multi-user.** One machine, one developer. Auth, quotas and LAN serving would
   change every design here.
 - **Not a model zoo.** A model earns a place by scoring on the scorer; "worth a look"
