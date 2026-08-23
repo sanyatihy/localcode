@@ -73,7 +73,7 @@ already screened against it in 0017.
       moves the wall and the budget together
 - [x] one instruction run to completion under both configs, scored by the repository's own
       tests rather than by what the sessions reported
-- [ ] the two chains compared on wall clock to the finished instruction, sessions spent,
+- [x] the two chains compared on wall clock to the finished instruction, sessions spent,
       tokens ingested and tokens generated
 - [ ] `docs/TECH.md` records which context the driver serves and the number that decided it
 
