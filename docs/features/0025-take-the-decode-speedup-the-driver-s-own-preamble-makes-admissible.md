@@ -1,9 +1,9 @@
 ---
 id: 0025
 title: Take the decode speedup the driver's own preamble makes admissible
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-23
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-23
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 ---
 
