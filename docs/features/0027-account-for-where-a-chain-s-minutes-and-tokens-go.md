@@ -1,9 +1,9 @@
 ---
 id: 0027
 title: Account for where a chain's minutes and tokens go
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-23
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-23
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 ---
 
