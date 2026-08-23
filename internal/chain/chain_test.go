@@ -200,6 +200,27 @@ func TestNextAndDoneReadTheChainsOnlySignals(t *testing.T) {
 	}
 }
 
+// The hook that lets a session end and the supervisor that reads what it left must mean
+// the same thing by a handoff. They did not: the hook matched the marker as a substring
+// and the supervisor read the step after it, so two sessions were told they had handed
+// something on while the chain read nothing in either.
+func TestTheStopHookAndTheSupervisorAgreeOnAUsableHandoff(t *testing.T) {
+	bare := []byte(strings.Replace(good, "**Next:** fix Clamp", "**Next:**", 1))
+	if len(bare) < handoffFloor {
+		t.Fatalf("the case must clear the size floor to test the other half: %d bytes", len(bare))
+	}
+	if v := Stop(bare, "/s/HANDOFF.md", 0); !v.Deny {
+		t.Fatal("a marker carrying no step hands nothing on, whatever the file's size")
+	}
+	// What the hook lets end is what the supervisor can read, in both directions.
+	for _, h := range []string{good, strings.Replace(good, "fix Clamp", "\n1. fix Clamp", 1)} {
+		ended := !Stop([]byte(h), "/s/HANDOFF.md", 0).Deny
+		if read := Next([]byte(h)) != ""; ended != read {
+			t.Fatalf("hook let it end: %v, supervisor read a step: %v, for %q", ended, read, h)
+		}
+	}
+}
+
 // A marker written as a heading over a list is still a next step. Measured on a chain
 // that stopped at seven of eight sessions: two handoffs read as empty, and the repeat
 // guard took the two empties for a plan written twice.

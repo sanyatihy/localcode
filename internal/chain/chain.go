@@ -9,7 +9,6 @@ package chain
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -208,15 +207,20 @@ func Stop(handoff []byte, path string, tries int) Verdict {
 		return Verdict{}
 	}
 	return Verdict{Deny: true, Reason: fmt.Sprintf(
-		"localcode: %s is missing, shorter than %d bytes, or carries no `**Next:**` line, "+
-			"so this session has handed nothing on.", path, handoffFloor)}
+		"localcode: %s is missing, shorter than %d bytes, or carries no step under its "+
+			"`**Next:**` marker, so this session has handed nothing on.", path, handoffFloor)}
 }
 
-// usable reports whether a handoff is one. Size and a `**Next:**` line, because those are
-// what the failure looked like: a chain of eight sessions wrote eight handoffs of which
-// seven carried `Prompt is too long` as their next step.
+// usable reports whether a handoff is one. Size and a step the supervisor can read,
+// because those are what the failures looked like: a chain of eight sessions wrote eight
+// handoffs of which seven carried `Prompt is too long` as their next step, and a later
+// one ended two sessions on handoffs whose marker carried nothing this could find.
+//
+// The step is `Next`'s answer and not a substring, so the hook and the supervisor cannot
+// disagree about what was handed on. They did, and that is what made the second failure
+// silent: both sessions were told they had handed something on, and neither had.
 func usable(handoff []byte) bool {
-	return len(handoff) >= handoffFloor && bytes.Contains(handoff, []byte("**Next:**"))
+	return len(handoff) >= handoffFloor && Next(handoff) != ""
 }
 
 // IsHandoff reports whether a call is the session writing its way out. It is never part of
