@@ -170,3 +170,50 @@ func TestFitRatesRefusesCallsThatCannotSeparateThem(t *testing.T) {
 		t.Error("one call fitted two rates")
 	}
 }
+
+// A chain's totals hide the session that spent them badly, so the columns repeat per
+// session — and a session whose own calls cannot decide a rate says so rather than
+// borrowing the chain's, which was fitted over other sessions' calls too.
+func TestAccountRepeatsTheColumnsPerSession(t *testing.T) {
+	chainOnDisk(t, "20260823-104105",
+		[]string{
+			transcriptRow("2026-08-23T06:41:00.000Z"),
+			transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+			transcriptRow("2026-08-23T06:41:41.000Z"),
+			transcriptCall("a2", "2026-08-23T06:42:01.000Z", 500, 4080, 120),
+		},
+		[]string{
+			transcriptRow("2026-08-23T06:50:00.000Z"),
+			transcriptCall("b1", "2026-08-23T06:50:45.000Z", 4400, 0, 90),
+		},
+	)
+	var out strings.Builder
+	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	rows := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	first, second := rows[len(rows)-2], rows[len(rows)-1]
+	for _, want := range []string{"2", "100", "60.0", "4000", "4500", "4080", "200", "7.33"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("session 1 does not report %q: %q", want, first)
+		}
+	}
+	if !strings.HasSuffix(second, "—") {
+		t.Errorf("a session of one call reported a decode rate: %q", second)
+	}
+}
+
+// One session is the whole chain, so repeating it under itself says nothing twice.
+func TestAccountLeavesOutTheBreakdownOfASingleSession(t *testing.T) {
+	chainOnDisk(t, "20260823-104105", []string{
+		transcriptRow("2026-08-23T06:41:00.000Z"),
+		transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+	})
+	var out strings.Builder
+	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	if strings.Contains(out.String(), "session  calls") {
+		t.Errorf("a chain of one session printed a per-session table:\n%s", out.String())
+	}
+}

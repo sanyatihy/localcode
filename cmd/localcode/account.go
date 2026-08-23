@@ -129,10 +129,32 @@ func printChain(w io.Writer, id string, accounts []account) {
 	if prefill, decode, ok := fitRates(calls); ok {
 		_, _ = fmt.Fprintf(w, "  fitted     decode %.2f tok/s, prefill %.1f tok/s, over %d calls\n",
 			decode, prefill, len(calls))
-		return
+	} else {
+		_, _ = fmt.Fprintf(w, "  fitted     nothing: %s cannot separate prefill from decode\n",
+			plural(len(calls), "call"))
 	}
-	_, _ = fmt.Fprintf(w, "  fitted     nothing: %s do not separate prefill from decode\n",
-		plural(len(calls), "call"))
+	if len(accounts) > 1 {
+		printSessions(w, accounts)
+	}
+}
+
+// printSessions repeats the chain's own columns per session, which is where a chain that
+// went wrong says so: a session is what a handoff, a budget and a preamble are each paid
+// per, so a chain's totals hide the one that spent them badly.
+func printSessions(w io.Writer, accounts []account) {
+	_, _ = fmt.Fprintf(w, "\n  %7s %6s %8s %10s %9s %9s %9s %10s %8s\n", "session", "calls",
+		"seconds", "in a call", "preamble", "ingested", "reused", "generated", "decode")
+	for _, a := range accounts {
+		ingested, cached, generated, seconds := a.totals()
+		// A session whose own calls do not decide a rate says so rather than borrowing the
+		// chain's: the chain's fit is over other sessions' calls as well.
+		decode := "—"
+		if _, fitted, ok := fitRates(a.calls); ok {
+			decode = fmt.Sprintf("%.2f", fitted)
+		}
+		_, _ = fmt.Fprintf(w, "  %7d %6d %8d %10.1f %9d %9d %9d %10d %8s\n", a.session,
+			len(a.calls), a.seconds, seconds, a.preamble(), ingested, cached, generated, decode)
+	}
 }
 
 // fitRates splits a call's clock between the prompt it read and the reply it wrote.
