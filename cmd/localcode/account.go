@@ -18,7 +18,8 @@ import (
 // the tools and the harness spent.
 type account struct {
 	session int
-	seconds int // the supervisor's clock for the whole session
+	seconds int  // the supervisor's clock for the whole session, and zero while it runs
+	running bool // no row in `sessions.jsonl` yet, so the session has not ended
 	calls   []handoff.Request
 }
 
@@ -75,28 +76,28 @@ func accountHere(w io.Writer, id string) (int, error) {
 		return 2, err
 	}
 	if len(accounts) == 0 {
-		return 2, fmt.Errorf("chain %s has recorded no session to account for", id)
+		return 2, fmt.Errorf("chain %s has no session to account for", id)
 	}
 	printChain(w, id, accounts)
 	return 0, nil
 }
 
-// readAccounts reads one account per session the chain has recorded. `sessions.jsonl` is
-// what says a session happened at all, because the wall clock is the supervisor's and
-// nothing the session wrote carries it.
+// readAccounts reads one account per session the chain holds.
+//
+// The chain's numbered directories are what says a session exists, not `sessions.jsonl`:
+// that row is appended once the session has ended, so a chain read while it works would
+// otherwise be missing the session doing the work. What the file adds is the wall clock,
+// which is the supervisor's measurement and is in nothing the session itself wrote.
 func readAccounts(dir string) ([]account, error) {
-	body, err := os.ReadFile(filepath.Join(dir, "sessions.jsonl"))
+	timed, err := recordedSeconds(dir)
 	if err != nil {
-		return nil, fmt.Errorf("read the chain's sessions: %w", err)
+		return nil, err
 	}
 	var accounts []account
-	for _, line := range bytes.Split(body, []byte("\n")) {
-		var r row
-		if err := json.Unmarshal(line, &r); err != nil {
-			continue // the trailing newline, and any row this does not model
-		}
-		a := account{session: r.Session, seconds: r.Seconds}
-		if t := newestTranscript(filepath.Join(dir, fmt.Sprintf("%02d", r.Session)), os.Environ()); t != "" {
+	for _, n := range chain.Sessions(dir) {
+		seconds, ended := timed[n]
+		a := account{session: n, seconds: seconds, running: !ended}
+		if t := newestTranscript(filepath.Join(dir, fmt.Sprintf("%02d", n)), os.Environ()); t != "" {
 			if a.calls, err = handoff.Requests(t); err != nil {
 				return nil, err
 			}
@@ -104,6 +105,28 @@ func readAccounts(dir string) ([]account, error) {
 		accounts = append(accounts, a)
 	}
 	return accounts, nil
+}
+
+// recordedSeconds is the supervisor's clock per session that has ended. A chain whose
+// first session is still running has written no file at all, which is not an error: it is
+// the answer that none of them has ended.
+func recordedSeconds(dir string) (map[int]int, error) {
+	body, err := os.ReadFile(filepath.Join(dir, "sessions.jsonl"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[int]int{}, nil
+		}
+		return nil, fmt.Errorf("read the chain's sessions: %w", err)
+	}
+	seconds := map[int]int{}
+	for _, line := range bytes.Split(body, []byte("\n")) {
+		var r row
+		if err := json.Unmarshal(line, &r); err != nil {
+			continue // the trailing newline, and any row this does not model
+		}
+		seconds[r.Session] = r.Seconds
+	}
+	return seconds, nil
 }
 
 // printChain reports the chain as one thing. Counts before rates, because the counts are
@@ -119,13 +142,31 @@ func printChain(w io.Writer, id string, accounts []account) {
 		ingested, cached, generated, model = ingested+i, cached+c, generated+g, model+s
 		calls = append(calls, a.calls...)
 	}
-	_, _ = fmt.Fprintf(w, "chain %s — %s, %d s\n", id, plural(len(accounts), "session"), seconds)
+	running := 0
+	for _, a := range accounts {
+		if a.running {
+			running++
+		}
+	}
+	if running > 0 {
+		_, _ = fmt.Fprintf(w, "chain %s — %s, %d still running, %d s recorded\n",
+			id, plural(len(accounts), "session"), running, seconds)
+	} else {
+		_, _ = fmt.Fprintf(w, "chain %s — %s, %d s\n", id, plural(len(accounts), "session"), seconds)
+	}
 	_, _ = fmt.Fprintf(w, "  generated  %d tokens\n", generated)
 	_, _ = fmt.Fprintf(w, "  ingested   %d tokens, %d of it preamble — paid once per session\n",
 		ingested, preamble)
 	_, _ = fmt.Fprintf(w, "  reused     %d tokens the server already held\n", cached)
-	_, _ = fmt.Fprintf(w, "  clock      %.1f s inside a call to the model, %.1f s outside one\n",
-		model, float64(seconds)-model)
+	if running > 0 {
+		// A session that has not ended has no wall clock of its own yet, and what is
+		// outside the model calls is the difference between the two.
+		_, _ = fmt.Fprintf(w, "  clock      %.1f s inside a call to the model, and %s "+
+			"still to be timed\n", model, plural(running, "session"))
+	} else {
+		_, _ = fmt.Fprintf(w, "  clock      %.1f s inside a call to the model, %.1f s outside one\n",
+			model, float64(seconds)-model)
+	}
 	if prefill, decode, ok := fitRates(calls); ok {
 		_, _ = fmt.Fprintf(w, "  fitted     decode %.2f tok/s, prefill %.1f tok/s, over %d calls\n",
 			decode, prefill, len(calls))
@@ -152,8 +193,12 @@ func printSessions(w io.Writer, accounts []account) {
 		if _, fitted, ok := fitRates(a.calls); ok {
 			decode = fmt.Sprintf("%.2f", fitted)
 		}
-		_, _ = fmt.Fprintf(w, "  %7d %6d %8d %10.1f %9d %9d %9d %10d %8s\n", a.session,
-			len(a.calls), a.seconds, seconds, a.preamble(), ingested, cached, generated, decode)
+		clock := fmt.Sprintf("%d", a.seconds)
+		if a.running {
+			clock = "—"
+		}
+		_, _ = fmt.Fprintf(w, "  %7d %6d %8s %10.1f %9d %9d %9d %10d %8s\n", a.session,
+			len(a.calls), clock, seconds, a.preamble(), ingested, cached, generated, decode)
 	}
 }
 
