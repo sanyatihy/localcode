@@ -75,7 +75,7 @@ already screened against it in 0017.
       tests rather than by what the sessions reported
 - [x] the two chains compared on wall clock to the finished instruction, sessions spent,
       tokens ingested and tokens generated
-- [ ] `docs/TECH.md` records which context the driver serves and the number that decided it
+- [x] `docs/TECH.md` records which context the driver serves and the number that decided it
 
 ## Open questions
 
