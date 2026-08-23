@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/sanyatihy/localcode/internal/chain"
+	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/handoff"
 )
 
@@ -18,9 +20,25 @@ import (
 // the tools and the harness spent.
 type account struct {
 	session int
-	seconds int  // the supervisor's clock for the whole session, and zero while it runs
-	running bool // no row in `sessions.jsonl` yet, so the session has not ended
+	at      string // when the supervisor started it, and empty while it runs
+	seconds int    // the supervisor's clock for the whole session, and zero while it runs
+	running bool   // no row in `sessions.jsonl` yet, so the session has not ended
+	limits  chain.Limits
 	calls   []handoff.Request
+}
+
+// peak is the largest context any call reached, which is the number a ceiling exists to
+// keep under the window — and the one that says whether a shorter context would have fit.
+// Derived from the calls rather than read from `sessions.jsonl`, so a running session has
+// it too.
+func (a account) peak() int {
+	peak := 0
+	for _, c := range a.calls {
+		if total := c.Ingest + c.Cached + c.Output; total > peak {
+			peak = total
+		}
+	}
+	return peak
 }
 
 // preamble is the first call's prompt: at that point the session has said nothing, so what
@@ -47,7 +65,7 @@ func (a account) totals() (ingested, cached, generated int, seconds float64) {
 
 // accountHere reports what one chain of this repository cost. The newest by default,
 // because that is the one an operator has just watched run.
-func accountHere(w io.Writer, id string) (int, error) {
+func accountHere(w io.Writer, id, jsonl string) (int, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return 2, fmt.Errorf("no working directory: %w", err)
@@ -79,6 +97,11 @@ func accountHere(w io.Writer, id string) (int, error) {
 		return 2, fmt.Errorf("chain %s has no session to account for", id)
 	}
 	printChain(w, id, accounts)
+	if jsonl != "" {
+		if err := writeRows(jsonl, id, accounts); err != nil {
+			return 2, err
+		}
+	}
 	return 0, nil
 }
 
@@ -95,9 +118,15 @@ func readAccounts(dir string) ([]account, error) {
 	}
 	var accounts []account
 	for _, n := range chain.Sessions(dir) {
-		seconds, ended := timed[n]
-		a := account{session: n, seconds: seconds, running: !ended}
-		if t := newestTranscript(filepath.Join(dir, fmt.Sprintf("%02d", n)), os.Environ()); t != "" {
+		r, ended := timed[n]
+		a := account{session: n, at: r.At, seconds: r.Seconds, running: !ended}
+		sessionDir := filepath.Join(dir, fmt.Sprintf("%02d", n))
+		// The budget the session ran under, which is in the spec the supervisor wrote it
+		// and in nothing else. Absent for a session nobody budgeted, which is not an error.
+		if spec, err := chain.ReadSpec(sessionDir); err == nil {
+			a.limits = spec.Limits
+		}
+		if t := newestTranscript(sessionDir, os.Environ()); t != "" {
 			if a.calls, err = handoff.Requests(t); err != nil {
 				return nil, err
 			}
@@ -107,26 +136,26 @@ func readAccounts(dir string) ([]account, error) {
 	return accounts, nil
 }
 
-// recordedSeconds is the supervisor's clock per session that has ended. A chain whose
+// recordedSeconds is the supervisor's own record per session that has ended. A chain whose
 // first session is still running has written no file at all, which is not an error: it is
 // the answer that none of them has ended.
-func recordedSeconds(dir string) (map[int]int, error) {
+func recordedSeconds(dir string) (map[int]row, error) {
 	body, err := os.ReadFile(filepath.Join(dir, "sessions.jsonl"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[int]int{}, nil
+			return map[int]row{}, nil
 		}
 		return nil, fmt.Errorf("read the chain's sessions: %w", err)
 	}
-	seconds := map[int]int{}
+	rows := map[int]row{}
 	for _, line := range bytes.Split(body, []byte("\n")) {
 		var r row
 		if err := json.Unmarshal(line, &r); err != nil {
 			continue // the trailing newline, and any row this does not model
 		}
-		seconds[r.Session] = r.Seconds
+		rows[r.Session] = r
 	}
-	return seconds, nil
+	return rows, nil
 }
 
 // printChain reports the chain as one thing. Counts before rates, because the counts are
@@ -233,4 +262,88 @@ func fitRates(calls []handoff.Request) (prefill, decode float64, ok bool) {
 		return 0, 0, false
 	}
 	return 1 / perPrompt, 1 / perReply, true
+}
+
+// dataRow is one line of the JSONL `docs/data/` takes. Field names are 0025's, because the
+// two files are read together: a chain accounted here and the same chain measured off the
+// server's counters have to be talking about the same tokens.
+//
+// The rates are the only fitted numbers and `rates_fitted` is what says so — false, and
+// they are absent rather than zero, since a zero decode rate reads as a measurement.
+type dataRow struct {
+	Record    string  `json:"record"`
+	Chain     string  `json:"chain"`
+	Session   int     `json:"session,omitempty"`
+	At        string  `json:"at,omitempty"`
+	Running   bool    `json:"running,omitempty"`
+	Sessions  int     `json:"sessions,omitempty"`
+	Wall      int     `json:"wall_seconds"`
+	Model     float64 `json:"model_seconds"`
+	Calls     int     `json:"model_calls"`
+	Preamble  int     `json:"preamble_tokens"`
+	Ingested  int     `json:"prompt_tokens_ingested"`
+	Cached    int     `json:"prompt_tokens_cached"`
+	Generated int     `json:"tokens_generated"`
+	Peak      int     `json:"peak_context_tokens"`
+	Window    int     `json:"window_tokens,omitempty"`
+	Ceiling   int     `json:"ceiling_tokens,omitempty"`
+	Fitted    bool    `json:"rates_fitted"`
+	Decode    float64 `json:"decode_per_second,omitempty"`
+	Prompt    float64 `json:"prompt_per_second,omitempty"`
+}
+
+// writeRows appends the chain and then a row per session, which is the order they are read
+// in. Appended rather than written: a results file here accumulates across runs, and one
+// that truncated would lose the chain it was compared against.
+func writeRows(path, id string, accounts []account) error {
+	chainRow := dataRow{Record: "chain", Chain: id, Sessions: len(accounts)}
+	var calls []handoff.Request
+	rows := []dataRow{{}}
+	for _, a := range accounts {
+		ingested, cached, generated, seconds := a.totals()
+		r := dataRow{
+			Record: "session", Chain: id, Session: a.session, At: a.at, Running: a.running,
+			Wall: a.seconds, Model: round(seconds, 1), Calls: len(a.calls),
+			Preamble: a.preamble(), Ingested: ingested, Cached: cached, Generated: generated,
+			Peak: a.peak(), Window: a.limits.Window, Ceiling: a.limits.Ceiling,
+		}
+		r.Prompt, r.Decode, r.Fitted = fittedRates(a.calls)
+		rows = append(rows, r)
+
+		chainRow.Wall += a.seconds
+		chainRow.Model += seconds
+		chainRow.Calls += len(a.calls)
+		chainRow.Preamble += a.preamble()
+		chainRow.Ingested += ingested
+		chainRow.Cached += cached
+		chainRow.Generated += generated
+		if p := a.peak(); p > chainRow.Peak {
+			chainRow.Peak = p
+		}
+		calls = append(calls, a.calls...)
+	}
+	chainRow.Model = round(chainRow.Model, 1)
+	chainRow.Prompt, chainRow.Decode, chainRow.Fitted = fittedRates(calls)
+	rows[0] = chainRow
+	for _, r := range rows {
+		if err := eval.AppendJSON(path, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fittedRates is fitRates rounded to what the fit can claim. Two decimals on a decode rate
+// and one on a prompt rate, which is the precision the published figures here carry.
+func fittedRates(calls []handoff.Request) (prompt, decode float64, ok bool) {
+	p, d, ok := fitRates(calls)
+	if !ok {
+		return 0, 0, false
+	}
+	return round(p, 1), round(d, 2), true
+}
+
+func round(v float64, places int) float64 {
+	scale := math.Pow(10, float64(places))
+	return math.Round(v*scale) / scale
 }

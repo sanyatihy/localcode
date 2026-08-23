@@ -74,6 +74,7 @@ flags:
   -continue          carry on this repository's most recent chain
   -resume id         carry on the chain with this id
   -fork id           start a chain from what that chain knew
+  -jsonl file        append the account subcommand's report to this results file too
 `
 
 func main() {
@@ -91,6 +92,7 @@ func main() {
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
+	jsonl := fs.String("jsonl", "", "append what account reports to this results file as well")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -112,7 +114,7 @@ func main() {
 	case len(args) > 0 && args[0] == "sessions":
 		code, err = sessionsHere()
 	case len(args) > 0 && args[0] == "account":
-		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""))
+		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""), *jsonl)
 	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,

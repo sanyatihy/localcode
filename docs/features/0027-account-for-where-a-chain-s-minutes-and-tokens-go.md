@@ -64,7 +64,7 @@ describes.
       preamble paid per session, and the decode rate its timestamps imply
 - [x] the same numbers per session, so a chain that went wrong shows where
 - [x] it reads a chain that is still running without waiting for it to finish
-- [ ] the output is the JSONL shape `docs/data/` takes, and one real chain is committed
+- [x] the output is the JSONL shape `docs/data/` takes, and one real chain is committed
       there
 
 ## Open questions
