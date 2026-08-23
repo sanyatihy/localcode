@@ -38,12 +38,16 @@ trigger nobody watches is not an idea, it is a hedge.
   when: either is edited for any other reason — a `--` separator or the instruction on stdin
   costs one line each. **Its real home is a comment at both call sites**, since that is where it
   fires; it sits here until someone puts it there.
-- **The handoff, reconciled with `kit`** — 0016 puts `HANDOFF.md`, three hooks and a box parser
-  in localcode, but `kit` owns the work protocol: it writes AGENTS.md, and `kit next --json`
-  already publishes the topmost box the driver re-derives. Handing off inside a box is the same
-  category of rule as doing the topmost one. Promote when: a second project wants it, or the box
-  parser drifts from kit's format. The unresolved part is whether kit should ship one vendor's
-  shell hooks at all, or only the rule.
+- **Retire the `## Tasks` parser, which is the one place this repo re-implements `kit`** —
+  `internal/handoff` reads kit's doc format and `cmd/handoff` drives "the topmost unticked
+  box" from it, which is what `kit next --json` already publishes. VISION now says this is
+  the wrong side of the boundary. Two things have to land before it can go, and both are
+  cheaper than reconciling the parser: 0026 gives a chain an external success test that is a
+  command and an exit code rather than a ticked box, and a real chain has already shown the
+  model driving `kit next`, `kit claim` and `kit ship` itself, unaided, better than the
+  parser did. Promote when: 0026 ships, or the parser drifts from kit's format — whichever
+  comes first. The unresolved part is whether `cmd/handoff` survives at all once its only
+  unique property, checking the doc rather than the model's word, is general.
 - **A progress signal a supervisor can check** — 0023 stops a chain when two sessions in a
   row plan the same `Next`, which is weak: two sessions that both surveyed the same files
   and changed nothing wrote different `Next` lines, so the chain ran to its `-sessions`
