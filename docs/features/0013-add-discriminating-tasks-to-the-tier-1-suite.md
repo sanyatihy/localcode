@@ -4,9 +4,6 @@ title: Add discriminating tasks to the tier-1 suite
 status: Shipped
 created: 2026-08-17
 shipped: 2026-08-18
-check:
-checked:
-review:
 needs: 0002
 related: 0005, 0004
 ---

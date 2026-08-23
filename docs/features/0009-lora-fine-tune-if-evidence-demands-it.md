@@ -5,7 +5,6 @@ status: Dropped
 created: 2026-08-17
 shipped:
 check: 2026-11-17
-checked:
 review: human
 needs: 0005
 related: 0006

@@ -4,9 +4,6 @@ title: Refuse a sweep the machine cannot carry
 status: Shipped
 created: 2026-08-19
 shipped: 2026-08-20
-check:
-checked:
-review:
 needs:
 related: 0010, 0014
 ---
