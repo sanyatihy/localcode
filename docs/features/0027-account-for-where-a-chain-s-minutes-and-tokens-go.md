@@ -63,7 +63,7 @@ describes.
 - [x] a command reports one chain: sessions, wall clock, tokens generated, tokens ingested,
       preamble paid per session, and the decode rate its timestamps imply
 - [x] the same numbers per session, so a chain that went wrong shows where
-- [ ] it reads a chain that is still running without waiting for it to finish
+- [x] it reads a chain that is still running without waiting for it to finish
 - [ ] the output is the JSONL shape `docs/data/` takes, and one real chain is committed
       there
 

@@ -217,3 +217,98 @@ func TestAccountLeavesOutTheBreakdownOfASingleSession(t *testing.T) {
 		t.Errorf("a chain of one session printed a per-session table:\n%s", out.String())
 	}
 }
+
+// The point of reading a chain's own files: the session doing the work is the one with no
+// row in `sessions.jsonl`, because that row is appended when the session ends.
+func TestAccountReadsAChainThatIsStillRunning(t *testing.T) {
+	dir := chainOnDisk(t, "20260823-104105",
+		[]string{
+			transcriptRow("2026-08-23T06:41:00.000Z"),
+			transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+		},
+		[]string{
+			transcriptRow("2026-08-23T06:50:00.000Z"),
+			transcriptCall("b1", "2026-08-23T06:50:45.000Z", 4400, 0, 90),
+			transcriptRow("2026-08-23T06:50:46.000Z"),
+			transcriptCall("b2", "2026-08-23T06:51:16.000Z", 600, 4490, 200),
+		},
+	)
+	endFirstSessionOnly(t, dir)
+
+	var out strings.Builder
+	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	for _, want := range []string{
+		"2 sessions, 1 still running, 100 s recorded",
+		"generated  370 tokens",
+		"ingested   9000 tokens, 8400 of it preamble",
+		"115.0 s inside a call to the model, and 1 session still to be timed",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the report does not say %q:\n%s", want, out.String())
+		}
+	}
+	last := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if !strings.Contains(last[len(last)-1], "—") {
+		t.Errorf("the running session was given a wall clock: %q", last[len(last)-1])
+	}
+}
+
+// A chain whose first session has not ended has written no `sessions.jsonl` at all, which
+// is the answer that none of them has ended rather than a file that could not be read.
+func TestAccountReadsAChainBeforeItsFirstSessionEnds(t *testing.T) {
+	dir := chainOnDisk(t, "20260823-104105", []string{
+		transcriptRow("2026-08-23T06:41:00.000Z"),
+		transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+	})
+	if err := os.Remove(filepath.Join(dir, "sessions.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	if !strings.Contains(out.String(), "1 session, 1 still running, 0 s recorded") {
+		t.Errorf("a chain with no sessions.jsonl was not reported as running:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "generated  80 tokens") {
+		t.Errorf("the running session's calls were not counted:\n%s", out.String())
+	}
+}
+
+// A transcript is being appended to while this reads it, so its last line is as likely to
+// be half a row as a whole one.
+func TestAccountSurvivesATranscriptBeingWritten(t *testing.T) {
+	dir := chainOnDisk(t, "20260823-104105", []string{
+		transcriptRow("2026-08-23T06:41:00.000Z"),
+		transcriptCall("a1", "2026-08-23T06:41:40.000Z", 4000, 0, 80),
+		transcriptRow("2026-08-23T06:41:41.000Z"),
+		`{"type":"assistant","timestamp":"2026-08-23T06:42:0`,
+	})
+	if err := os.Remove(filepath.Join(dir, "sessions.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if code, err := accountHere(&out, ""); code != 0 || err != nil {
+		t.Fatalf("account = %d, %v", code, err)
+	}
+	if !strings.Contains(out.String(), "generated  80 tokens") {
+		t.Errorf("a half-written row cost the rows before it:\n%s", out.String())
+	}
+}
+
+// endFirstSessionOnly leaves the chain's record saying one session has ended, which is what
+// it says while the second one works.
+func endFirstSessionOnly(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, "sessions.jsonl")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := strings.SplitN(string(body), "\n", 2)[0] + "\n"
+	if err := os.WriteFile(path, []byte(first), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
