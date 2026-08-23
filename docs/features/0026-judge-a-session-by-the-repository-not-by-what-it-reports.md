@@ -34,8 +34,11 @@ session reporting on itself.
 - **Not a reviewer.** Judging whether code is good needs a model and a second opinion, which
   is [0011](0011-split-planning-and-grinding-across-frontier-and-local-models.md). This asks
   only whether the repository's own gate passes, which is a question with an exit code.
-- **Not a change to `kit`.** Ticking a box is the agent's claim and kit is right to take it;
-  what is missing is a second reader, and that belongs to whatever drives the sessions.
+- **Not a change to `kit`, and not any knowledge of it.** Ticking a box is the agent's claim
+  and kit is right to take it; what is missing is a second reader, and that belongs to
+  whatever drives the sessions. The gate is a command and an exit code — this must not learn
+  a doc format, which is the boundary VISION draws and the one 0016's parser already
+  crosses.
 - **Not a bound on what a session may do.** 0023 settled that. This decides what happens
   after one ends.
 
