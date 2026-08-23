@@ -35,6 +35,7 @@ Design arguments stay in the feature docs; this is the state of the machine.
 
 - [Claude Code against the local endpoint](#claude-code-against-the-local-endpoint)
 - [Sessions hand off instead of compacting](#sessions-hand-off-instead-of-compacting)
+- [A chain's clock is its model calls, and half its ingest is preamble](#a-chains-clock-is-its-model-calls-and-half-its-ingest-is-preamble)
 
 **Splitting the work across two tiers**
 
@@ -973,6 +974,40 @@ Starting clean is the default, `-continue` takes the newest chain, `-resume` tak
 id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them.
 One handoff per repository was wrong: a second instruction in the same checkout would have
 resumed the first and then overwritten what it knew.
+
+## A chain's clock is its model calls, and half its ingest is preamble
+
+`localcode account [id]` reports what one chain cost, off files the run already left:
+`sessions.jsonl` for the wall clock, each session's `session.json` for the budget it ran
+under, and its transcript for the tokens. `-jsonl` appends the same as rows. It needs no
+server and waits for nothing, so a chain still working is read while it works — its running
+session has no row in `sessions.jsonl` yet, and the numbered directories are what say a
+session exists.
+
+**A call is one response, not one transcript row.** Claude Code files an assistant row per
+content block and every one of them carries that call's usage, so a turn answering with
+text and two tool calls is charged three times unless the rows are folded on their message
+id. Folded, `prompt_tokens_ingested` and `tokens_generated` reproduce the server's own
+counters to the token on both chains of
+[0025](data/2026-08-23-m2max-32gb-0025-chain.jsonl).
+
+**Wall clock outside a model call is noise on a driver chain**: 5.2 s of 661 at 32,768 and
+2.9 s of 825 at 49,152. Tool execution and the harness's own work are under 1%, so what a
+chain costs is what its calls cost, and nothing is hiding between them.
+
+**Half of what a chain ingests is preamble.** The driver chain paid 4,165 then 4,430 tokens
+of the 17,119 it ingested — 50%, because a preamble is paid once per session and a session
+is what a handoff creates. That is the term a shorter context multiplies, and it is why
+adding a session is not free even where the ingest per turn is small.
+
+**The two rates are fitted, and they are the only derived numbers here.** A transcript
+records no first-token time, so the split of a call's clock between its prompt and its
+reply is a least-squares fit over the chain's own calls rather than the client-side
+measurement [the scorer takes](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom).
+`localcode account` refuses to print a pair the calls cannot separate. Read as a ratio it
+agrees with what was measured another way — 8.41 tok/s against 6.44, which is the 1.31x the
+MTP head was adopted for; read as an absolute rate each figure carries the harness's own
+time around the call and is the slower for it.
 
 ## The two-tier split, measured
 

@@ -57,6 +57,7 @@ usage:
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
   localcode sessions           the chains this repository has run
+  localcode account [id]       what one chain cost: minutes, tokens, its rates
   localcode hook <name>        run one of this binary's own session hooks
   localcode --help
 
@@ -73,6 +74,7 @@ flags:
   -continue          carry on this repository's most recent chain
   -resume id         carry on the chain with this id
   -fork id           start a chain from what that chain knew
+  -jsonl file        append the account subcommand's report to this results file too
 `
 
 func main() {
@@ -90,6 +92,7 @@ func main() {
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
+	jsonl := fs.String("jsonl", "", "append what account reports to this results file as well")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}
@@ -110,6 +113,8 @@ func main() {
 		code, err = hook(args[1])
 	case len(args) > 0 && args[0] == "sessions":
 		code, err = sessionsHere()
+	case len(args) > 0 && args[0] == "account":
+		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""), *jsonl)
 	default:
 		code, err = run(opts{
 			checkout: *checkoutFlag,

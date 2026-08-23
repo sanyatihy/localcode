@@ -123,22 +123,34 @@ func Chains(state string) ([]string, error) {
 	return ids, nil
 }
 
+// Sessions lists the sessions a chain holds, in the order they ran. A numbered directory
+// is the record that a session started, and it is made before the session runs — so this
+// sees the one that is still running, which `sessions.jsonl` cannot: that file's row is
+// appended once the session has ended.
+func Sessions(dir string) []int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var ns []int
+	for _, e := range entries {
+		if n, err := strconv.Atoi(e.Name()); err == nil && e.IsDir() {
+			ns = append(ns, n)
+		}
+	}
+	sort.Ints(ns)
+	return ns
+}
+
 // NextSession is the number the next session in a chain takes. Sessions are numbered
 // directories, so the chain's own layout is what answers this rather than a counter that
 // could disagree with it.
 func NextSession(dir string) int {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+	ns := Sessions(dir)
+	if len(ns) == 0 {
 		return 1
 	}
-	highest := 0
-	for _, e := range entries {
-		n, err := strconv.Atoi(e.Name())
-		if err == nil && e.IsDir() && n > highest {
-			highest = n
-		}
-	}
-	return highest + 1
+	return ns[len(ns)-1] + 1
 }
 
 // LatestHandoff is the newest handoff a chain holds, or "" when it holds none. The newest

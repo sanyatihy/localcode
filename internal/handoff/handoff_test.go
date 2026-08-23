@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const doc = `---
@@ -141,5 +142,80 @@ func TestRefusalsCountThisSessionsOnly(t *testing.T) {
 	// No log means no session here has ever been asked to compact, which is not an error.
 	if n := Refusals(filepath.Join(t.TempDir(), "absent.jsonl"), "mine"); n != 0 {
 		t.Errorf("a missing log counted %d refusals", n)
+	}
+}
+
+// call is one response as Claude Code files it: a row per content block, every one of them
+// carrying the whole call's usage and the same message id.
+func call(id, at string, in, write, read, out int) string {
+	b, _ := json.Marshal(map[string]any{
+		"type": "assistant", "timestamp": at,
+		"message": map[string]any{"id": id, "usage": map[string]int{
+			"input_tokens": in, "cache_creation_input_tokens": write,
+			"cache_read_input_tokens": read, "output_tokens": out,
+		}},
+	})
+	return string(b)
+}
+
+func at(ts string) string {
+	return `{"type":"user","timestamp":"` + ts + `","message":{"content":"a tool result"}}`
+}
+
+// A turn answering with text and two tool calls files three rows carrying one usage.
+// Counted per row it charges that call three times, which is how a chain's generated
+// tokens stop matching the server's own counter.
+func TestRequestsAreCountedPerCallAndNotPerContentBlock(t *testing.T) {
+	calls, err := Requests(writeTranscript(t,
+		at("2026-08-23T06:41:06.080Z"),
+		call("msg_1", "2026-08-23T06:41:59.926Z", 4165, 0, 0, 86),
+		at("2026-08-23T06:42:00.263Z"),
+		call("msg_2", "2026-08-23T06:43:15.874Z", 1342, 0, 6442, 176),
+		call("msg_2", "2026-08-23T06:43:15.879Z", 1342, 0, 6442, 176),
+		call("msg_2", "2026-08-23T06:43:15.880Z", 1342, 0, 6442, 176),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("read %d calls from 4 assistant rows, want 2: %+v", len(calls), calls)
+	}
+	if calls[1].Output != 176 || calls[1].Ingest != 1342 || calls[1].Cached != 6442 {
+		t.Errorf("the second call is %+v", calls[1])
+	}
+}
+
+// The prompt the server had to read is what was not already held, which is the uncached
+// input plus whatever the call wrote into the cache.
+func TestRequestsChargeIngestForWhatWasNotCached(t *testing.T) {
+	calls, err := Requests(writeTranscript(t,
+		at("2026-08-23T06:41:06.000Z"),
+		call("msg_1", "2026-08-23T06:41:07.000Z", 300, 1000, 6442, 20),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls[0].Ingest != 1300 || calls[0].Cached != 6442 {
+		t.Errorf("ingest %d and cached %d, want 1300 and 6442", calls[0].Ingest, calls[0].Cached)
+	}
+}
+
+// A call's clock starts when the harness finished the row before it, since that is the last
+// thing that happened before it was sent.
+func TestRequestsMeasureACallFromTheRowBeforeIt(t *testing.T) {
+	calls, err := Requests(writeTranscript(t,
+		at("2026-08-23T06:41:06.000Z"),
+		call("msg_1", "2026-08-23T06:41:59.500Z", 4165, 0, 0, 86),
+		at("2026-08-23T06:42:00.000Z"),
+		call("msg_2", "2026-08-23T06:42:20.000Z", 1001, 0, 4252, 70),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls[0].Latency != 53500*time.Millisecond {
+		t.Errorf("the first call took %v, want 53.5s", calls[0].Latency)
+	}
+	if calls[1].Latency != 20*time.Second {
+		t.Errorf("the second call took %v, want the 20s since the tool result", calls[1].Latency)
 	}
 }
