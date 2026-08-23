@@ -162,8 +162,9 @@ refused here rather than tuned, and `-continue` is not `claude --resume`, which 
 the conversation that had just failed to fit.
 
 **The agent is sandboxed, which is what makes an unrestricted `Bash` tool defensible.**
-Writes reach the working directory, temp and the cache roots; everything else the kernel
-refuses. Reads are unrestricted, because an agent that cannot read a toolchain cannot use
+Writes reach the working directory, worktrees beside it named after it (`repo-0001` next to
+`repo`, which is what `git worktree add ../repo-0001` needs), temp and the cache roots;
+everything else the kernel refuses. Reads are unrestricted, because an agent that cannot read a toolchain cannot use
 one. The network is loopback-only, so a repository's source cannot leave the machine —
 `localcode -net` opens it for one session when something has to be installed. A refused
 write names the path and the line that allows it:
