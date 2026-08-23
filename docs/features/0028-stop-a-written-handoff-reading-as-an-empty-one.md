@@ -47,6 +47,6 @@ This is the second line of defence, kept because the first one parses prose.
 
 - [x] `Next` returns the step when the handoff writes it below the marker
 - [x] the Stop hook and the supervisor agree on what a usable handoff is
-- [ ] the chain does not stop on two handoffs whose next step it could not read
+- [x] the chain does not stop on two handoffs whose next step it could not read
 
 ## Log

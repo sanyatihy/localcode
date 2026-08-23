@@ -158,9 +158,8 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	inherit := chain.LatestHandoff(chainDir)
 	first := chain.NextSession(chainDir)
 	var prev string
-	var havePrev bool
 	if inherit != "" {
-		prev, havePrev = chain.Next(chain.Read(inherit)), true
+		prev = chain.Next(chain.Read(inherit))
 	}
 
 	// A chain is one thing to interrupt. The session shares this process group, so Ctrl-C
@@ -199,7 +198,11 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		}
 		// Two sessions planning the same next step is the shape a chain fails in: it is
 		// still writing handoffs, and none of them is progress.
-		if havePrev && r.Next == prev {
+		//
+		// A step that was read is what makes two of them comparable. Two handoffs the
+		// supervisor could not read are not one plan written twice, and taking them for
+		// that stopped a chain with a session of its bound unspent.
+		if prev != "" && r.Next == prev {
 			narrate("chain %s stopped: this session planned what the last one "+
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
 			return 1, nil
@@ -211,7 +214,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 			return 1, nil
 		default:
 		}
-		prev, havePrev = r.Next, true
+		prev = r.Next
 		// The newest handoff the chain holds, not this session's: a session killed before
 		// either it or `session-end.sh` wrote one leaves an empty directory, and pointing
 		// the next session at that file hands it nothing at all.
