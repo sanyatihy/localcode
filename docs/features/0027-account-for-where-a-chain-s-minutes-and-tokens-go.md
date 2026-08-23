@@ -1,9 +1,9 @@
 ---
 id: 0027
 title: Account for where a chain's minutes and tokens go
-status: Draft        # Draft | Shipped | Dropped — kit ship and kit drop write it
+status: Shipped
 created: 2026-08-23
-shipped:             # written by kit ship, never by hand
+shipped: 2026-08-23
 needs:               # feature ids that must ship first, e.g. 0002, 0003. Empty = can start now
 ---
 
@@ -60,17 +60,25 @@ describes.
 
 ## Tasks
 
-- [ ] a command reports one chain: sessions, wall clock, tokens generated, tokens ingested,
+- [x] a command reports one chain: sessions, wall clock, tokens generated, tokens ingested,
       preamble paid per session, and the decode rate its timestamps imply
-- [ ] the same numbers per session, so a chain that went wrong shows where
-- [ ] it reads a chain that is still running without waiting for it to finish
-- [ ] the output is the JSONL shape `docs/data/` takes, and one real chain is committed
+- [x] the same numbers per session, so a chain that went wrong shows where
+- [x] it reads a chain that is still running without waiting for it to finish
+- [x] the output is the JSONL shape `docs/data/` takes, and one real chain is committed
       there
 
-## Open questions
-
-- Whether wall clock outside the model — tool execution, the harness's own work — is worth
-  separating from ingest. It is the residual after decode and ingest are accounted for, and
-  on the one chain measured so far it was small enough to be noise or a real 10%.
-
 ## Log
+
+- 2026-08-23 — the command is `localcode account [id]`, a subcommand rather than a binary of
+  its own. It needs the state directory, the chain list and the transcript lookup that
+  `localcode` already has, and a second binary would have carried a copy of all three.
+- 2026-08-23 — **the harness's client-side decode rule cannot be applied here.** The scorer
+  measures decode as wall less time-to-first-token, and a transcript records no first-token
+  time at all: one row per call, written when the call ended. So the split of a call's clock
+  between its prompt and its reply is a least-squares fit over the chain's own calls, and it
+  is labelled as fitted everywhere it is reported. The design said "derived from the
+  transcript's own timestamps" and this is what that turned out to require.
+- 2026-08-23 — **open question settled: the residual is noise, and separating it would
+  measure nothing.** Wall clock outside a model call is 5.2 s of 661 at 32,768 and 2.9 s of
+  825 at 49,152 — under 1%, not the 10% it might have been. The account reports the two
+  numbers and leaves it there.
