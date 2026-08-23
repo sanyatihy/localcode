@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,10 +71,25 @@ func passthroughSandbox(t *testing.T) {
 	t.Cleanup(func() { sandboxExec = old })
 }
 
+// healthy is a server answering /health with the given code and /props with the context
+// config/agent.env serves, which is the one the checkouts these tests build declare against.
 func healthy(t *testing.T, code int) string {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(code)
+	return serving(t, code, 49152)
+}
+
+// serving is the same with the served context chosen, because that is now what a session's
+// budget is derived from: the file names a window, and the server is what decides it.
+func serving(t *testing.T, code, nctx int) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if code != http.StatusOK || r.URL.Path != "/props" {
+			w.WriteHeader(code)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"model_path":"/cache/Qwen3.8-27B-Q4_K_M.gguf",
+			"default_generation_settings":{"n_ctx":%d}}`, nctx)
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
@@ -570,23 +586,82 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	}
 }
 
-// A window nothing fits in is refused before a cold ingest is spent discovering it.
+// A window nothing fits in is refused before a cold ingest is spent discovering it. The
+// server is what starves it, because the server is what the window is now taken from: 8,192
+// served less the 4,096 kept for a reply leaves a session less than its own preamble.
 func TestRunRefusesAWindowNothingFitsIn(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 0")
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
-	env := `ANTHROPIC_BASE_URL="http://127.0.0.1:8081"` + "\n" +
-		`CLAUDE_CODE_MAX_CONTEXT_TOKENS="8192"` + "\n" +
-		`CLAUDE_CODE_MAX_OUTPUT_TOKENS="4096"` + "\n"
-	if err := os.WriteFile(filepath.Join(root, "harness", "claude-code", "claude-code.env"),
-		[]byte(env), 0o644); err != nil {
-		t.Fatal(err)
-	}
+
 	code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
-		endpoint: healthy(t, http.StatusOK), noServe: true})
+		endpoint: serving(t, http.StatusOK, 8192), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a window under the preamble must be refused: code %d err %v", code, err)
+	}
+}
+
+// The point of the change: naming a config moves the wall and the budget together. The
+// file declares 45,056 throughout these tests; a server at 32,768 must budget the session
+// for that instead, or a chain runs against a wall 16,384 tokens further away than the one
+// it has and dies on `Prompt is too long` with no handoff written.
+func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
+	root := fakeCheckout(t)
+	argv := stubClaude(t, "exit 0")
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+
+	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+		endpoint: serving(t, http.StatusOK, 32768), noServe: true}); err != nil || code != 0 {
+		t.Fatalf("run: code %d err %v", code, err)
+	}
+	got, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := flagValue(argsOf(got), "--add-dir")
+	spec, err := chain.ReadSpec(dir)
+	if err != nil {
+		t.Fatalf("the session was not budgeted: %v", err)
+	}
+	// 32,768 served, less 4,096 for a reply, is a 28,672 declaration; less the 4,096 the
+	// harness keeps whatever it is told is a 24,576 window; less a quarter of it for a
+	// turn's results and twice the reservation is the ceiling.
+	if spec.Limits.Window != 24576 || spec.Limits.Ceiling != 10240 {
+		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
+	}
+}
+
+// The child has to be told the same number, and told it once: two entries for one name
+// leave which of them Claude Code reads to the C library.
+func TestTheDeclarationTheChildIsGivenIsTheServedOne(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"replaced", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=45056\nB=2", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672\nB=2"},
+		{"appended", "A=1", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
+		{"deduped", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=2", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := setEnv(strings.Split(tc.in, "\n"), "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "28672")
+			if strings.Join(got, "\n") != tc.want {
+				t.Fatalf("got %q, want %q", strings.Join(got, "\n"), tc.want)
+			}
+		})
+	}
+}
+
+// A server that will not say what it serves cannot be budgeted against, and guessing is
+// the failure this whole change is about.
+func TestRunRefusesAServerThatReportsNoContext(t *testing.T) {
+	root := fakeCheckout(t)
+	stubClaude(t, "exit 0")
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+
+	code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+		endpoint: serving(t, http.StatusOK, 0), noServe: true})
+	if code != 2 || err == nil {
+		t.Fatalf("a server reporting no context must be refused: code %d err %v", code, err)
 	}
 }
 
