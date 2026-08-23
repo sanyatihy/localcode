@@ -240,15 +240,56 @@ func IsHandoff(tool string, input map[string]any, handoff string) bool {
 // hooks 0016 already ships are talking about the same file.
 const HandoffName = "HANDOFF.md"
 
-// Next is the one line a supervisor reads back out of a handoff: what the session that
-// wrote it meant to do next. Empty when the handoff carries none.
+// Next is what a supervisor reads back out of a handoff: what the session that wrote it
+// meant to do next. Empty when the handoff carries none.
+//
+// The marker's own line first, and the lines under it when that line ends there. A
+// session that writes the marker as a heading over a numbered list has written a next
+// step, and reading none of it is what stops the chain: two such handoffs compare equal,
+// so the repeat guard reports a plan that was never repeated.
 func Next(handoff []byte) string {
-	for _, line := range strings.Split(string(handoff), "\n") {
-		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "**Next:**"); ok {
-			return strings.TrimSpace(rest)
+	lines := strings.Split(string(handoff), "\n")
+	for i, line := range lines {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "**Next:**")
+		if !ok {
+			continue
 		}
+		if rest = strings.TrimSpace(rest); rest != "" {
+			return rest
+		}
+		return below(lines[i+1:])
 	}
 	return ""
+}
+
+// below is the step written under the marker rather than on it, joined into the one line
+// the supervisor compares and displays.
+//
+// It ends at the next field or at the blank line after the step, so a handoff whose
+// closing prose follows one does not become the step. Blank lines before the step are
+// skipped instead, because a marker written as a heading is often spaced like one.
+func below(lines []string) string {
+	var step []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		switch {
+		case field(line):
+			return strings.Join(step, " ")
+		case line == "" && len(step) == 0:
+			continue
+		case line == "":
+			return strings.Join(step, " ")
+		}
+		step = append(step, line)
+	}
+	return strings.Join(step, " ")
+}
+
+// field reports whether a line opens one of the handoff's own sections, which is where
+// the step under a marker stops.
+func field(line string) bool {
+	rest, ok := strings.CutPrefix(line, "**")
+	return ok && strings.Index(rest, ":**") > 0
 }
 
 // Done reports whether a handoff says the instruction is finished. The word is the

@@ -200,6 +200,36 @@ func TestNextAndDoneReadTheChainsOnlySignals(t *testing.T) {
 	}
 }
 
+// A marker written as a heading over a list is still a next step. Measured on a chain
+// that stopped at seven of eight sessions: two handoffs read as empty, and the repeat
+// guard took the two empties for a plan written twice.
+func TestNextReadsTheStepWrittenBelowTheMarker(t *testing.T) {
+	block := "# Handoff\n\n**Box:** the third one\n**Next:**\n1. fix Clamp\n2. then ship it\n"
+	if got := Next([]byte(block)); got != "1. fix Clamp 2. then ship it" {
+		t.Fatalf("Next: got %q", got)
+	}
+	spaced := "**Next:**\n\n  fix Clamp\n"
+	if got := Next([]byte(spaced)); got != "fix Clamp" {
+		t.Fatalf("a marker spaced like a heading still carries its step: got %q", got)
+	}
+	closing := "**Next:**\nfix Clamp\n\nthe worktree is left in place.\n"
+	if got := Next([]byte(closing)); got != "fix Clamp" {
+		t.Fatalf("the step ends at the blank line, not at the file: got %q", got)
+	}
+	fields := "**Next:**\nfix Clamp\n**Files:** `median.go`\n"
+	if got := Next([]byte(fields)); got != "fix Clamp" {
+		t.Fatalf("the step ends at the next field: got %q", got)
+	}
+	if got := Next([]byte("**Next:**\n")); got != "" {
+		t.Fatalf("a marker with nothing under it carries no step: got %q", got)
+	}
+	// The completion signal is read out of the same place, so it is unreadable for the
+	// same reason until this is.
+	if !Done([]byte("**Next:**\nnone \u2014 every box is ticked and the branch is pushed.\n")) {
+		t.Fatal("`none` under the marker is the same completion signal as `none` on it")
+	}
+}
+
 // A spent budget opens exactly one door, and it is the door the supervisor reads from.
 func TestOnlyTheOneHandoffTheSessionWasGivenCounts(t *testing.T) {
 	if !IsHandoff("Write", map[string]any{"file_path": "/state/01/./HANDOFF.md"}, handoffPath) {
