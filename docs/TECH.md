@@ -1070,6 +1070,19 @@ Each of these has already caused a wrong number in this repo.
   "resolved" only where `/tmp` resolves to something else: on Linux it resolves to itself,
   so the assertion failed CI over a profile that was correct. State the property — the path
   in the profile is its own resolution — and it holds on both.
+- **A completion signal the model must phrase exactly is one it will phrase otherwise.**
+  A chain ends when a handoff's `**Next:**` says `none`. Measured on real work, a finished
+  session wrote `none — 0003 is done. Remaining: human merges…`, which an exact match read
+  as unfinished: the chain spent another whole session and then reported its `-sessions`
+  bound rather than its success. The test is now the first clause of the line, with a short
+  allowlist of qualifiers, because "none of the tests pass" is the opposite of done and
+  begins the same way.
+- **kit's worktrees and the agent sandbox disagree about where work goes.** `kit claim`
+  prints a sibling worktree, and `git worktree add ../name` under `localcode` fails with
+  `Operation not permitted`: writes are confined to the working directory. The model
+  recovered by putting the worktree inside the repository, which works and is not where
+  anybody would look for it. A kit-driven repository wants that path named in the
+  instruction, or the sibling directory added to `~/.config/localcode/writable`.
 - **Characters over four is not a token count.** A budget probe that padded prompts by
   `chars/4` bracketed Claude Code's limit at 9,400–10,200 tokens; the same probe padded
   through the server's `/tokenize` put it at 8,192. The first number was wrong by a fifth
