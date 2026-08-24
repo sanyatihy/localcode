@@ -1,9 +1,9 @@
 ---
 id: 0036
 title: Tell a session when the plan it inherited has produced no commit
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
