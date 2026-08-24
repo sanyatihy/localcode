@@ -705,6 +705,37 @@ afterwards.
 **One hang in 27 runs**, returning no token in 240 seconds against a budget it then hit.
 Once is not a characterisation, and it is recorded rather than explained.
 
+**Re-asked at one depth, and the head still pays.** A 25-session chain read 6.93 tok/s with
+the draft head against 6.94 without it, which would have inverted the verdict above. It did
+not survive being measured: those sessions ran at different context depths, and decode falls
+with depth whatever is drafting. The same twenty-bug fixture run a third way settles it —
+`config/agent.env` pinned by `-ceiling 25` to the driver's own 10,240 ceiling, so the two
+arms differ in the draft head and not in how deep they work:
+
+| | ceiling | sessions | peak context | wall | generated | s / generated token | decode |
+|---|---|---|---|---|---|---|---|
+| `config/agent.env`, 49,152 | 22,528 | 1 | 18,336 | 850 s | 4,589 | 0.185 | 6.77 tok/s |
+| `config/agent.env`, 49,152, `-ceiling 25` | 10,240 | 2 | 12,276 and 6,452 | 782 s | 4,184 | 0.187 | 6.75 tok/s |
+| `config/driver-mtp-32k.env`, 32,768 | 10,240 | 2 | 11,935 and 6,800 | **640 s** | 4,491 | **0.143** | **9.33 tok/s** |
+
+**Pinning the depth moves the ratio by nothing: 1.38× either way.** The pinned arm's peaks
+match the driver's within 3% session for session and its decode reads 6.75 against the
+unpinned 6.77, so depth accounted for none of the gap and the head accounted for all of it.
+Against the pinned arm the driver is 142 s, or 18%, on equal sessions — 1.31× per generated
+token, which is the same figure from a third direction. The rows are in
+[data/2026-08-24-m2max-32gb-0034-draft-head-chain.jsonl](data/2026-08-24-m2max-32gb-0034-draft-head-chain.jsonl).
+
+**Read a decode rate against the depth that produced it, or do not read it.** That is the
+lesson the inverted signal leaves: two sessions of one chain are not a controlled pair, and
+a rate quoted without the peak context beside it cannot be compared with another one.
+
+**Attended, and one run an arm.** The operator was working on the machine throughout, so
+the wall clock carries whatever that contended for; the counts and the within-run decode
+ratio do not. All three finished 20/20 by `go test`, with `fixme_test.go` byte-identical to
+a freshly generated one afterwards. `result_cap` follows the window rather than the ceiling,
+so the pinned arm still returned up to 10,240 bytes of a `Read` against the driver's 6,144 —
+pinning the depth does not pin that.
+
 **The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
 builds a second `llama_context` over the same weights, so there is no second copy. Its cache
 is still sized at the context the target serves, so its cost grows with `--ctx-size`.
@@ -787,7 +818,10 @@ not use, and spending it costs the MTP head, which the allocator refuses above 3
 end to end the smaller context finished the same instruction in 661 s against 824, paying the
 second session it was always going to pay: [the chain, both
 ways](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). `localcode`
-therefore defaults to `config/driver-mtp-32k.env`, and `-config` is what moves it.
+therefore defaults to `config/driver-mtp-32k.env`, and `-config` is what moves it. Re-asked
+at one depth against a signal that said the head had stopped paying, the same fixture put it
+at 640 s against 782 on equal sessions, so the default stands on a controlled pair rather
+than on the uncontrolled one it was first taken from.
 
 `config/agent.env` is the serving config for an editor agent. It serves **49,152**
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in
