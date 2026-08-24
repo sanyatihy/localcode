@@ -28,6 +28,10 @@ WORK="${WORK:-/private/tmp/localcode-chainrun}"
 SESSIONS="${SESSIONS:-20}"
 CALLS="${CALLS:-200}"
 SESSION_TIMEOUT="${SESSION_TIMEOUT:-45m}"
+# Unset serves the ceiling the window implies, which is what a config actually runs at. Set,
+# it holds two configs to one depth — decode falls with depth whatever is drafting, so a
+# comparison across two contexts is measuring both unless one of them is pinned.
+CEILING="${CEILING:-}"
 PORT="${PORT:-8081}"
 ENDPOINT="http://127.0.0.1:$PORT"
 LOAD_TIMEOUT="${LOAD_TIMEOUT:-900}"
@@ -91,7 +95,10 @@ echo "    serving $served on $ENDPOINT" >&2
 read -r p0 c0 g0 <<<"$(metrics)"
 started=$SECONDS
 set +e
+ceiling_arg=()
+[ -n "$CEILING" ] && ceiling_arg=(-ceiling "$CEILING")
 ( cd "$repo" && "$BIN" -checkout "$root" -endpoint "$ENDPOINT" -no-serve \
+    "${ceiling_arg[@]}" \
     -calls "$CALLS" -sessions "$SESSIONS" -session-timeout "$SESSION_TIMEOUT" "$GOAL" )
 chain_exit=$?
 set -e
@@ -114,6 +121,7 @@ row = {"record": "chain", "label": os.environ["LABEL"], "config": os.environ["CO
        "bugs": $total, "tests_passing": $passed, "finished": $passed == $total,
        "chain_exit": $chain_exit, "sessions": $spent, "wall_seconds": $seconds,
        "session_bound": $SESSIONS, "call_budget": $CALLS,
+       "ceiling_pct": ${CEILING:-None},
        "prompt_tokens_ingested": $p1 - $p0, "prompt_tokens_cached": $c1 - $c0,
        "tokens_generated": $g1 - $g0}
 print(json.dumps(row))

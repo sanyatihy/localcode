@@ -41,7 +41,17 @@ table is what changes.
 
 ## Tasks
 
-- [ ] one task runs to completion on both configurations, at comparable context depth
+- [x] one task runs to completion on both configurations, at comparable context depth
 - [ ] the driver serves whichever config the run settles on, and TECH.md says why
 
 ## Log
+
+- 2026-08-24 — the run does not reproduce the signal the feature was drafted on. At matched
+  depth the head decodes 9.33 tok/s against 6.75, which is the 1.38x 0017 measured, so the
+  6.93-against-6.94 reading came from work at different depths rather than from the head
+  having stopped paying.
+- 2026-08-24 — a third arm was added: `config/agent.env` pinned to the driver's 10,240
+  ceiling. Two configs at their own ceilings differ in depth as well as in mechanism, and
+  the design named depth as the confound to control without saying how.
+- 2026-08-24 — `scripts/chainrun.sh` gained a `CEILING` knob, which is what pinning the
+  third arm needed.
