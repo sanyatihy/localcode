@@ -263,7 +263,7 @@ func run(o opts) (int, error) {
 	}
 	// No channel: a session at a keyboard is in the terminal's own foreground group, which is
 	// what delivers an interrupt to it, and there is no supervisor loop here to forward one.
-	r, err := l.session(dir, n, id, "", chain.LatestHandoff(chainDir), nil)
+	r, err := l.session(dir, n, id, "", chain.LatestHandoff(chainDir), nil, 0)
 	if err != nil {
 		return 2, err
 	}
