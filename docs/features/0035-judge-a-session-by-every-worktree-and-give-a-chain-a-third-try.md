@@ -1,9 +1,9 @@
 ---
 id: 0035
 title: Judge a session by every worktree, and give a chain a third try
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
