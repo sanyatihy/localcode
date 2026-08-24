@@ -88,6 +88,24 @@ func chainDirOf(t *testing.T, state string) string {
 	return filepath.Join(state, "chains", ids[0])
 }
 
+// endingOf reads back how a chain said it stopped, which is the record a background run
+// leaves behind once its narration has gone to a stream nobody kept.
+func endingOf(t *testing.T, dir string) chain.Ending {
+	t.Helper()
+	e, ok := chain.ReadEnding(dir)
+	if !ok {
+		t.Fatalf("the chain recorded no ending in %s", filepath.Join(dir, chain.EndingName))
+	}
+	// Only when it names one: a chain whose sessions wrote nothing has no handoff to send
+	// a reader to, and inventing a path would be worse than saying so.
+	if e.Handoff != "" {
+		if _, err := os.Stat(e.Handoff); err != nil {
+			t.Fatalf("the ending points at %s, which a reader cannot open: %v", e.Handoff, err)
+		}
+	}
+	return e
+}
+
 // The point of the feature: work no single session could hold finishes across several,
 // and `none` is the only thing that says it is finished.
 func TestChainRunsUntilAHandoffSaysThereIsNothingLeft(t *testing.T) {
@@ -110,6 +128,10 @@ func TestChainRunsUntilAHandoffSaysThereIsNothingLeft(t *testing.T) {
 			t.Fatalf("session %s left no handoff: %v", n, err)
 		}
 	}
+	// The narration went to a stream. What a reader has afterwards is this.
+	if e := endingOf(t, dir); e.Reason != chain.Finished || e.Session != 3 {
+		t.Fatalf("a finished chain must record finishing at session 3, got %+v", e)
+	}
 }
 
 // A chain still writing handoffs is not a chain making progress. Two sessions planning the
@@ -123,8 +145,12 @@ func TestChainStopsWhenTwoSessionsPlanTheSameThing(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("a stalled chain must exit 1, got %d", code)
 	}
-	if got := chain.NextSession(chainDirOf(t, state)); got != 3 {
+	dir := chainDirOf(t, state)
+	if got := chain.NextSession(dir); got != 3 {
 		t.Fatalf("the chain must stop at the repeat, next is %d", got)
+	}
+	if e := endingOf(t, dir); e.Reason != chain.Stalled || e.Session != 2 {
+		t.Fatalf("a stalled chain must record stalling at session 2, got %+v", e)
 	}
 }
 
@@ -154,8 +180,12 @@ func TestChainStopsAtItsBound(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("a chain that ran out of sessions must exit 1, got %d", code)
 	}
-	if got := chain.NextSession(chainDirOf(t, state)); got != 3 {
+	dir := chainDirOf(t, state)
+	if got := chain.NextSession(dir); got != 3 {
 		t.Fatalf("the bound must be two sessions, next is %d", got)
+	}
+	if e := endingOf(t, dir); e.Reason != chain.Bound || e.Session != 2 {
+		t.Fatalf("a bounded chain must record its bound at session 2, got %+v", e)
 	}
 }
 
@@ -321,9 +351,13 @@ func TestASessionThatWillNotStopIsStoppedAndEndsTheChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dir := chainDirOf(t, state)
 	// One session, not four: a chain does not spend its bound on a session that hangs.
-	if got := chain.NextSession(chainDirOf(t, state)); got != 2 {
+	if got := chain.NextSession(dir); got != 2 {
 		t.Fatalf("the chain must stop at the first timeout, next is %d", got)
+	}
+	if e := endingOf(t, dir); e.Reason != chain.TimedOut || e.Session != 1 {
+		t.Fatalf("a timed-out chain must record the clock at session 1, got %+v", e)
 	}
 }
 

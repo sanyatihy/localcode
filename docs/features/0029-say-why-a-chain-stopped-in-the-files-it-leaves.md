@@ -39,7 +39,7 @@ before deciding whether to resume.
 
 ## Tasks
 
-- [ ] a finished, stalled, bounded or timed-out chain records which it was, and where to read
+- [x] a finished, stalled, bounded or timed-out chain records which it was, and where to read
 - [ ] `localcode sessions` shows a chain's ending beside its session count
 
 ## Log
