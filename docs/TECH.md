@@ -1062,7 +1062,9 @@ about to use against what the chain's last session actually ran under, and names
 that moved along with the endpoint now serving it. Narrated rather than refused: a smaller
 window is a legitimate choice and sometimes the only one the machine has, and what is wrong
 is making it in silence. The session bound is not compared, because a resume is what raises
-it and a warning that fires every time is one nobody reads.
+it and a warning that fires every time is one nobody reads. The difference goes into `chain.json`
+beside the ending as `budget_changed`, because the terminal a background chain was resumed
+from is the one place the warning cannot be read back from.
 
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,

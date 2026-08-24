@@ -733,3 +733,64 @@ func TestAResumeOnTheSameBudgetSaysNothing(t *testing.T) {
 		t.Fatalf("an unchanged budget must be silent: %q", said.String())
 	}
 }
+
+// A background chain's warning goes to a stream nobody kept, which is the reason its
+// ending is a file at all.
+func TestAChangedBudgetIsRecordedWithTheChainsEnding(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := endingOf(t, chainDirOf(t, state))
+	if len(e.Budget) == 0 {
+		t.Fatalf("the ending must carry what the budget changed by: %+v", e)
+	}
+	if !strings.Contains(strings.Join(e.Budget, " "), "ceiling 22528 -> 20480") {
+		t.Fatalf("it must name both numbers: %v", e.Budget)
+	}
+}
+
+// A chain budgeted as its last session was records nothing, so the field's presence is
+// itself the signal.
+func TestAnUnchangedBudgetLeavesTheEndingClean(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	for _, o := range []opts{
+		{ceiling: 100, calls: 30, sessions: 1, args: []string{"fix the four tests"}},
+		{ceiling: 100, calls: 30, sessions: 4, cont: true},
+	} {
+		o.checkout, o.endpoint, o.noServe = root, url, true
+		if _, err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := endingOf(t, chainDirOf(t, state)); len(e.Budget) != 0 {
+		t.Fatalf("an unchanged budget must leave the field absent: %v", e.Budget)
+	}
+}
