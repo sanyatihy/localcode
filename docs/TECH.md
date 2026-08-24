@@ -923,6 +923,32 @@ which is what sets how many files a session can get through before its ceiling. 
 appended system prompt says so, because a session that surveys before it acts spends its
 whole ceiling on reads it cannot follow up — measured, three times over.
 
+**A tool call costs about 680 tokens, and a generated fixture says a third of that.** Over
+the 35 scored sessions of the longest chain run here — one instruction against real source,
+at a 22,528 ceiling and at 10,240 — the context a session reached above its preamble divided
+by the calls it spent has a median of 671 and a call-weighted aggregate of 683, spread from
+335 to 1,474 with quartiles at 579 and 980. The six fixture sessions of 0023 and 0025
+aggregate to 298, so **a number taken from generated bugs in one-function files is 2.3x too
+cheap** for the work a chain is actually pointed at. The cost also moves with the ceiling —
+859 a call at 10,240 against 597 at 22,528, by session median — because a session's first
+calls carry a fixed orientation the later ones amortise. The rows are in
+[data/2026-08-24-m2max-32gb-0032-call-cost.jsonl](data/2026-08-24-m2max-32gb-0032-call-cost.jsonl).
+
+**That is what makes one flat call budget wrong at both ends.** The room above the preamble
+buys about 8 calls at a 10,240 ceiling and about 26 at 22,528, against the 30 both were
+given: at the smaller ceiling no session of the seventeen reached the budget and their
+median was 9 calls, while at the larger eleven of eighteen ended on it.
+
+**So the budget follows the ceiling, at the cheapest call rather than the typical one.** It
+is the room above the preamble divided by 350 tokens — 51 calls at the shipped window, 25 at
+32,768 — and 350 is the low end of the measured range because this bound is the backstop for
+when the transcript cannot be read: sized on a typical call it would pre-empt the ceiling for
+every session whose calls come cheaper than typical, which is half of them. A ceiling with
+room for fewer than one turn's four calls is refused rather than served, on the same argument
+the preamble floor already makes. `-calls` overrides the derived number and is taken as
+given, below the floor included: a measurement the tool rounds up to what it thinks
+reasonable is not one.
+
 **Both unbounded tools are capped, each where it can be.** `BASH_MAX_OUTPUT_LENGTH` is set
 to a sixteenth of the window, so one unbounded command cannot spend a session inside a
 single permitted call. `Read` has no such setting — its own bound is two thousand lines,
