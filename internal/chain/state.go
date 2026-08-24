@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -173,4 +174,61 @@ func LatestHandoff(dir string) string {
 		}
 	}
 	return best
+}
+
+// EndingName is what a chain's ending is written to, beside the rows of its sessions.
+const EndingName = "chain.json"
+
+// Reason is how a chain stopped, in one of five fixed words. A word rather than prose,
+// because the point is that a program can test it, and prose is what the handoff is for.
+type Reason string
+
+const (
+	Finished    Reason = "finished"
+	Stalled     Reason = "stalled"
+	Bound       Reason = "bound"
+	TimedOut    Reason = "timeout"
+	Interrupted Reason = "interrupted"
+)
+
+// Ending is a chain's own record of how it stopped: which of the five it was, the session
+// it happened at, and the handoff a reader should open.
+//
+// Beside `sessions.jsonl` rather than inside it: a row describes a session, and the ending
+// belongs to the chain. `-continue` and `-resume` overwrite it, which is correct — a
+// resumed chain has a new ending, and the old one is a session row away.
+type Ending struct {
+	Reason  Reason `json:"reason"`
+	Session int    `json:"session"`
+	Handoff string `json:"handoff"`
+}
+
+// WriteEnding records how a chain stopped.
+func WriteEnding(dir string, e Ending) error {
+	body, err := json.MarshalIndent(e, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, EndingName), body, 0o644)
+}
+
+// ReadEnding returns how a chain stopped, and whether it recorded one at all. A chain that
+// is still running has none, and so has one that ran before this was written.
+func ReadEnding(dir string) (Ending, bool) {
+	body, err := os.ReadFile(filepath.Join(dir, EndingName))
+	if err != nil {
+		return Ending{}, false
+	}
+	var e Ending
+	if err := json.Unmarshal(body, &e); err != nil {
+		return Ending{}, false
+	}
+	return e, e.Reason != ""
+}
+
+// ClearEnding forgets the ending of the run before this one. A chain that is running has
+// no ending, and a resumed chain that dies before it writes its own must not be read back
+// as the run it continued.
+func ClearEnding(dir string) {
+	_ = os.Remove(filepath.Join(dir, EndingName))
 }

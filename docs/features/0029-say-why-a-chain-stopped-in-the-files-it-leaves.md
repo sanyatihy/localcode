@@ -1,9 +1,9 @@
 ---
 id: 0029
 title: Say why a chain stopped, in the files it leaves
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
@@ -39,7 +39,7 @@ before deciding whether to resume.
 
 ## Tasks
 
-- [ ] a finished, stalled, bounded or timed-out chain records which it was, and where to read
-- [ ] `localcode sessions` shows a chain's ending beside its session count
+- [x] a finished, stalled, bounded or timed-out chain records which it was, and where to read
+- [x] `localcode sessions` shows a chain's ending beside its session count
 
 ## Log
