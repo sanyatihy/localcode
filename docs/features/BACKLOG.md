@@ -71,3 +71,30 @@ trigger nobody watches is not an idea, it is a hedge.
   the same starting commit — scored by what landed rather than by wall clock, since the two
   are within 3% per tool call. Promote when: the default is questioned again, or a repository
   and an instruction worth spending two full chains on are in hand.
+- **The output reservation is subtracted twice** — `declaredFromServer` sets
+  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to what is served less the reservation, and `NewLimits`
+  then takes the reservation off that again to get the window. The second is Claude Code's
+  own behaviour, measured; the first applies the same reasoning a second time, so about
+  4,096 tokens of every served context go unused. At 49,152 that costs 3,072 of ceiling and
+  nine tool calls — 22,528 and 51 against 25,600 and 60. It is not obviously wrong: the
+  server may account for template or BOS tokens the arithmetic here cannot see, and getting
+  it wrong means sessions dying on `Prompt is too long` after a cold ingest, which is the
+  failure the whole reservation chain exists to prevent. Settle it the way the 4,096 floor
+  was settled — pad a prompt to an exact token count against a 49,152 server with
+  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to the full 49,152, and bisect where the refusal
+  lands. Promote when: the ceiling is the binding constraint on a chain worth the
+  measurement, which it now is for every session on real source.
+- **Spill a tool result to a file instead of dropping it** — Pi caps tool output at 50 KB or
+  2,000 lines; `localcode` sets `BASH_MAX_OUTPUT_LENGTH` and the excess is simply gone, so a
+  session that needed it re-runs the command through a filter and pays a turn plus the
+  command's own time. 0023 considered a spill and dropped it, reasoning that a `PostToolUse`
+  hook runs once the result is already in the conversation and so can only add context. That
+  is true of `PostToolUse` and not of `PreToolUse`, which is the hook the gate already uses
+  to rewrite an input — `ClampRead` narrows a `Read` there today, and the `Verdict.Input`
+  channel it returns through is not specific to `Read`. A `Bash` command rewritten to
+  redirect into the session directory and return only its tail would leave the whole output
+  where the session can grep it, and name the path so the loss is visible rather than
+  silent. Against it: a targeted re-run costs one call and so does a grep, so the win is on
+  slow commands and on the session knowing what it lost, not on tokens. Promote when: a
+  chain is measured losing work to a truncated result, or `go test` output at a real
+  repository's size is shown to exceed the cap that a session then cannot recover.
