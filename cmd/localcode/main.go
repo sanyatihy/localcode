@@ -283,7 +283,7 @@ func sessionsHere() (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	return listChains(state)
+	return listChains(state, os.Stdout)
 }
 
 // resolveCheckout prefers the flag, then the stamped path. It refuses rather than

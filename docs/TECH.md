@@ -976,7 +976,8 @@ so a run whose narration went to a stream nobody kept is still readable afterwar
 step is read from the `**Next:**` line or from the lines under it, and a handoff carrying
 none is neither an ending a session may take nor a step a later one can repeat.
 Starting clean is the default, `-continue` takes the newest chain, `-resume` takes one by
-id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them.
+id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them
+with how each one ended.
 One handoff per repository was wrong: a second instruction in the same checkout would have
 resumed the first and then overwritten what it knew.
 
