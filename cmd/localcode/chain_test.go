@@ -610,9 +610,9 @@ func inRepo(t *testing.T, o opts) (int, string) {
 // `Next` comparison stayed silent, because each restated the same plan differently.
 func TestAChainThatStopsChangingTheRepositoryStops(t *testing.T) {
 	root := fakeCheckout(t)
-	// Session 1 works; 2 and 3 do not, and each plans something new.
+	// Session 1 works; 2, 3 and 4 do not, and each plans something new.
 	movingStub(t, map[int]bool{1: true},
-		"fix Clamp", "fix Title", "fix Median", "fix Mean")
+		"fix Clamp", "fix Title", "fix Median", "fix Mean", "fix Sum")
 	passthroughSandbox(t)
 
 	code, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
@@ -620,11 +620,30 @@ func TestAChainThatStopsChangingTheRepositoryStops(t *testing.T) {
 		t.Fatalf("a chain that stopped changing anything must exit 1, got %d", code)
 	}
 	dir := chainDirOf(t, state)
-	if got := chain.NextSession(dir); got != 4 {
-		t.Fatalf("the chain must stop at the second still session, next is %d", got)
+	if got := chain.NextSession(dir); got != 5 {
+		t.Fatalf("the chain must stop at the third still session, next is %d", got)
 	}
 	if e := endingOf(t, dir); e.Reason != chain.Stalled {
 		t.Fatalf("it stalled, got %+v", e)
+	}
+}
+
+// Two is not enough. On a real chain of ten, four sessions were still and none of the
+// pairs was a stall — the pair that stopped it had written 140 lines the reading could not
+// see, and the patience is what buys a session like that its next try.
+func TestTwoStillSessionsDoNotStopAChain(t *testing.T) {
+	root := fakeCheckout(t)
+	// Sessions 2 and 3 change nothing; 4 works again and finishes.
+	movingStub(t, map[int]bool{1: true, 4: true},
+		"fix Clamp", "fix Title", "fix Median", "none")
+	passthroughSandbox(t)
+
+	code, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	if code != 0 {
+		t.Fatalf("two still sessions are not a stall, got %d", code)
+	}
+	if got := chain.NextSession(chainDirOf(t, state)); got != 5 {
+		t.Fatalf("all four sessions must run, next is %d", got)
 	}
 }
 

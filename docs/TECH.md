@@ -1081,9 +1081,11 @@ it and a warning that fires every time is one nobody reads. The difference goes 
 beside the ending as `budget_changed`, because the terminal a background chain was resumed
 from is the one place the warning cannot be read back from.
 
-**A chain stops when the repository stops moving, not when its prose repeats.** Two
-sessions in a row that leave the repository as they found it end it — two and not one,
-because a session that reads before it edits is normal. The `Next` comparison stays as the
+**A chain stops when the repository stops moving, not when its prose repeats.** Three
+sessions in a row that leave the repository as they found it end it — three and not one,
+because a session that reads before it edits is normal, and not two because two was matched
+to the `Next` comparison's patience before any chain had been watched: on one of ten, four
+sessions were still and no pair of them was a stall. The `Next` comparison stays as the
 first test and catches an identical pair on sight; what it cannot see is the failure that
 motivated this, where eight consecutive sessions of a 25-session chain committed nothing
 while each reworded the same plan, costing about 49 minutes. Movement only judges a chain

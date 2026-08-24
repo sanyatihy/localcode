@@ -329,7 +329,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
 			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
 		}
-		// Two, not one: a session that spends its budget reading before it edits is normal,
+		// More than one: a session that spends its budget reading before it edits is normal,
 		// and what this catches is a chain that has stopped converging rather than a slow
 		// session. Measured on a 25-session chain, eight in a row committed nothing while the
 		// comparison above stayed silent, because each reworded the same plan.
@@ -340,7 +340,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		case ever:
 			still++
 		}
-		if still >= 2 {
+		if still >= stillSessions {
 			narrate("chain %s stopped: %d sessions in a row left the repository as they "+
 				"found it — read %s\n", chainID, still, filepath.Join(dir, chain.HandoffName))
 			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
@@ -395,6 +395,13 @@ func movement(moved *bool) string {
 		return "repository unchanged"
 	}
 }
+
+// stillSessions is how many sessions in a row may leave the repository as they found it
+// before the chain is stopped. Three rather than two: two was matched to the `Next`
+// comparison's patience before there was any evidence about how a real session behaves, and
+// on a chain of ten single still sessions were common — four of them — while none of the
+// pairs was a stall.
+const stillSessions = 3
 
 func or(s, fallback string) string {
 	if s == "" {
