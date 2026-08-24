@@ -1,9 +1,9 @@
 ---
 id: 0030
 title: Judge a session's progress by the repository, not by its handoff
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0029
 ---
 
