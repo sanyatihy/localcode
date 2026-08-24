@@ -64,7 +64,7 @@ usage:
 flags:
   -checkout dir      the localcode checkout to read configuration from
   -endpoint url      the server to use
-  -config file       the serving config to start (default config/driver-mtp-32k.env)
+  -config file       the serving config to start (default config/agent.env)
   -no-serve          refuse if no server is running, rather than starting one
   -net               allow outbound network for this session (loopback only by default)
   -ceiling pct       lower the ceiling below what the reserve already allows
@@ -82,7 +82,7 @@ func main() {
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
-	config := fs.String("config", "config/driver-mtp-32k.env", "the serving config to start")
+	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
@@ -311,9 +311,9 @@ func serverUp(endpoint string) error {
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
-			return fmt.Errorf("no answer from %s: start one with `make serve CONFIG=config/driver-mtp-32k.env`", endpoint)
+			return fmt.Errorf("no answer from %s: start one with `make serve CONFIG=config/agent.env`", endpoint)
 		}
-		return fmt.Errorf("no server at %s: start one with `make serve CONFIG=config/driver-mtp-32k.env`", endpoint)
+		return fmt.Errorf("no server at %s: start one with `make serve CONFIG=config/agent.env`", endpoint)
 	}
 	defer resp.Body.Close() //nolint:errcheck // reading the code is the whole check
 	if resp.StatusCode != http.StatusOK {
