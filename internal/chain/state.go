@@ -206,6 +206,9 @@ type Ending struct {
 	// place its warning cannot be read back from, which is the whole reason the ending is
 	// a file.
 	Budget []string `json:"budget_changed,omitempty"`
+	// The sessions told that the plan they inherited had not been landing. Recorded because
+	// a nudge nobody can read back cannot be judged against the session that followed it.
+	Nudged []int `json:"nudged_sessions,omitempty"`
 }
 
 // WriteEnding records how a chain stopped.
