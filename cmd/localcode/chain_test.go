@@ -423,3 +423,43 @@ func TestContinueCarriesAnInteractiveSessionOnWithoutAPrompt(t *testing.T) {
 		t.Fatalf("an interactive continuation must not be -p: %s", argv)
 	}
 }
+
+// The listing is the one place a reader looks before deciding whether to resume, so how a
+// chain ended belongs in it: `finished` and `bound` are the same session count and
+// opposite answers.
+func TestSessionsListsHowEachChainEnded(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("fix Title"))
+	passthroughSandbox(t)
+
+	_, state := runHere(t, opts{ceiling: 100, calls: 30, sessions: 2,
+		checkout: root, args: []string{"fix the four tests"}})
+
+	var out strings.Builder
+	if code, err := listChains(state, &out); code != 0 || err != nil {
+		t.Fatalf("listing a chain: code %d err %v", code, err)
+	}
+	line := strings.TrimSpace(out.String())
+	if !strings.Contains(line, "2 sessions") || !strings.Contains(line, string(chain.Bound)) {
+		t.Fatalf("a bounded chain must list its bound beside its session count, got %q", line)
+	}
+}
+
+// A chain that ran before the ending was recorded still lists an honest word, and the one
+// its handoff can answer for is `finished`.
+func TestSessionsReadsAnOlderChainsEndingFromItsHandoff(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("none"))
+	passthroughSandbox(t)
+
+	_, state := runHere(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	chain.ClearEnding(chainDirOf(t, state))
+
+	var out strings.Builder
+	if _, err := listChains(state, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, string(chain.Finished)) {
+		t.Fatalf("a finished chain with no record must still read finished, got %q", got)
+	}
+}

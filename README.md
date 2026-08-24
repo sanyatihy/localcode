@@ -130,7 +130,7 @@ A repository can hold as many chains as you have given it instructions. Starting
 default, which is what `claude` does too:
 
 ```sh
-localcode sessions          # every chain here: id, sessions, and where it got to
+localcode sessions          # every chain here: id, sessions, how it ended, where it got to
 localcode -continue         # carry on the newest one
 localcode -resume <id>      # carry on that one
 localcode -fork <id>        # start a new chain from what that one knew
