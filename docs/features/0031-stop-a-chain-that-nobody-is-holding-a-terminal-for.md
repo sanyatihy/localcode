@@ -1,9 +1,9 @@
 ---
 id: 0031
 title: Stop a chain that nobody is holding a terminal for
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0029
 ---
 
@@ -38,7 +38,14 @@ distinguishable afterwards from one that hit its bound.
 
 ## Tasks
 
-- [ ] an interrupt sent to a background chain reaches the session it is waiting on
-- [ ] a second interrupt ends the run without waiting
+- [x] an interrupt sent to a background chain reaches the session it is waiting on
+- [x] a second interrupt ends the run without waiting
+- [x] a session stopped by the clock leaves nothing running behind it
 
 ## Log
+- 2026-08-24 — a third box, for the same orphan reached by the other trigger. `sandbox-exec`
+  execs the harness, so the process the session's clock kills is the harness itself and what
+  survives is whatever that session started — a `Bash` call, a hook. One of those holds the
+  pipe the supervisor is reading, so the bound meant to end a session ended nothing:
+  measured, a one-second timeout returned after ninety-five. The group this feature already
+  creates is what the clock now kills.
