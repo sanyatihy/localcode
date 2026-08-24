@@ -39,6 +39,6 @@ distinguishable afterwards from one that hit its bound.
 ## Tasks
 
 - [x] an interrupt sent to a background chain reaches the session it is waiting on
-- [ ] a second interrupt ends the run without waiting
+- [x] a second interrupt ends the run without waiting
 
 ## Log

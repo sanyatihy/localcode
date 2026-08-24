@@ -666,7 +666,7 @@ func TestAChainThatNeverMovesTheRepositoryIsJudgedOnItsHandoffs(t *testing.T) {
 
 // sleepingStub is a claude that writes its handoff, records any interrupt it is sent, and
 // then does nothing for far longer than the test will wait.
-func sleepingStub(t *testing.T) (started, caught string) {
+func sleepingStub(t *testing.T, onInt string) (started, caught string) {
 	t.Helper()
 	dir := t.TempDir()
 	started, caught = filepath.Join(dir, "started"), filepath.Join(dir, "caught")
@@ -677,7 +677,7 @@ func sleepingStub(t *testing.T) (started, caught string) {
 		"  shift\n" +
 		"done\n" +
 		"printf '%s' '" + handoffSaying("fix Clamp") + "' > \"$out\"\n" +
-		"trap ': > " + caught + "; exit 130' INT\n" +
+		"trap ': > " + caught + "; " + onInt + "' INT\n" +
 		": > " + started + "\n" +
 		"i=0; while [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done\n"
 	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
@@ -707,7 +707,7 @@ func interruptOnce(t *testing.T, when string) {
 // group the supervisor owns, the session it was waiting on runs on against the endpoint.
 func TestAnInterruptReachesTheSessionTheChainIsWaitingOn(t *testing.T) {
 	root := fakeCheckout(t)
-	started, caught := sleepingStub(t)
+	started, caught := sleepingStub(t, "exit 130")
 	passthroughSandbox(t)
 	interruptOnce(t, started)
 
@@ -724,6 +724,31 @@ func TestAnInterruptReachesTheSessionTheChainIsWaitingOn(t *testing.T) {
 		t.Fatalf("the chain must stop at the session it was interrupted in, next is %d", got)
 	}
 	if e := endingOf(t, dir); e.Reason != chain.Interrupted {
+		t.Fatalf("the ending must say it was interrupted, got %+v", e)
+	}
+}
+
+// A supervisor that cannot be stopped is worse than a session that dies mid-edit. The stub
+// here catches the interrupt and carries on, which is the case the second one exists for.
+func TestASecondInterruptEndsARunTheFirstDidNotStop(t *testing.T) {
+	root := fakeCheckout(t)
+	started, caught := sleepingStub(t, "") // catches the signal and keeps sleeping
+	passthroughSandbox(t)
+	interruptOnce(t, started)
+	interruptOnce(t, caught) // the second, once the first is known to have been ignored
+
+	at := time.Now()
+	code, state := runHere(t, opts{ceiling: 100, calls: 30, sessions: 4, timeout: 5 * time.Minute,
+		checkout: root, args: []string{"fix the four tests"}})
+	// The stub sleeps for a minute and the session's own clock is five, so returning at all
+	// is the assertion: only the kill can have ended it.
+	if took := time.Since(at); took > 30*time.Second {
+		t.Fatalf("the second interrupt must not wait for the session: took %s", took)
+	}
+	if code != 1 {
+		t.Fatalf("an interrupted chain must exit 1, got %d", code)
+	}
+	if e := endingOf(t, chainDirOf(t, state)); e.Reason != chain.Interrupted {
 		t.Fatalf("the ending must say it was interrupted, got %+v", e)
 	}
 }
