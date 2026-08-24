@@ -1081,6 +1081,20 @@ it and a warning that fires every time is one nobody reads. The difference goes 
 beside the ending as `budget_changed`, because the terminal a background chain was resumed
 from is the one place the warning cannot be read back from.
 
+**A session is told when the plan it inherited has not been landing.** It sees that
+handoff and nothing else, so a plan that has already failed twice reads exactly like one
+that has not — measured, a session concluded the sandbox was corrupting its regexes and the
+four after it inherited that as a premise and spent 2h44m without a commit. After two
+sessions that committed nothing the next one is told the count, in the appended system
+prompt beside the handoff briefing: the same words through a tool result were refused as
+injection, correctly. A fact rather than a request, which is what separates it from the
+prose measured not to work here — that asked a session to want less than it wanted, and
+this reports something the session has no other way to know. The count is read from the
+rows, so a resumed chain carries what the old plan cost, and the sessions told are recorded
+in `chain.json` as `nudged_sessions`. **Whether it works is unmeasured**: the generated
+fixture cannot reproduce a chain talking itself into a false premise, so the record is what
+a later reading rests on.
+
 **A chain stops when the repository stops moving, not when its prose repeats.** Three
 sessions in a row that leave the repository as they found it end it — three and not one,
 because a session that reads before it edits is normal, and not two because two was matched

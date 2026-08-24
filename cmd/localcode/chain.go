@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -76,7 +77,7 @@ type row struct {
 // The directory is fresh every time: a handoff left in it by the session before is a stale
 // instruction the next one obeys, which is how a chain freezes at its first handoff.
 func (l launch) session(dir string, n int, chainID, goal, inherit string,
-	interrupted <-chan os.Signal) (row, error) {
+	interrupted <-chan os.Signal, dry int) (row, error) {
 	handoffPath := filepath.Join(dir, chain.HandoffName)
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
@@ -91,7 +92,8 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		// it with exactly the files the work changed. Claude Code confines its file tools
 		// to the workspace, and this is what puts that one directory in it.
 		"--add-dir", dir,
-		"--append-system-prompt", l.briefing + "\n\n" + handoffBriefing(l.limits, handoffPath),
+		"--append-system-prompt", l.briefing + "\n\n" + handoffBriefing(l.limits, handoffPath) +
+			stalledBriefing(dry),
 	}
 	// The instruction goes last and verbatim. What the session before it learned arrives
 	// separately, through the hook 0016 already uses, so a chain cannot drift by rewriting
@@ -242,6 +244,55 @@ func signalGroup(p *os.Process, sig syscall.Signal) {
 	_ = syscall.Kill(-p.Pid, sig)
 }
 
+// nudgeAfter is how many sessions may end without a commit before the next one is told.
+// Two, so a chain is told before 0035's counter can stop it: a warning that arrives with
+// the ending is not one.
+const nudgeAfter = 2
+
+// stalledBriefing is what a session is told when the plan it inherited has not been landing.
+// Empty until it has failed twice, and part of the system prompt because that is the
+// channel the model trusts — the same words through a tool result were refused as injection.
+//
+// A fact the session cannot otherwise have, not a request for restraint. It sees the
+// handoff it inherited and nothing else, so a plan that has already failed twice reads
+// exactly like one that has not, and the supervisor is the only thing that can see across
+// sessions. Instruction measured not to work here asked a session to want less than it
+// wanted; this reports a count and what the count licenses.
+func stalledBriefing(dry int) string {
+	if dry < nudgeAfter {
+		return ""
+	}
+	return fmt.Sprintf("\n\nlocalcode: the last %d sessions of this chain ended without "+
+		"committing anything, and the step you inherited was written by one of them. Treat "+
+		"its premise as unverified: check it against something outside this chain before "+
+		"acting on it, and prefer the smallest change you can commit over another round of "+
+		"diagnosis.", dry)
+}
+
+// dryRun is how many sessions have ended without a commit, and whether the chain has landed
+// one at all. Read from the rows rather than counted from this run alone: a resumed chain
+// inherits the plan that was not landing, so it inherits the count of what that plan cost.
+func dryRun(chainDir string) (dry int, landed bool) {
+	body, err := os.ReadFile(filepath.Join(chainDir, "sessions.jsonl"))
+	if err != nil {
+		return 0, false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		var r row
+		if json.Unmarshal([]byte(line), &r) != nil || r.Committed == nil {
+			continue // a session with no repository to read does not vote either way
+		}
+		if *r.Committed {
+			dry, landed = 0, true
+			continue
+		}
+		if landed {
+			dry++
+		}
+	}
+	return dry, landed
+}
+
 // runChain runs sessions until the instruction is finished, the chain stops making
 // progress, or the bound is reached. Each of the three is a different answer and each
 // says so: a chain that stopped for its bound has work left, and one that stalled has a
@@ -286,11 +337,17 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// comparison below is the only evidence there is.
 	ever, still := false, 0
 
+	// What the chain has landed, which is the narrower reading and the one a session is
+	// told about. Seeded from the rows so a resume carries the count it inherited.
+	dry, landed := dryRun(chainDir)
+	var nudged []int
+
 	// record writes how the chain stopped and hands back what the supervisor exits with. A
 	// failed write does not change the ending: a chain that finished and could not say so
 	// still finished, so the failure is narrated and the code stands.
 	record := func(code int, reason chain.Reason, at int, handoff string) (int, error) {
-		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff, Budget: budget}
+		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff, Budget: budget,
+			Nudged: nudged}
 		if err := chain.WriteEnding(chainDir, e); err != nil {
 			narrate("chain %s could not record how it stopped: %v\n", chainID, err)
 		}
@@ -302,7 +359,12 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return 2, err
 		}
-		r, err := l.session(dir, n, chainID, goal, inherit, interrupted)
+		if dry >= nudgeAfter {
+			nudged = append(nudged, n)
+			narrate("chain %s: %d sessions without a commit — session %d is told the plan it "+
+				"inherited has not been landing\n", chainID, dry, n)
+		}
+		r, err := l.session(dir, n, chainID, goal, inherit, interrupted, dry)
 		if err != nil {
 			return 2, err
 		}
@@ -341,6 +403,13 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		// and what this catches is a chain that has stopped converging rather than a slow
 		// session. Measured on a 25-session chain, eight in a row committed nothing while the
 		// comparison above stayed silent, because each reworded the same plan.
+		switch {
+		case r.Committed == nil: // no repository to read, so this does not vote either way
+		case *r.Committed:
+			dry, landed = 0, true
+		case landed:
+			dry++
+		}
 		switch {
 		case r.Moved == nil: // no repository to read, so this test does not vote
 		case *r.Moved:
