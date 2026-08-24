@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sanyatihy/localcode/internal/chain"
@@ -59,13 +60,18 @@ type row struct {
 	// repository to read. Absent is not `false`: a chain outside version control has not
 	// stalled, it has nothing here to be judged by.
 	Moved *bool `json:"repo_moved,omitempty"`
+	// Whether an interrupt reached this session. Recorded beside TimedOut and for the same
+	// reason: a chain read back afterwards cannot tell a session somebody stopped from one
+	// that ended on its own.
+	Interrupted bool `json:"interrupted,omitempty"`
 }
 
 // session runs one, in its own directory, and returns what the harness exited with.
 //
 // The directory is fresh every time: a handoff left in it by the session before is a stale
 // instruction the next one obeys, which is how a chain freezes at its first handoff.
-func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, error) {
+func (l launch) session(dir string, n int, chainID, goal, inherit string,
+	interrupted <-chan os.Signal) (row, error) {
 	handoffPath := filepath.Join(dir, chain.HandoffName)
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
@@ -116,6 +122,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 	cmd.Stderr = os.Stderr
 
 	started := time.Now()
+	var r row
 	var err error
 	if goal == "" {
 		// A developer at a keyboard: the harness draws its own screen and owns the terminal.
@@ -125,6 +132,25 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		// Nobody is typing, and a terminal that never closes makes the harness wait on
 		// stdin it will not get.
 		cmd.Stdin = nil
+		// Its own process group, because the supervisor's is not one it can rely on. Started
+		// in the background and signalled by pid, the supervisor takes the interrupt alone
+		// and the session it was waiting on runs on against the endpoint — measured, an
+		// orphan had to be matched by its `--add-dir` argument to be found. A group of its
+		// own is one the supervisor can address, and everything the sandbox starts is in it.
+		//
+		// Only here: a session at a keyboard is in the terminal's foreground group already,
+		// which is what delivers the interrupt, and moving it out would leave it stopped on
+		// its first read from the terminal.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		// The clock reaches the group too. `sandbox-exec` execs the harness, so the process
+		// the context would kill is the harness itself and what survives is whatever the
+		// session started — a `Bash` call, a hook. One of those holds the pipe the supervisor
+		// is reading, so the bound that was meant to end the session ends nothing: measured,
+		// a one-second timeout returned after ninety-five.
+		cmd.Cancel = func() error {
+			signalGroup(cmd.Process, syscall.SIGKILL)
+			return cmd.Process.Kill()
+		}
 		events, pipeErr := cmd.StdoutPipe()
 		if pipeErr != nil {
 			return row{}, pipeErr
@@ -132,13 +158,14 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		if err = cmd.Start(); err != nil {
 			return row{}, fmt.Errorf("could not start claude: %w", err)
 		}
+		stop := relay(interrupted, cmd.Process)
 		render(events, os.Stdout, l.cwd)
 		err = cmd.Wait()
+		r.Interrupted = stop()
 	}
-	r := row{
-		At: started.UTC().Format(time.RFC3339), Chain: chainID, Session: n,
-		Seconds: int(time.Since(started).Round(time.Second).Seconds()),
-	}
+	r.At = started.UTC().Format(time.RFC3339)
+	r.Chain, r.Session = chainID, n
+	r.Seconds = int(time.Since(started).Round(time.Second).Seconds())
 	r.TimedOut = ctx.Err() != nil
 	var exit *exec.ExitError
 	switch {
@@ -159,6 +186,51 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		r.Moved = &moved
 	}
 	return r, nil
+}
+
+// relay forwards an interrupt to the session and returns a function that stops relaying
+// and reports whether one arrived.
+//
+// The first is forwarded rather than acted on: the session is given the signal it would get
+// from a keyboard, so its own shutdown runs and the handoff still lands. The second kills.
+// The whole group either way, because the sandbox runs the harness as a child of its own and
+// signalling the sandbox alone leaves the session it wrapped running.
+func relay(interrupted <-chan os.Signal, p *os.Process) func() bool {
+	done, seen := make(chan struct{}), make(chan bool, 1)
+	go func() {
+		sent := 0
+		for {
+			select {
+			case <-done:
+				seen <- sent > 0
+				return
+			case <-interrupted:
+				sent++
+				// The second one kills, because the reason to send it twice is that the first
+				// did not work. A supervisor that cannot be stopped is worse than a session
+				// that dies mid-edit, and the group is what makes the kill reach everything
+				// the sandbox started rather than the sandbox alone.
+				if sent == 1 {
+					signalGroup(p, syscall.SIGINT)
+				} else {
+					signalGroup(p, syscall.SIGKILL)
+				}
+			}
+		}
+	}()
+	return func() bool {
+		close(done)
+		return <-seen
+	}
+}
+
+// signalGroup sends one signal to everything the session started. A process that has
+// already gone is not an error here: the session ending is the outcome being asked for.
+func signalGroup(p *os.Process, sig syscall.Signal) {
+	if p == nil {
+		return
+	}
+	_ = syscall.Kill(-p.Pid, sig)
 }
 
 // runChain runs sessions until the instruction is finished, the chain stops making
@@ -206,7 +278,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return 2, err
 		}
-		r, err := l.session(dir, n, chainID, goal, inherit)
+		r, err := l.session(dir, n, chainID, goal, inherit, interrupted)
 		if err != nil {
 			return 2, err
 		}
@@ -257,12 +329,20 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 				"found it — read %s\n", chainID, still, filepath.Join(dir, chain.HandoffName))
 			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
 		}
-		select {
-		case <-interrupted:
+		// The session's own reading first: it was the one waiting, and an interrupt during a
+		// session is consumed there rather than left for this to find.
+		stopped := r.Interrupted
+		if !stopped {
+			select {
+			case <-interrupted:
+				stopped = true
+			default:
+			}
+		}
+		if stopped {
 			narrate("chain %s interrupted — continue with `localcode -resume %s`\n",
 				chainID, chainID)
 			return record(1, chain.Interrupted, n, chain.LatestHandoff(chainDir))
-		default:
 		}
 		prev = r.Next
 		// The newest handoff the chain holds, not this session's: a session killed before
