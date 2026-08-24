@@ -60,6 +60,58 @@ func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
 	}
 }
 
+// The point of the feature: one constant fitted neither end of the range served, so the
+// budget follows the ceiling the same way every other bound here does.
+func TestTheCallBudgetFollowsTheCeiling(t *testing.T) {
+	small, err := NewLimits(32768, 4096, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	large, err := NewLimits(49152, 4096, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if small.Calls >= large.Calls {
+		t.Fatalf("a %d ceiling must buy fewer calls than a %d one, got %d and %d",
+			small.Ceiling, large.Ceiling, small.Calls, large.Calls)
+	}
+	// The room above the preamble, and nothing else: a budget that counted the preamble
+	// would spend it on the context every session pays before it has done anything.
+	if want := (large.Ceiling - preambleFloor) / callCost; large.Calls != want {
+		t.Fatalf("a %d ceiling has room for %d calls, got %d", large.Ceiling, want, large.Calls)
+	}
+}
+
+// An explicit number is what makes a measurement repeatable, so it is taken as given —
+// including below the floor the derived one is held to.
+func TestAnExplicitCallBudgetOverridesTheDerivedOne(t *testing.T) {
+	l, err := NewLimits(45056, 4096, 100, 3)
+	if err != nil {
+		t.Fatalf("a named budget must be taken as given: %v", err)
+	}
+	if l.Calls != 3 {
+		t.Fatalf("a named budget of 3 must survive, got %d", l.Calls)
+	}
+	if _, err := NewLimits(45056, 4096, 100, -1); err == nil {
+		t.Fatal("a negative budget runs nothing and must be refused")
+	}
+}
+
+// A ceiling with room for less than one turn's calls is a configuration mistake, and the
+// same argument the preamble floor already makes applies: refuse it rather than start a
+// session that cannot read a file, change it and see what that did.
+func TestNewLimitsRefusesACeilingWithNoRoomToWorkIn(t *testing.T) {
+	// 12% of the shipped window clears the preamble floor and little else, which is the
+	// band this refusal exists for: the old one passed it.
+	_, err := NewLimits(45056, 4096, 12, 0)
+	if err == nil {
+		t.Fatal("a ceiling with room for one call must be refused")
+	}
+	if !strings.Contains(err.Error(), "tool calls") {
+		t.Fatalf("the refusal must name what ran out: %v", err)
+	}
+}
+
 const handoffPath = "/state/01/HANDOFF.md"
 
 func limits(t *testing.T) Spec {
