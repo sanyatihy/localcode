@@ -1054,6 +1054,16 @@ the session it starts — saying so when the two disagree. A server that will no
 context is refused rather than guessed at. The file's own value stands for the flow it is
 sourced into by hand.
 
+**A resume on a different budget says so before it runs.** What a session is budgeted
+against is whatever the server serves at the moment it starts, and a chain resumed on the
+default config took a 10,240 ceiling where its sessions before had 22,528 — two starved
+sessions ran before anybody read `session.json` by hand. The supervisor compares what it is
+about to use against what the chain's last session actually ran under, and names every bound
+that moved along with the endpoint now serving it. Narrated rather than refused: a smaller
+window is a legitimate choice and sometimes the only one the machine has, and what is wrong
+is making it in silence. The session bound is not compared, because a resume is what raises
+it and a warning that fires every time is one nobody reads.
+
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,
 because a session that reads before it edits is normal. The `Next` comparison stays as the

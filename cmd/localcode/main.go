@@ -245,6 +245,7 @@ func run(o opts) (int, error) {
 	l := launch{
 		claude: claudePath, sandbox: sandboxExec, profile: profile, settings: settings,
 		env: env, limits: limits, briefing: sandboxBriefing(cwd), cwd: cwd,
+		endpoint: o.endpoint,
 	}
 	if oneShot {
 		// The clock is the supervisor's bound on a session nobody is watching.

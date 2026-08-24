@@ -662,3 +662,74 @@ func TestAChainThatNeverMovesTheRepositoryIsJudgedOnItsHandoffs(t *testing.T) {
 		t.Fatalf("all four sessions must run, next is %d", got)
 	}
 }
+
+// loud captures the supervisor's own lines instead of dropping them, for the tests that
+// are about what it said.
+func loud(t *testing.T) *strings.Builder {
+	t.Helper()
+	var said strings.Builder
+	old := progressOut
+	progressOut = &said
+	t.Cleanup(func() { progressOut = old })
+	return &said
+}
+
+// The failure this feature exists for: a chain resumed against a different server took a
+// 10,240 ceiling where its sessions before had 22,528, and ran two starved sessions before
+// anybody read session.json by hand.
+func TestAResumeOnADifferentBudgetSaysSoBeforeItRuns(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := said.String()
+	if !strings.Contains(got, "different budget") {
+		t.Fatalf("a resume on a changed budget must say so: %q", got)
+	}
+	// Both numbers and the endpoint, because a warning that does not name them cannot be
+	// acted on without reading session.json anyway.
+	for _, want := range []string{"ceiling 22528 -> 20480", url} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the warning must name %q: %q", want, got)
+		}
+	}
+}
+
+// A chain carried on with the budget it had says nothing. A warning that fires on every
+// resume is one nobody reads.
+func TestAResumeOnTheSameBudgetSaysNothing(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	// A different session bound, which is what a resume is for and not a budget at all.
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 9, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(said.String(), "different budget") {
+		t.Fatalf("an unchanged budget must be silent: %q", said.String())
+	}
+}
