@@ -1,9 +1,9 @@
 ---
 id: 0032
 title: Let a session's call budget follow the window it was given
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
@@ -38,7 +38,19 @@ refusing a window smaller than the preamble.
 
 ## Tasks
 
-- [ ] the cost of a tool call is measured from the chains this repository has already run
-- [ ] a session's call budget is derived from its window, with `-calls` still overriding it
+- [x] the cost of a tool call is measured from the chains this repository has already run
+- [x] a session's call budget is derived from its window, with `-calls` still overriding it
 
 ## Log
+
+- 2026-08-24 — a call costs 680 tokens on real source and 298 on this repository's generated
+  fixtures, so the formula takes the real figure and the fixture chains cannot size it.
+- 2026-08-24 — the cost spreads from 335 to 1,474 tokens a call across sessions, so no single
+  number can be both bounds: the ceiling stays the one that has to hold, and the budget is
+  sized so it does not bind first.
+- 2026-08-24 — the problem's second half does not survive the measurement. At 22,528 the
+  30-call budget and the ceiling bind within a few calls of each other, and the 15,000
+  tokens those sessions left unused were window below the ceiling rather than room above it;
+  what the flat number actually breaks is the small end, where 30 is three times the room.
+- 2026-08-24 — the floor is on the derived budget only, since a named one is a measurement
+  and the flag is the override the non-goals keep.
