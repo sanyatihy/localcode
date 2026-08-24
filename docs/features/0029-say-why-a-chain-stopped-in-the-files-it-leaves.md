@@ -1,9 +1,9 @@
 ---
 id: 0029
 title: Say why a chain stopped, in the files it leaves
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
