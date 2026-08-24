@@ -805,3 +805,135 @@ func TestATimedOutSessionLeavesNothingRunning(t *testing.T) {
 		t.Fatalf("the session outlived the chain that timed it out: %d ticks became %d", size, now)
 	}
 }
+
+// loud captures the supervisor's own lines instead of dropping them, for the tests that
+// are about what it said.
+func loud(t *testing.T) *strings.Builder {
+	t.Helper()
+	var said strings.Builder
+	old := progressOut
+	progressOut = &said
+	t.Cleanup(func() { progressOut = old })
+	return &said
+}
+
+// The failure this feature exists for: a chain resumed against a different server took a
+// 10,240 ceiling where its sessions before had 22,528, and ran two starved sessions before
+// anybody read session.json by hand.
+func TestAResumeOnADifferentBudgetSaysSoBeforeItRuns(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := said.String()
+	if !strings.Contains(got, "different budget") {
+		t.Fatalf("a resume on a changed budget must say so: %q", got)
+	}
+	// Both numbers and the endpoint, because a warning that does not name them cannot be
+	// acted on without reading session.json anyway.
+	for _, want := range []string{"ceiling 22528 -> 20480", url} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the warning must name %q: %q", want, got)
+		}
+	}
+}
+
+// A chain carried on with the budget it had says nothing. A warning that fires on every
+// resume is one nobody reads.
+func TestAResumeOnTheSameBudgetSaysNothing(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	// A different session bound, which is what a resume is for and not a budget at all.
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 9, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(said.String(), "different budget") {
+		t.Fatalf("an unchanged budget must be silent: %q", said.String())
+	}
+}
+
+// A background chain's warning goes to a stream nobody kept, which is the reason its
+// ending is a file at all.
+func TestAChangedBudgetIsRecordedWithTheChainsEnding(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(opts{ceiling: 50, calls: 30, sessions: 4, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := endingOf(t, chainDirOf(t, state))
+	if len(e.Budget) == 0 {
+		t.Fatalf("the ending must carry what the budget changed by: %+v", e)
+	}
+	if !strings.Contains(strings.Join(e.Budget, " "), "ceiling 22528 -> 20480") {
+		t.Fatalf("it must name both numbers: %v", e.Budget)
+	}
+}
+
+// A chain budgeted as its last session was records nothing, so the field's presence is
+// itself the signal.
+func TestAnUnchangedBudgetLeavesTheEndingClean(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	for _, o := range []opts{
+		{ceiling: 100, calls: 30, sessions: 1, args: []string{"fix the four tests"}},
+		{ceiling: 100, calls: 30, sessions: 4, cont: true},
+	} {
+		o.checkout, o.endpoint, o.noServe = root, url, true
+		if _, err := run(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := endingOf(t, chainDirOf(t, state)); len(e.Budget) != 0 {
+		t.Fatalf("an unchanged budget must leave the field absent: %v", e.Budget)
+	}
+}

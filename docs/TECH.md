@@ -1069,6 +1069,18 @@ reason the group made visible: `sandbox-exec` execs the harness, so a kill by pi
 the harness and not what it started, and a surviving `Bash` call or hook holds the pipe the
 supervisor is reading — measured, a one-second timeout returned after ninety-five.
 
+**A resume on a different budget says so before it runs.** What a session is budgeted
+against is whatever the server serves at the moment it starts, and a chain resumed on the
+default config took a 10,240 ceiling where its sessions before had 22,528 — two starved
+sessions ran before anybody read `session.json` by hand. The supervisor compares what it is
+about to use against what the chain's last session actually ran under, and names every bound
+that moved along with the endpoint now serving it. Narrated rather than refused: a smaller
+window is a legitimate choice and sometimes the only one the machine has, and what is wrong
+is making it in silence. The session bound is not compared, because a resume is what raises
+it and a warning that fires every time is one nobody reads. The difference goes into `chain.json`
+beside the ending as `budget_changed`, because the terminal a background chain was resumed
+from is the one place the warning cannot be read back from.
+
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,
 because a session that reads before it edits is normal. The `Next` comparison stays as the
