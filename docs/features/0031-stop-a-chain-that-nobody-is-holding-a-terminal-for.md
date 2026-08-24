@@ -1,9 +1,9 @@
 ---
 id: 0031
 title: Stop a chain that nobody is holding a terminal for
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0029
 ---
 
