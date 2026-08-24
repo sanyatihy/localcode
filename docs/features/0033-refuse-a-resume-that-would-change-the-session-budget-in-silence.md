@@ -39,7 +39,7 @@ what a session row means.
 ## Tasks
 
 - [x] a resume whose session budget differs from the last session's says so before it runs
-- [ ] the difference is recorded where the chain's ending is, so it survives the terminal
+- [x] the difference is recorded where the chain's ending is, so it survives the terminal
 
 ## Log
 - 2026-08-24 — `-sessions` is not compared. The design groups it with the ceiling and the

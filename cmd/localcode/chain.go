@@ -210,7 +210,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// failed write does not change the ending: a chain that finished and could not say so
 	// still finished, so the failure is narrated and the code stands.
 	record := func(code int, reason chain.Reason, at int, handoff string) (int, error) {
-		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff}
+		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff, Budget: budget}
 		if err := chain.WriteEnding(chainDir, e); err != nil {
 			narrate("chain %s could not record how it stopped: %v\n", chainID, err)
 		}
