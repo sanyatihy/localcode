@@ -41,6 +41,6 @@ cost of a third is one session; the cost of stopping a chain that was working is
 ## Tasks
 
 - [x] a session that edits a linked worktree and commits nothing reports the repository moved
-- [ ] a chain stops after three still sessions rather than two
+- [x] a chain stops after three still sessions rather than two
 
 ## Log
