@@ -1,9 +1,9 @@
 ---
 id: 0032
 title: Let a session's call budget follow the window it was given
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
