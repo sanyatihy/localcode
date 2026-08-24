@@ -42,7 +42,7 @@ table is what changes.
 ## Tasks
 
 - [x] one task runs to completion on both configurations, at comparable context depth
-- [ ] the driver serves whichever config the run settles on, and TECH.md says why
+- [x] the driver serves whichever config the run settles on, and TECH.md says why
 
 ## Log
 
@@ -55,3 +55,5 @@ table is what changes.
   the design named depth as the confound to control without saying how.
 - 2026-08-24 — `scripts/chainrun.sh` gained a `CEILING` knob, which is what pinning the
   third arm needed.
+- 2026-08-24 — the config does not change. The run settles on what the driver already
+  serves, so this box is the table in `docs/TECH.md` and nothing in `config/`.
