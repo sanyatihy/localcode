@@ -39,6 +39,7 @@ type launch struct {
 	briefing string
 	timeout  time.Duration
 	cwd      string
+	endpoint string
 }
 
 // row is one session of a chain. The file of them is what a chain can be read back from
@@ -182,6 +183,21 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 
 	// A chain that is running has no ending, so the one the run before it left goes first.
 	chain.ClearEnding(chainDir)
+
+	// What a resumed chain is budgeted against is whatever the server serves now, and
+	// nothing else says when that changed: a chain resumed on the default config took a
+	// 10,240 ceiling where its sessions before had 22,528, and ran two starved sessions
+	// before anybody read `session.json` by hand. Narrated and recorded rather than
+	// refused — a smaller window is a legitimate choice, and sometimes the only one the
+	// machine has; what is wrong is making it in silence.
+	var budget []string
+	if last, ok := chain.LastSpec(chainDir); ok {
+		if budget = l.limits.Changed(last.Limits); budget != nil {
+			narrate("chain %s resumes on a different budget from its session %d: %s. %s "+
+				"serves it now, and rows either side of this cannot be compared.\n",
+				chainID, last.Session, strings.Join(budget, ", "), l.endpoint)
+		}
+	}
 
 	// What the repository says, which is the test the handoff cannot be trusted for. `ever`
 	// gates it: a chain whose work leaves no trace — a measurement, an investigation — never

@@ -46,6 +46,44 @@ func ReadSpec(dir string) (Spec, error) {
 	return s, nil
 }
 
+// LastSpec is what the newest session of a chain ran under, and whether the chain has one
+// to compare against. Newest first with a fallback, because a session directory made for a
+// run that died before it was budgeted would otherwise hide the session before it.
+func LastSpec(dir string) (Spec, bool) {
+	ns := Sessions(dir)
+	for i := len(ns) - 1; i >= 0; i-- {
+		if s, err := ReadSpec(filepath.Join(dir, fmt.Sprintf("%02d", ns[i]))); err == nil {
+			return s, true
+		}
+	}
+	return Spec{}, false
+}
+
+// Changed names every bound that differs between what the last session ran under and what
+// the next one will, as `field was -> is`. Empty for a chain that did not move server,
+// which is every chain that resumes on the config it started on.
+//
+// Every field, because each is a bound the session feels: the window it has, the ceiling
+// the gate holds it to, what one result may add, and how many calls it may spend.
+func (l Limits) Changed(from Limits) []string {
+	var out []string
+	for _, f := range []struct {
+		name     string
+		was, now int
+	}{
+		{"window", from.Window, l.Window},
+		{"ceiling", from.Ceiling, l.Ceiling},
+		{"result cap", from.ResultCap, l.ResultCap},
+		{"calls", from.Calls, l.Calls},
+		{"batch", from.Batch, l.Batch},
+	} {
+		if f.was != f.now {
+			out = append(out, fmt.Sprintf("%s %d -> %d", f.name, f.was, f.now))
+		}
+	}
+	return out
+}
+
 // ErrNoSpec is a session nobody budgeted.
 var ErrNoSpec = errors.New("no session spec")
 
