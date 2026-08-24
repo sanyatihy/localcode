@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -660,5 +661,69 @@ func TestAChainThatNeverMovesTheRepositoryIsJudgedOnItsHandoffs(t *testing.T) {
 	}
 	if got := chain.NextSession(chainDirOf(t, state)); got != 5 {
 		t.Fatalf("all four sessions must run, next is %d", got)
+	}
+}
+
+// sleepingStub is a claude that writes its handoff, records any interrupt it is sent, and
+// then does nothing for far longer than the test will wait.
+func sleepingStub(t *testing.T) (started, caught string) {
+	t.Helper()
+	dir := t.TempDir()
+	started, caught = filepath.Join(dir, "started"), filepath.Join(dir, "caught")
+	body := "#!/bin/sh\n" +
+		"out=/dev/null\n" +
+		"while [ $# -gt 0 ]; do\n" +
+		"  if [ \"$1\" = \"--add-dir\" ]; then out=\"$2/HANDOFF.md\"; fi\n" +
+		"  shift\n" +
+		"done\n" +
+		"printf '%s' '" + handoffSaying("fix Clamp") + "' > \"$out\"\n" +
+		"trap ': > " + caught + "; exit 130' INT\n" +
+		": > " + started + "\n" +
+		"i=0; while [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return started, caught
+}
+
+// interruptOnce sends the supervisor one interrupt as soon as the session is up. Signalling
+// by pid is the case the process group exists for: nothing here shares a terminal.
+func interruptOnce(t *testing.T, when string) {
+	t.Helper()
+	go func() {
+		for i := 0; i < 400; i++ {
+			if _, err := os.Stat(when); err == nil {
+				_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+				return
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		panic("the session never started")
+	}()
+}
+
+// The point of the feature: a chain in the background is signalled by pid, and without a
+// group the supervisor owns, the session it was waiting on runs on against the endpoint.
+func TestAnInterruptReachesTheSessionTheChainIsWaitingOn(t *testing.T) {
+	root := fakeCheckout(t)
+	started, caught := sleepingStub(t)
+	passthroughSandbox(t)
+	interruptOnce(t, started)
+
+	code, state := runHere(t, opts{ceiling: 100, calls: 30, sessions: 4, timeout: 90 * time.Second,
+		checkout: root, args: []string{"fix the four tests"}})
+	if _, err := os.Stat(caught); err != nil {
+		t.Fatalf("the session never got the interrupt: %v", err)
+	}
+	if code != 1 {
+		t.Fatalf("an interrupted chain must exit 1, got %d", code)
+	}
+	dir := chainDirOf(t, state)
+	if got := chain.NextSession(dir); got != 2 {
+		t.Fatalf("the chain must stop at the session it was interrupted in, next is %d", got)
+	}
+	if e := endingOf(t, dir); e.Reason != chain.Interrupted {
+		t.Fatalf("the ending must say it was interrupted, got %+v", e)
 	}
 }

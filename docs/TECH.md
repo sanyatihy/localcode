@@ -1054,6 +1054,16 @@ the session it starts — saying so when the two disagree. A server that will no
 context is refused rather than guessed at. The file's own value stands for the flow it is
 sourced into by hand.
 
+**An interrupt reaches the session, because the supervisor owns the group it is in.** A
+background session runs in a process group of its own and the supervisor forwards the
+signal to it — forwarded and not killed, so the harness's own shutdown runs and the handoff
+still lands. Relying on a shared group holds only at a terminal, where the signal goes to
+the foreground group: a chain started in the background and signalled by pid took the
+supervisor alone, and the session it was waiting on ran on against the endpoint until it
+was matched by its `--add-dir` argument and killed by hand. A session at a keyboard keeps
+the terminal's own group, which is what delivers its interrupt and what it must stay in to
+read at all.
+
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,
 because a session that reads before it edits is normal. The `Next` comparison stays as the
