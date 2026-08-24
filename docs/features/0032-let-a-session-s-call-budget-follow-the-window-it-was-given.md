@@ -38,7 +38,13 @@ refusing a window smaller than the preamble.
 
 ## Tasks
 
-- [ ] the cost of a tool call is measured from the chains this repository has already run
+- [x] the cost of a tool call is measured from the chains this repository has already run
 - [ ] a session's call budget is derived from its window, with `-calls` still overriding it
 
 ## Log
+
+- 2026-08-24 — a call costs 680 tokens on real source and 298 on this repository's generated
+  fixtures, so the formula takes the real figure and the fixture chains cannot size it.
+- 2026-08-24 — the cost spreads from 335 to 1,474 tokens a call across sessions, so no single
+  number can be both bounds: the ceiling stays the one that has to hold, and the budget is
+  sized so it does not bind first.
