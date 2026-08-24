@@ -61,6 +61,10 @@ type row struct {
 	// repository to read. Absent is not `false`: a chain outside version control has not
 	// stalled, it has nothing here to be judged by.
 	Moved *bool `json:"repo_moved,omitempty"`
+	// Whether it gained a commit, which is the narrower question. A session writing
+	// throwaway probes moves a worktree without leaving anything durable, so the two are
+	// recorded apart and read apart.
+	Committed *bool `json:"repo_committed,omitempty"`
 	// Whether an interrupt reached this session. Recorded beside TimedOut and for the same
 	// reason: a chain read back afterwards cannot tell a session somebody stopped from one
 	// that ended on its own.
@@ -183,8 +187,12 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		r.Peak, r.Turns = chain.Cost(t)
 	}
 	r.Calls = chain.Counter(dir, chain.CallsFile(sessionIDOf(dir)))
-	if moved, known := chain.Repo(l.cwd).Moved(before); known {
+	after := chain.Repo(l.cwd)
+	if moved, known := after.Moved(before); known {
 		r.Moved = &moved
+	}
+	if committed, known := after.Committed(before); known {
+		r.Committed = &committed
 	}
 	return r, nil
 }

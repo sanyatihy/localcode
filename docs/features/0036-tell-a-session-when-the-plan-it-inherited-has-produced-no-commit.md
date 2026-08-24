@@ -55,6 +55,6 @@ cannot be judged against the session that followed it.
 
 ## Tasks
 
-- [ ] a session's row says whether the repository gained a commit while it ran
+- [x] a session's row says whether the repository gained a commit while it ran
 - [ ] a session inheriting a plan from two sessions that committed nothing is told so, and
       the chain records that it was

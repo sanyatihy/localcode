@@ -14,6 +14,7 @@ import (
 // answer for, which is not the same as a repository that stood still.
 type Snapshot struct {
 	Objects int
+	Commits int
 	Tree    string
 	Known   bool
 }
@@ -29,7 +30,7 @@ func Repo(dir string) Snapshot {
 	if !ok {
 		return Snapshot{}
 	}
-	return Snapshot{Objects: n, Tree: tree(dir), Known: true}
+	return Snapshot{Objects: n, Commits: commits(dir), Tree: tree(dir), Known: true}
 }
 
 // Moved reports whether the repository changed between two readings, and whether that
@@ -40,6 +41,35 @@ func (s Snapshot) Moved(before Snapshot) (moved, known bool) {
 		return false, false
 	}
 	return s.Objects != before.Objects || s.Tree != before.Tree, true
+}
+
+// Committed reports whether the repository gained a commit between two readings, and
+// whether that could be told.
+//
+// A narrower question than Moved, and a different one: a session writing throwaway probes
+// moves a worktree, so two of those read as working while nothing durable lands. What a
+// chain talking itself into a false premise stops producing is commits — measured, five
+// sessions and 2h44m of them.
+func (s Snapshot) Committed(before Snapshot) (committed, known bool) {
+	if !s.Known || !before.Known {
+		return false, false
+	}
+	return s.Commits > before.Commits, true
+}
+
+// commits counts what is reachable from every ref, so a commit made on any branch counts
+// and a branch made at one that was already there does not. Reachability rather than the
+// refs themselves: `kit claim` creates a branch, which moves a ref without adding work.
+func commits(dir string) int {
+	out, err := git(dir, "rev-list", "--all", "--count")
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // objects counts everything git holds, loose and packed. Both, because a repack moves

@@ -140,3 +140,61 @@ func TestAddingAWorktreeIsMovement(t *testing.T) {
 		t.Fatalf("adding a worktree must read as movement: moved %v known %v", moved, known)
 	}
 }
+
+// The distinction the nudge rests on: a session writing throwaway probes moves a worktree,
+// and two of those read as working. What a stalled chain stops producing is commits.
+func TestAScratchFileMovesTheRepositoryWithoutCommittingToIt(t *testing.T) {
+	dir := repoWithACommit(t)
+	before := Repo(dir)
+	if err := os.WriteFile(filepath.Join(dir, "probe.go"), []byte("package probe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	after := Repo(dir)
+	if moved, known := after.Moved(before); !known || !moved {
+		t.Fatalf("a scratch file is still movement: moved %v known %v", moved, known)
+	}
+	if committed, known := after.Committed(before); !known || committed {
+		t.Fatalf("but it is not a commit: committed %v known %v", committed, known)
+	}
+}
+
+func TestACommitIsCommitted(t *testing.T) {
+	dir := repoWithACommit(t)
+	before := Repo(dir)
+	if err := os.WriteFile(filepath.Join(dir, "fixed.go"), []byte("package fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-qm", "the session's work")
+	if committed, known := Repo(dir).Committed(before); !known || !committed {
+		t.Fatalf("a commit must read as one: committed %v known %v", committed, known)
+	}
+}
+
+// The same case 0035 had to fix for movement: the work lands on a branch the checkout is
+// not on, and only the refs they share say so.
+func TestACommitInAWorktreeIsCommittedInTheCheckout(t *testing.T) {
+	dir := repoWithACommit(t)
+	tree := filepath.Join(t.TempDir(), "claimed")
+	run(t, dir, "worktree", "add", "-q", "-b", "claimed", tree)
+	before := Repo(dir)
+	if err := os.WriteFile(filepath.Join(tree, "fixed.go"), []byte("package fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, tree, "add", ".")
+	run(t, tree, "commit", "-qm", "work in the worktree")
+	if committed, known := Repo(dir).Committed(before); !known || !committed {
+		t.Fatalf("a worktree's commit must count: committed %v known %v", committed, known)
+	}
+}
+
+// Adding a worktree is movement but not a commit: it makes a branch at a commit that was
+// already there.
+func TestAddingAWorktreeIsNotACommit(t *testing.T) {
+	dir := repoWithACommit(t)
+	before := Repo(dir)
+	run(t, dir, "worktree", "add", "-q", "-b", "claimed", filepath.Join(t.TempDir(), "claimed"))
+	if committed, known := Repo(dir).Committed(before); !known || committed {
+		t.Fatalf("a new branch at an old commit is not a commit: committed %v known %v", committed, known)
+	}
+}
