@@ -261,7 +261,9 @@ func run(o opts) (int, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return 2, err
 	}
-	r, err := l.session(dir, n, id, "", chain.LatestHandoff(chainDir))
+	// No channel: a session at a keyboard is in the terminal's own foreground group, which is
+	// what delivers an interrupt to it, and there is no supervisor loop here to forward one.
+	r, err := l.session(dir, n, id, "", chain.LatestHandoff(chainDir), nil)
 	if err != nil {
 		return 2, err
 	}

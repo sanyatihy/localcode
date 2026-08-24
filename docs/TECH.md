@@ -1054,6 +1054,21 @@ the session it starts — saying so when the two disagree. A server that will no
 context is refused rather than guessed at. The file's own value stands for the flow it is
 sourced into by hand.
 
+**An interrupt reaches the session, because the supervisor owns the group it is in.** A
+background session runs in a process group of its own and the supervisor forwards the
+signal to it — forwarded and not killed, so the harness's own shutdown runs and the handoff
+still lands. Relying on a shared group holds only at a terminal, where the signal goes to
+the foreground group: a chain started in the background and signalled by pid took the
+supervisor alone, and the session it was waiting on ran on against the endpoint until it
+was matched by its `--add-dir` argument and killed by hand. A session at a keyboard keeps
+the terminal's own group, which is what delivers its interrupt and what it must stay in to
+read at all. **A second interrupt kills that group**, because the reason to send one twice
+is that the first was ignored, and a supervisor that cannot be stopped is worse than a
+session that dies mid-edit. The session's clock kills the same group, and for a
+reason the group made visible: `sandbox-exec` execs the harness, so a kill by pid reaches
+the harness and not what it started, and a surviving `Bash` call or hook holds the pipe the
+supervisor is reading — measured, a one-second timeout returned after ninety-five.
+
 **A resume on a different budget says so before it runs.** What a session is budgeted
 against is whatever the server serves at the moment it starts, and a chain resumed on the
 default config took a 10,240 ceiling where its sessions before had 22,528 — two starved
