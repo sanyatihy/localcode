@@ -169,6 +169,20 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	signal.Notify(interrupted, os.Interrupt)
 	defer signal.Stop(interrupted)
 
+	// A chain that is running has no ending, so the one the run before it left goes first.
+	chain.ClearEnding(chainDir)
+
+	// record writes how the chain stopped and hands back what the supervisor exits with. A
+	// failed write does not change the ending: a chain that finished and could not say so
+	// still finished, so the failure is narrated and the code stands.
+	record := func(code int, reason chain.Reason, at int, handoff string) (int, error) {
+		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff}
+		if err := chain.WriteEnding(chainDir, e); err != nil {
+			narrate("chain %s could not record how it stopped: %v\n", chainID, err)
+		}
+		return code, nil
+	}
+
 	for n := first; n < first+bound; n++ {
 		dir := filepath.Join(chainDir, fmt.Sprintf("%02d", n))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -188,13 +202,14 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		// A session stopped by the clock left whatever it had got to; carrying on from that
 		// is guessing, and the chain has already spent its longest session on it.
 		if r.TimedOut {
+			latest := chain.LatestHandoff(chainDir)
 			narrate("chain %s stopped: session %d ran past %s — read %s\n",
-				chainID, n, l.timeout, chain.LatestHandoff(chainDir))
-			return 1, nil
+				chainID, n, l.timeout, latest)
+			return record(1, chain.TimedOut, n, latest)
 		}
 		if chain.Done(body) {
 			narrate("chain %s finished after %s\n", chainID, plural(n-first+1, "session"))
-			return 0, nil
+			return record(0, chain.Finished, n, filepath.Join(dir, chain.HandoffName))
 		}
 		// Two sessions planning the same next step is the shape a chain fails in: it is
 		// still writing handoffs, and none of them is progress.
@@ -205,13 +220,13 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		if prev != "" && r.Next == prev {
 			narrate("chain %s stopped: this session planned what the last one "+
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
-			return 1, nil
+			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
 		}
 		select {
 		case <-interrupted:
 			narrate("chain %s interrupted — continue with `localcode -resume %s`\n",
 				chainID, chainID)
-			return 1, nil
+			return record(1, chain.Interrupted, n, chain.LatestHandoff(chainDir))
 		default:
 		}
 		prev = r.Next
@@ -222,10 +237,11 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 			inherit = h
 		}
 	}
+	latest := chain.LatestHandoff(chainDir)
 	narrate("chain %s stopped after %s, which is its bound — "+
 		"read %s and continue with `localcode -resume %s`\n",
-		chainID, plural(bound, "session"), chain.LatestHandoff(chainDir), chainID)
-	return 1, nil
+		chainID, plural(bound, "session"), latest, chainID)
+	return record(1, chain.Bound, first+bound-1, latest)
 }
 
 func plural(n int, thing string) string {
