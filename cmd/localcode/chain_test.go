@@ -956,3 +956,142 @@ func TestAnUnchangedBudgetLeavesTheEndingClean(t *testing.T) {
 		t.Fatalf("an unchanged budget must leave the field absent: %v", e.Budget)
 	}
 }
+
+// The row is where the count of sessions since a commit is read back from, so the two
+// questions have to be answerable apart.
+func TestASessionsRowSaysWhetherItCommitted(t *testing.T) {
+	root := fakeCheckout(t)
+	// Session 1 commits; session 2 only writes a scratch file, which moves the repository
+	// without leaving anything durable in it.
+	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))), "out=/dev/null\n",
+		"[ \"$n\" = 1 ] && { : > \"$PWD/fixed.go\"; git add -A; git -c user.name=t -c user.email=t@t commit -qm work; }\n"+
+			"[ \"$n\" = 2 ] && : > \"$PWD/probe.go\"\n"+"out=/dev/null\n", 1)
+	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	passthroughSandbox(t)
+
+	_, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	rows := sessionRows(t, chainDirOf(t, state))
+	if len(rows) != 2 {
+		t.Fatalf("two sessions, got %d", len(rows))
+	}
+	if rows[0].Committed == nil || !*rows[0].Committed {
+		t.Fatalf("the session that committed must say so: %v", rows[0].Committed)
+	}
+	if rows[1].Moved == nil || !*rows[1].Moved {
+		t.Fatalf("a scratch file is still movement: %v", rows[1].Moved)
+	}
+	if rows[1].Committed == nil || *rows[1].Committed {
+		t.Fatalf("but it committed nothing: %v", rows[1].Committed)
+	}
+}
+
+// committingStub is a claude that commits on the sessions named, writes a scratch file on
+// the rest, and records the system prompt it was given so the nudge can be read back.
+func committingStub(t *testing.T, commits map[int]bool, nexts ...string) string {
+	t.Helper()
+	var handoffs []string
+	for _, n := range nexts {
+		handoffs = append(handoffs, handoffSaying(n))
+	}
+	stub := chainStub(t, handoffs...)
+	var cases string
+	for n := range commits {
+		cases += fmt.Sprintf("[ \"$n\" = %d ] && { echo %d > \"$PWD/f%d.go\"; git add -A; "+
+			"git -c user.name=t -c user.email=t@t commit -qm w%d; }\n", n, n, n, n)
+	}
+	// Every session writes a scratch file, so movement is never the thing under test here.
+	cases += "echo $n >> \"$PWD/scratch.txt\"\n"
+	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))),
+		"printf '%s\\n' \"$*\" > '"+stub+"'/argv-$n\n",
+		"printf '%s\\n' \"$*\" > '"+stub+"'/argv-$n\n"+cases, 1)
+	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return stub
+}
+
+// The point of the feature: a plan that has already failed twice arrives reading exactly
+// like one that has not, and only the supervisor can see the difference.
+func TestASessionIsToldWhenTheInheritedPlanHasNotBeenLanding(t *testing.T) {
+	root := fakeCheckout(t)
+	// Session 1 commits; 2 and 3 do not, so session 4 is the one told.
+	stub := committingStub(t, map[int]bool{1: true},
+		"fix Clamp", "fix Title", "fix Median", "none")
+	passthroughSandbox(t)
+
+	_, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
+
+	told := map[int]bool{}
+	for n := 1; n <= 4; n++ {
+		argv, err := os.ReadFile(filepath.Join(stub, fmt.Sprintf("argv-%d", n)))
+		if err != nil {
+			continue
+		}
+		told[n] = strings.Contains(string(argv), "ended without committing anything")
+	}
+	if told[2] || told[3] {
+		t.Fatalf("the nudge must wait for two sessions without a commit: %v", told)
+	}
+	if !told[4] {
+		t.Fatalf("session 4 inherits a plan two sessions have not landed and must be told: %v", told)
+	}
+	// And it is readable afterwards, because a nudge nobody can read back cannot be judged.
+	if e := endingOf(t, chainDirOf(t, state)); len(e.Nudged) == 0 || e.Nudged[0] != 4 {
+		t.Fatalf("the ending must record which session was told: %+v", e)
+	}
+}
+
+// A chain landing commits is never told, whatever its handoffs say.
+func TestAChainThatKeepsCommittingIsNeverTold(t *testing.T) {
+	root := fakeCheckout(t)
+	stub := committingStub(t, map[int]bool{1: true, 2: true, 3: true},
+		"fix Clamp", "fix Title", "none")
+	passthroughSandbox(t)
+
+	_, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	for n := 1; n <= 3; n++ {
+		argv, err := os.ReadFile(filepath.Join(stub, fmt.Sprintf("argv-%d", n)))
+		if err == nil && strings.Contains(string(argv), "ended without committing anything") {
+			t.Fatalf("session %d committed and must not be told", n)
+		}
+	}
+	if e := endingOf(t, chainDirOf(t, state)); len(e.Nudged) != 0 {
+		t.Fatalf("nothing to record: %+v", e)
+	}
+}
+
+// A resumed chain inherits the plan that was not landing, so it inherits the count of what
+// that plan has cost. Counting only this run's own sessions is what let three sessions of a
+// real chain run free after a resume.
+func TestAResumedChainCarriesTheCountOfWhatTheOldPlanCost(t *testing.T) {
+	root := fakeCheckout(t)
+	stub := committingStub(t, map[int]bool{1: true},
+		"fix Clamp", "fix Title", "fix Median", "none")
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	gitRepo(t, repo)
+	url := healthy(t, http.StatusOK)
+
+	// Three sessions: one commits, two do not.
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 3, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	// A fresh invocation, whose own counting starts at zero.
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	argv, err := os.ReadFile(filepath.Join(stub, "argv-4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(argv), "ended without committing anything") {
+		t.Fatal("the session after a resume must still be told what the old plan cost")
+	}
+}

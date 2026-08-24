@@ -1,9 +1,9 @@
 ---
 id: 0036
 title: Tell a session when the plan it inherited has produced no commit
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
@@ -55,6 +55,9 @@ cannot be judged against the session that followed it.
 
 ## Tasks
 
-- [ ] a session's row says whether the repository gained a commit while it ran
-- [ ] a session inheriting a plan from two sessions that committed nothing is told so, and
+- [x] a session's row says whether the repository gained a commit while it ran
+- [x] a session inheriting a plan from two sessions that committed nothing is told so, and
       the chain records that it was
+- 2026-08-24 — the count is seeded from the rows rather than from this run's own sessions.
+  A resumed chain inherits the plan that was not landing, and counting only the current
+  invocation is what let three sessions of a real chain run free after a resume.
