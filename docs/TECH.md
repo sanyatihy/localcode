@@ -1081,9 +1081,11 @@ it and a warning that fires every time is one nobody reads. The difference goes 
 beside the ending as `budget_changed`, because the terminal a background chain was resumed
 from is the one place the warning cannot be read back from.
 
-**A chain stops when the repository stops moving, not when its prose repeats.** Two
-sessions in a row that leave the repository as they found it end it — two and not one,
-because a session that reads before it edits is normal. The `Next` comparison stays as the
+**A chain stops when the repository stops moving, not when its prose repeats.** Three
+sessions in a row that leave the repository as they found it end it — three and not one,
+because a session that reads before it edits is normal, and not two because two was matched
+to the `Next` comparison's patience before any chain had been watched: on one of ten, four
+sessions were still and no pair of them was a stall. The `Next` comparison stays as the
 first test and catches an identical pair on sight; what it cannot see is the failure that
 motivated this, where eight consecutive sessions of a 25-session chain committed nothing
 while each reworded the same plan, costing about 49 minutes. Movement only judges a chain
@@ -1091,10 +1093,14 @@ once that chain has moved a repository at all, so work that leaves no trace — 
 measurement, an investigation — is judged on its handoffs as before.
 
 **A session reports whether the repository moved while it ran.** Its row carries
-`repo_moved`, which is the object database's size and the working tree's state read either
-side of the session: a commit made in any linked worktree lands in the objects they share,
-so a chain working in a claimed one is measured even though the checkout's `HEAD` never
-moves, and a session that only read has moved nothing. The field is absent rather than
+`repo_moved`, which is the object database's size and **every worktree's** state read
+either side of the session: a commit made in any linked worktree lands in the objects they
+share, so a chain working in a claimed one is measured even though the checkout's `HEAD`
+never moves, and a session that only read has moved nothing. The working-tree half reads
+them all because a project worked through `kit` edits in a linked worktree — reading the
+checkout's alone, a session that wrote 140 lines across two files and ended before
+committing recorded `repo_moved: false`, and two of those stopped a ten-session chain that
+was converging. The field is absent rather than
 `false` outside version control, because a chain with no repository to read has not been
 measured.
 
