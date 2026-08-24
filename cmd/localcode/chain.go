@@ -142,6 +142,15 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		// which is what delivers the interrupt, and moving it out would leave it stopped on
 		// its first read from the terminal.
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		// The clock reaches the group too. `sandbox-exec` execs the harness, so the process
+		// the context would kill is the harness itself and what survives is whatever the
+		// session started — a `Bash` call, a hook. One of those holds the pipe the supervisor
+		// is reading, so the bound that was meant to end the session ends nothing: measured,
+		// a one-second timeout returned after ninety-five.
+		cmd.Cancel = func() error {
+			signalGroup(cmd.Process, syscall.SIGKILL)
+			return cmd.Process.Kill()
+		}
 		events, pipeErr := cmd.StdoutPipe()
 		if pipeErr != nil {
 			return row{}, pipeErr

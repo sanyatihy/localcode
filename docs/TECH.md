@@ -1064,7 +1064,10 @@ was matched by its `--add-dir` argument and killed by hand. A session at a keybo
 the terminal's own group, which is what delivers its interrupt and what it must stay in to
 read at all. **A second interrupt kills that group**, because the reason to send one twice
 is that the first was ignored, and a supervisor that cannot be stopped is worse than a
-session that dies mid-edit.
+session that dies mid-edit. The session's clock kills the same group, and for a
+reason the group made visible: `sandbox-exec` execs the harness, so a kill by pid reaches
+the harness and not what it started, and a surviving `Bash` call or hook holds the pipe the
+supervisor is reading — measured, a one-second timeout returned after ninety-five.
 
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,

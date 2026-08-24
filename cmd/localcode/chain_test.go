@@ -752,3 +752,56 @@ func TestASecondInterruptEndsARunTheFirstDidNotStop(t *testing.T) {
 		t.Fatalf("the ending must say it was interrupted, got %+v", e)
 	}
 }
+
+// tickingStub is a claude that writes to a file forever. Whether that file is still
+// growing after the chain has returned is how a survivor is detected: a process nobody is
+// holding a terminal for leaves no other trace.
+func tickingStub(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	ticks := filepath.Join(dir, "ticks")
+	// The ticking is a child of the stub, not the stub: `sandbox-exec` execs the harness, so
+	// the process the context kills is the harness itself. What outlives a kill by pid is
+	// what the session started — a `Bash` call, a hook — and that is what has to be reached.
+	body := "#!/bin/sh\n" +
+		"( i=0; while [ $i -lt 900 ]; do printf . >> " + ticks + "; sleep 0.1; i=$((i+1)); done ) &\n" +
+		"i=0; while [ $i -lt 900 ]; do sleep 0.1; i=$((i+1)); done\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return ticks
+}
+
+func sizeOf(t *testing.T, path string) int64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("the stub never ran: %v", err)
+	}
+	return info.Size()
+}
+
+// A session stopped by the clock must leave nothing running. The context kills the sandbox
+// it started, and the harness the sandbox wrapped is a child of that — killed by pid, it
+// survives and keeps working against the endpoint.
+func TestATimedOutSessionLeavesNothingRunning(t *testing.T) {
+	root := fakeCheckout(t)
+	ticks := tickingStub(t)
+	passthroughSandbox(t)
+
+	at := time.Now()
+	runHere(t, opts{ceiling: 100, calls: 30, sessions: 1, timeout: time.Second,
+		checkout: root, args: []string{"fix the four tests"}})
+	// A survivor holds the pipe the supervisor is reading, so the clock that was supposed to
+	// end the session ends nothing: measured, a one-second timeout returned after 95.
+	if took := time.Since(at); took > 20*time.Second {
+		t.Fatalf("the chain waited on what it had killed: %s for a one-second timeout", took)
+	}
+
+	size := sizeOf(t, ticks)
+	time.Sleep(500 * time.Millisecond)
+	if now := sizeOf(t, ticks); now != size {
+		t.Fatalf("the session outlived the chain that timed it out: %d ticks became %d", size, now)
+	}
+}
