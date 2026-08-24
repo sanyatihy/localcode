@@ -1,9 +1,9 @@
 ---
 id: 0030
 title: Judge a session's progress by the repository, not by its handoff
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0029
 ---
 
@@ -42,7 +42,16 @@ for work that leaves no trace, and makes the repository authoritative for work t
 
 ## Tasks
 
-- [ ] a session reports whether the repository moved while it ran
-- [ ] two sessions that neither moved the repository nor changed their next step stop the chain
+- [x] a session reports whether the repository moved while it ran
+- [x] two sessions in a row that leave the repository as they found it stop the chain, once
+      that chain has moved it at all
 
 ## Log
+- 2026-08-24 — the second box is rewritten, because the design's own rule contradicts the
+  problem it names. `repository moved OR the handoff's Next changed` scores a reworded step
+  as progress, and rewording is exactly what the eight silent sessions did — the rule as
+  written would have let that chain run. What ships is the design's other sentence, `two
+  consecutive sessions with no movement stop the chain`, with the prose fallback applied
+  where it is needed: a chain that has never moved a repository is judged on its handoffs,
+  and one that has is judged on the repository. A chain doing question-shaped work is
+  protected by never having moved anything, not by rewording its plan.

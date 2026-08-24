@@ -55,6 +55,10 @@ type row struct {
 	Handoff  int    `json:"handoff_bytes"`
 	Next     string `json:"next"`
 	TimedOut bool   `json:"timed_out,omitempty"`
+	// Whether the repository moved while the session ran, and absent when there was no
+	// repository to read. Absent is not `false`: a chain outside version control has not
+	// stalled, it has nothing here to be judged by.
+	Moved *bool `json:"repo_moved,omitempty"`
 }
 
 // session runs one, in its own directory, and returns what the harness exited with.
@@ -97,6 +101,10 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 	// apiece, and a turn at this depth is minutes: a session that answers a spent budget by
 	// trying another tool rather than by handing off would otherwise run until the budget
 	// of calls ran out, an hour later.
+	// Read before the session starts, so what it is compared with is the repository as the
+	// session was handed it rather than as the one before it left it.
+	before := chain.Repo(l.cwd)
+
 	ctx := context.Background()
 	if l.timeout > 0 {
 		var cancel context.CancelFunc
@@ -147,6 +155,9 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string) (row, 
 		r.Peak, r.Turns = chain.Cost(t)
 	}
 	r.Calls = chain.Counter(dir, chain.CallsFile(sessionIDOf(dir)))
+	if moved, known := chain.Repo(l.cwd).Moved(before); known {
+		r.Moved = &moved
+	}
 	return r, nil
 }
 
@@ -172,6 +183,13 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// A chain that is running has no ending, so the one the run before it left goes first.
 	chain.ClearEnding(chainDir)
 
+	// What the repository says, which is the test the handoff cannot be trusted for. `ever`
+	// gates it: a chain whose work leaves no trace — a measurement, an investigation — never
+	// moves a repository and would stall on its second session, so movement judges a chain
+	// only once that chain has shown it moves anything at all. Until then the `Next`
+	// comparison below is the only evidence there is.
+	ever, still := false, 0
+
 	// record writes how the chain stopped and hands back what the supervisor exits with. A
 	// failed write does not change the ending: a chain that finished and could not say so
 	// still finished, so the failure is narrated and the code stands.
@@ -196,8 +214,9 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 			return 2, err
 		}
 		body := chain.Read(filepath.Join(dir, chain.HandoffName))
-		narrate("session %d — %d tool calls, %d of %d tokens, %ds — next: %s\n",
-			n, r.Calls, r.Peak, l.limits.Window, r.Seconds, or(r.Next, "nothing recorded"))
+		narrate("session %d — %d tool calls, %d of %d tokens, %ds, %s — next: %s\n",
+			n, r.Calls, r.Peak, l.limits.Window, r.Seconds, movement(r.Moved),
+			or(r.Next, "nothing recorded"))
 
 		// A session stopped by the clock left whatever it had got to; carrying on from that
 		// is guessing, and the chain has already spent its longest session on it.
@@ -220,6 +239,22 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		if prev != "" && r.Next == prev {
 			narrate("chain %s stopped: this session planned what the last one "+
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
+			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
+		}
+		// Two, not one: a session that spends its budget reading before it edits is normal,
+		// and what this catches is a chain that has stopped converging rather than a slow
+		// session. Measured on a 25-session chain, eight in a row committed nothing while the
+		// comparison above stayed silent, because each reworded the same plan.
+		switch {
+		case r.Moved == nil: // no repository to read, so this test does not vote
+		case *r.Moved:
+			ever, still = true, 0
+		case ever:
+			still++
+		}
+		if still >= 2 {
+			narrate("chain %s stopped: %d sessions in a row left the repository as they "+
+				"found it — read %s\n", chainID, still, filepath.Join(dir, chain.HandoffName))
 			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
 		}
 		select {
@@ -249,6 +284,20 @@ func plural(n int, thing string) string {
 		return "1 " + thing
 	}
 	return fmt.Sprintf("%d %ss", n, thing)
+}
+
+// movement is how a session's effect on the repository reads in the supervisor's line. The
+// third case is its own words rather than "unchanged": a chain with no repository to read
+// has not been measured, and reporting it as still would be a claim.
+func movement(moved *bool) string {
+	switch {
+	case moved == nil:
+		return "no repository read"
+	case *moved:
+		return "repository moved"
+	default:
+		return "repository unchanged"
+	}
 }
 
 func or(s, fallback string) string {
