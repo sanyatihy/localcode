@@ -176,12 +176,13 @@ echo ~/.cargo >> ~/.config/localcode/writable
 
 **Never `tuned.env`:** Claude Code sends no sampling, no thinking toggle and no
 chat-template override, so a config that does not serve all three serves something nobody
-chose. `localcode` starts [`config/driver-mtp-32k.env`](config/driver-mtp-32k.env) by
-default — those defaults at 32,768, plus the model's own MTP head, which the allocator
-admits there and refuses at 49,152. It needs the llama.cpp build that carries that head, and
-says so rather than hanging if it is missing; `-config config/agent.env` is the same defaults
-at 49,152 on the binary on your `PATH`. The editor flows want `agent.env`, whose extra
-capacity their much larger first request needs.
+chose. `localcode` starts [`config/agent.env`](config/agent.env) by
+default — those defaults at 49,152, on the binary on your `PATH`.
+`-config config/driver-mtp-32k.env` is the same defaults at 32,768 plus the model's own MTP
+head, which the allocator admits there and refuses at 49,152; it needs the llama.cpp build
+that carries the head, and says so rather than hanging if it is missing. That config decodes
+1.38x faster and is the better one for work whose calls are cheap, but on real source a
+10,240 ceiling ends every session before its call budget, so the default is the larger one.
 
 Moving this checkout means running `make install` again — the path is compiled in, not
 searched for.
