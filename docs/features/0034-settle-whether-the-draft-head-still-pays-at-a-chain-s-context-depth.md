@@ -1,9 +1,9 @@
 ---
 id: 0034
 title: Settle whether the draft head still pays at a chain's context depth
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
