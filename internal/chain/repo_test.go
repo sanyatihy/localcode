@@ -109,3 +109,34 @@ func TestADirectoryThatIsNotARepositoryIsNotKnown(t *testing.T) {
 		t.Fatal("unknown at either end must stay unknown")
 	}
 }
+
+// The failure this feature exists for: a project worked through `kit` edits in a linked
+// worktree, so a session that writes code and ends before committing changes nothing the
+// checkout's own status can see. Measured on a live chain — 44 calls, 140 lines across two
+// files, and the row said the repository had not moved.
+func TestAnUncommittedFileInAWorktreeIsMovement(t *testing.T) {
+	dir := repoWithACommit(t)
+	tree := filepath.Join(t.TempDir(), "claimed")
+	run(t, dir, "worktree", "add", "-q", "-b", "claimed", tree)
+
+	before := Repo(dir)
+	if err := os.WriteFile(filepath.Join(tree, "enrich.go"), []byte("package enrich\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	moved, known := Repo(dir).Moved(before)
+	if !known || !moved {
+		t.Fatalf("a file written in a linked worktree must read as movement in the "+
+			"checkout: moved %v known %v", moved, known)
+	}
+}
+
+// Adding a worktree is the repository moving too — a branch and a checkout that were not
+// there before.
+func TestAddingAWorktreeIsMovement(t *testing.T) {
+	dir := repoWithACommit(t)
+	before := Repo(dir)
+	run(t, dir, "worktree", "add", "-q", "-b", "claimed", filepath.Join(t.TempDir(), "claimed"))
+	if moved, known := Repo(dir).Moved(before); !known || !moved {
+		t.Fatalf("adding a worktree must read as movement: moved %v known %v", moved, known)
+	}
+}

@@ -69,13 +69,46 @@ func objects(dir string) (int, bool) {
 // tree is the working tree's own state, hashed because it is compared and never read. It
 // carries untracked files too: a session that wrote a file and did not commit it has
 // changed the repository it was given.
+//
+// Every worktree, not the one the chain was started in. A project worked through `kit`
+// edits in a linked worktree, so a session that writes code and ends before committing
+// changes nothing the checkout's own status can see — measured on a live chain, 44 calls
+// and 140 lines across two files read as having done nothing. The path is hashed beside
+// each status, so a worktree appearing is movement as much as a file inside one.
 func tree(dir string) string {
-	out, err := git(dir, "status", "--porcelain")
-	if err != nil {
-		return ""
+	var parts []string
+	for _, w := range worktrees(dir) {
+		out, err := git(w, "status", "--porcelain")
+		if err != nil {
+			// A worktree git lists but cannot stat is the repository's own housekeeping,
+			// and a reading that refused because of one would stop a chain for something
+			// the session did not do.
+			continue
+		}
+		parts = append(parts, w, out)
 	}
-	sum := sha256.Sum256([]byte(out))
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(sum[:8])
+}
+
+// worktrees names every working tree the repository has, the one asked about included.
+// Falling back to that one alone, because a git too old to list them still has it.
+func worktrees(dir string) []string {
+	out, err := git(dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return []string{dir}
+	}
+	var paths []string
+	scan := bufio.NewScanner(strings.NewReader(out))
+	for scan.Scan() {
+		if p, ok := strings.CutPrefix(scan.Text(), "worktree "); ok {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return []string{dir}
+	}
+	return paths
 }
 
 // git runs one read-only command in a repository. Errors are the caller's cue that there

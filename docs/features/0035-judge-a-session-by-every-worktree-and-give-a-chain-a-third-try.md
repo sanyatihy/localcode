@@ -1,9 +1,9 @@
 ---
 id: 0035
 title: Judge a session by every worktree, and give a chain a third try
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs:
 ---
 
@@ -40,7 +40,7 @@ cost of a third is one session; the cost of stopping a chain that was working is
 
 ## Tasks
 
-- [ ] a session that edits a linked worktree and commits nothing reports the repository moved
-- [ ] a chain stops after three still sessions rather than two
+- [x] a session that edits a linked worktree and commits nothing reports the repository moved
+- [x] a chain stops after three still sessions rather than two
 
 ## Log
