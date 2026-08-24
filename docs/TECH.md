@@ -674,8 +674,10 @@ that changed the answer would be measuring something else.
   `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
   has not been taken against this config. It peaks at 22.10 GB where the desktop died at
   22.29, so the margin is 0.19 GB and the answer is not obvious.
-- **Driver, 32,768 served**: adopt. Measured on a whole chain rather than on a decode rate,
-  and the chain is what the trade is between.
+- **Driver, 32,768 served**: adopt for work whose calls are cheap, and not by default.
+  Measured on a whole chain, which is what the trade is between — but the chain was a
+  generated fixture, and on real source the ceiling it leaves ends every session. The driver
+  serves 49,152; see below.
 
 **A driver chain is faster at the smaller context, having paid the extra session.** The
 "record, do not adopt" verdict above rests on an agent session's prompt being deep, and the
@@ -735,6 +737,32 @@ ratio do not. All three finished 20/20 by `go test`, with `fixme_test.go` byte-i
 a freshly generated one afterwards. `result_cap` follows the window rather than the ceiling,
 so the pinned arm still returned up to 10,240 bytes of a `Read` against the driver's 6,144 —
 pinning the depth does not pin that.
+
+**And on real source the smaller ceiling loses anyway, because the fixture cannot reach
+it.** A call on the generated fixture costs 298 tokens against the 683 measured on real
+work, so the 5,728 tokens a 10,240 ceiling leaves above the preamble buy about nineteen
+calls on the fixture and about eight on a repository. The same 36-session chain 0032's cost
+figure comes from ran at both ceilings:
+
+| | ceiling | sessions | median calls | ended on the ceiling | preamble share of ingest | decode | s / call | s / generated token |
+|---|---|---|---|---|---|---|---|---|
+| 32,768 served | 10,240 | 17 | 9 | **17 of 17** | **46%** | 8.77 tok/s | 36.5 | 0.161 |
+| 49,152 served | 22,528 | 18 | 31 | 7 of 18 | 29% | 6.65 tok/s | 37.4 | 0.177 |
+
+**Every session at the smaller ceiling ended on it, and none reached its call budget.** The
+1.32× decode advantage survives as 10% per generated token and as nothing per tool call:
+what eats it is the preamble, which rises from 29% of everything ingested to 46% because a
+handoff falls due every nine calls instead of every thirty-one. `localcode` therefore
+defaults to `config/agent.env`, and `-config config/driver-mtp-32k.env` is what moves it.
+The rows are in
+[data/2026-08-24-m2max-32gb-0034-real-work-ceilings.jsonl](data/2026-08-24-m2max-32gb-0034-real-work-ceilings.jsonl).
+
+**That chain is a signal, not a controlled pair.** It interleaved the two configurations
+across phases of one instruction, so the sessions at each ceiling did different work — the
+same objection that sank the reading this feature was drafted on. What it is not vulnerable
+to is task mix: seventeen of seventeen is a count, and a ceiling that stops every session is
+not a timing artefact. The controlled pair above runs a fixture whose calls cost a third of
+real ones, so between them the question of a controlled run on real source is open.
 
 **The context ceiling is 38,912, and it is the draft context that sets it.** The MTP path
 builds a second `llama_context` over the same weights, so there is no second copy. Its cache
@@ -811,17 +839,16 @@ the count of them is printed beside it. Tokens and turns are indifferent to pagi
 
 ## Claude Code against the local endpoint
 
-**The driver serves 32,768 and the editor serves 49,152, and the number that decided it is
-4,395.** That is `localcode`'s preamble, against the 36,309 tokens an extension session's
-first request measures — so the capacity 49,152 exists to provide is capacity the driver does
-not use, and spending it costs the MTP head, which the allocator refuses above 38,912. Driven
-end to end the smaller context finished the same instruction in 661 s against 824, paying the
-second session it was always going to pay: [the chain, both
-ways](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). `localcode`
-therefore defaults to `config/driver-mtp-32k.env`, and `-config` is what moves it. Re-asked
-at one depth against a signal that said the head had stopped paying, the same fixture put it
-at 640 s against 782 on equal sessions, so the default stands on a controlled pair rather
-than on the uncontrolled one it was first taken from.
+**Both the driver and the editor serve 49,152, and the number that decided it for the
+driver is nine.** That is the median tool calls a session got through at the 10,240 ceiling
+32,768 leaves, against thirty-one at 22,528 — and every one of those seventeen sessions ended
+on the ceiling rather than on its budget. The smaller context is the faster one per token and
+the MTP head it admits is a real 1.38×, measured at one depth: [the chain, three
+ways](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom). It is still
+the wrong default, because a chain pays for that speed in handoffs and on real source the
+handoffs fall due three times as often. `localcode` therefore defaults to
+`config/agent.env`, and `-config config/driver-mtp-32k.env` is what moves it — for work whose
+calls are cheap, which is what the generated fixture measures and a repository is not.
 
 `config/agent.env` is the serving config for an editor agent. It serves **49,152**
 rather than the scorer's 32,768, and differs otherwise in what it serves rather than in

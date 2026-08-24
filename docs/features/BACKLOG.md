@@ -62,4 +62,12 @@ trigger nobody watches is not an idea, it is a hedge.
   throw it away. What a user actually sees is `no server at <url>, and -no-serve was given`, or
   a twenty-minute wait. Two call sites, one line each. Promote when: someone hits a dead
   endpoint and cannot tell from the output what to start — or when that file is open anyway.
-
+- **A controlled chain on real source at both ceilings** — 0034 settled the driver's default
+  on two readings that disagree, and neither is the measurement wanted. The fixture pair is
+  controlled but runs work whose calls cost a third of real ones, so the small ceiling never
+  binds in it; the real-source pair binds every session but interleaved the two
+  configurations across phases of one instruction, so its arms did different work. What
+  would settle it is one instruction on a real repository run twice, once per ceiling, from
+  the same starting commit — scored by what landed rather than by wall clock, since the two
+  are within 3% per tool call. Promote when: the default is questioned again, or a repository
+  and an instruction worth spending two full chains on are in hand.
