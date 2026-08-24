@@ -1062,7 +1062,9 @@ the foreground group: a chain started in the background and signalled by pid too
 supervisor alone, and the session it was waiting on ran on against the endpoint until it
 was matched by its `--add-dir` argument and killed by hand. A session at a keyboard keeps
 the terminal's own group, which is what delivers its interrupt and what it must stay in to
-read at all.
+read at all. **A second interrupt kills that group**, because the reason to send one twice
+is that the first was ignored, and a supervisor that cannot be stopped is worse than a
+session that dies mid-edit.
 
 **A chain stops when the repository stops moving, not when its prose repeats.** Two
 sessions in a row that leave the repository as they found it end it — two and not one,

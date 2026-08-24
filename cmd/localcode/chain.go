@@ -182,22 +182,30 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 // relay forwards an interrupt to the session and returns a function that stops relaying
 // and reports whether one arrived.
 //
-// Forwarded rather than acted on: the session is given the signal it would get from a
-// keyboard, so its own shutdown runs and the handoff still lands. The whole group, because
-// the sandbox runs the harness as a child of its own and signalling the sandbox alone
-// leaves the session it wrapped running.
+// The first is forwarded rather than acted on: the session is given the signal it would get
+// from a keyboard, so its own shutdown runs and the handoff still lands. The second kills.
+// The whole group either way, because the sandbox runs the harness as a child of its own and
+// signalling the sandbox alone leaves the session it wrapped running.
 func relay(interrupted <-chan os.Signal, p *os.Process) func() bool {
 	done, seen := make(chan struct{}), make(chan bool, 1)
 	go func() {
-		got := false
+		sent := 0
 		for {
 			select {
 			case <-done:
-				seen <- got
+				seen <- sent > 0
 				return
 			case <-interrupted:
-				got = true
-				signalGroup(p, syscall.SIGINT)
+				sent++
+				// The second one kills, because the reason to send it twice is that the first
+				// did not work. A supervisor that cannot be stopped is worse than a session
+				// that dies mid-edit, and the group is what makes the kill reach everything
+				// the sandbox started rather than the sandbox alone.
+				if sent == 1 {
+					signalGroup(p, syscall.SIGINT)
+				} else {
+					signalGroup(p, syscall.SIGKILL)
+				}
 			}
 		}
 	}()
