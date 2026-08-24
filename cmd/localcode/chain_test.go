@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -462,4 +464,100 @@ func TestSessionsReadsAnOlderChainsEndingFromItsHandoff(t *testing.T) {
 	if got := out.String(); !strings.Contains(got, string(chain.Finished)) {
 		t.Fatalf("a finished chain with no record must still read finished, got %q", got)
 	}
+}
+
+// gitRepo is a repository a chain can be judged against, since a plain directory is one
+// this cannot read.
+func gitRepo(t *testing.T, dir string) {
+	t.Helper()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"}, {"add", "."}, {"commit", "-qm", "first", "--allow-empty"},
+	} {
+		full := append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t",
+			"-c", "commit.gpgsign=false"}, args...)
+		if out, err := exec.Command("git", full...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+}
+
+// The row is where a supervisor reads a session back, and what the last one changed is not
+// recoverable from a handoff the model wrote about itself.
+func TestASessionsRowSaysWhetherTheRepositoryMoved(t *testing.T) {
+	root := fakeCheckout(t)
+	// The first session writes a file into the repository it was given; the second only
+	// writes its handoff, which lives outside it.
+	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	// The stub ends in `exit 0`, so the edit goes in ahead of the case that writes the
+	// handoff rather than after it.
+	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))),
+		"out=/dev/null\n", "[ \"$n\" = 1 ] && : > \"$PWD/fixed.go\"\nout=/dev/null\n", 1)
+	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	passthroughSandbox(t)
+	quiet(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	gitRepo(t, repo)
+
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 4, checkout: root,
+		endpoint: healthy(t, http.StatusOK), noServe: true,
+		args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := repoState(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := sessionRows(t, chainDirOf(t, state))
+	if len(rows) != 2 {
+		t.Fatalf("two sessions, got %d", len(rows))
+	}
+	if rows[0].Moved == nil || !*rows[0].Moved {
+		t.Fatalf("the session that wrote a file must report the repository moved: %v", rows[0].Moved)
+	}
+	if rows[1].Moved == nil || *rows[1].Moved {
+		t.Fatalf("the session that wrote only its handoff must report it unchanged: %v", rows[1].Moved)
+	}
+}
+
+// A chain outside version control reports nothing rather than reporting stillness, which
+// is a claim it has no way to make.
+func TestASessionOutsideARepositoryReportsNoMovement(t *testing.T) {
+	root := fakeCheckout(t)
+	chainStub(t, handoffSaying("none"))
+	passthroughSandbox(t)
+
+	_, state := runHere(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	rows := sessionRows(t, chainDirOf(t, state))
+	if rows[0].Moved != nil {
+		t.Fatalf("no repository means no reading, got %v", *rows[0].Moved)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func sessionRows(t *testing.T, dir string) []row {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(dir, "sessions.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []row
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		var r row
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		rows = append(rows, r)
+	}
+	return rows
 }

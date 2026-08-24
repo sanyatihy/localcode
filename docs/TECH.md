@@ -1054,6 +1054,14 @@ the session it starts — saying so when the two disagree. A server that will no
 context is refused rather than guessed at. The file's own value stands for the flow it is
 sourced into by hand.
 
+**A session reports whether the repository moved while it ran.** Its row carries
+`repo_moved`, which is the object database's size and the working tree's state read either
+side of the session: a commit made in any linked worktree lands in the objects they share,
+so a chain working in a claimed one is measured even though the checkout's `HEAD` never
+moves, and a session that only read has moved nothing. The field is absent rather than
+`false` outside version control, because a chain with no repository to read has not been
+measured.
+
 **A chain is one invocation, and a repository holds several.** `localcode` given an
 instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
 same step, or until `-sessions` runs out, and each of the three says which happened. It

@@ -42,7 +42,7 @@ for work that leaves no trace, and makes the repository authoritative for work t
 
 ## Tasks
 
-- [ ] a session reports whether the repository moved while it ran
+- [x] a session reports whether the repository moved while it ran
 - [ ] two sessions that neither moved the repository nor changed their next step stop the chain
 
 ## Log
