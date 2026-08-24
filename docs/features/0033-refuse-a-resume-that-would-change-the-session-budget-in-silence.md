@@ -1,9 +1,9 @@
 ---
 id: 0033
 title: Refuse a resume that would change the session budget in silence
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0032
 ---
 
