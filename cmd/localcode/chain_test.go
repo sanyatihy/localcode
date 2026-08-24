@@ -956,3 +956,34 @@ func TestAnUnchangedBudgetLeavesTheEndingClean(t *testing.T) {
 		t.Fatalf("an unchanged budget must leave the field absent: %v", e.Budget)
 	}
 }
+
+// The row is where the count of sessions since a commit is read back from, so the two
+// questions have to be answerable apart.
+func TestASessionsRowSaysWhetherItCommitted(t *testing.T) {
+	root := fakeCheckout(t)
+	// Session 1 commits; session 2 only writes a scratch file, which moves the repository
+	// without leaving anything durable in it.
+	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
+	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))), "out=/dev/null\n",
+		"[ \"$n\" = 1 ] && { : > \"$PWD/fixed.go\"; git add -A; git -c user.name=t -c user.email=t@t commit -qm work; }\n"+
+			"[ \"$n\" = 2 ] && : > \"$PWD/probe.go\"\n"+"out=/dev/null\n", 1)
+	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	passthroughSandbox(t)
+
+	_, state := inRepo(t, opts{checkout: root, args: []string{"fix the four tests"}})
+	rows := sessionRows(t, chainDirOf(t, state))
+	if len(rows) != 2 {
+		t.Fatalf("two sessions, got %d", len(rows))
+	}
+	if rows[0].Committed == nil || !*rows[0].Committed {
+		t.Fatalf("the session that committed must say so: %v", rows[0].Committed)
+	}
+	if rows[1].Moved == nil || !*rows[1].Moved {
+		t.Fatalf("a scratch file is still movement: %v", rows[1].Moved)
+	}
+	if rows[1].Committed == nil || *rows[1].Committed {
+		t.Fatalf("but it committed nothing: %v", rows[1].Committed)
+	}
+}

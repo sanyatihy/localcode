@@ -1104,6 +1104,14 @@ was converging. The field is absent rather than
 `false` outside version control, because a chain with no repository to read has not been
 measured.
 
+**A commit is recorded apart from movement, because they answer different questions.** The
+row also carries `repo_committed`, which is what `git rev-list --all --count` says either
+side of the session: a commit made on any branch counts, and a branch made at one that was
+already there does not. A session writing throwaway probes moves a worktree without leaving
+anything durable, so movement is the right test for whether a session did anything and the
+wrong one for whether a chain is landing work — measured, commits stopped five sessions and
+2h44m before movement did.
+
 **A chain is one invocation, and a repository holds several.** `localcode` given an
 instruction runs sessions until a handoff says `Next: none`, until two in a row plan the
 same step, or until `-sessions` runs out, and each of the three says which happened. It
