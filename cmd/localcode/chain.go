@@ -40,6 +40,7 @@ type launch struct {
 	briefing string
 	timeout  time.Duration
 	cwd      string
+	endpoint string
 }
 
 // row is one session of a chain. The file of them is what a chain can be read back from
@@ -255,6 +256,21 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// A chain that is running has no ending, so the one the run before it left goes first.
 	chain.ClearEnding(chainDir)
 
+	// What a resumed chain is budgeted against is whatever the server serves now, and
+	// nothing else says when that changed: a chain resumed on the default config took a
+	// 10,240 ceiling where its sessions before had 22,528, and ran two starved sessions
+	// before anybody read `session.json` by hand. Narrated and recorded rather than
+	// refused — a smaller window is a legitimate choice, and sometimes the only one the
+	// machine has; what is wrong is making it in silence.
+	var budget []string
+	if last, ok := chain.LastSpec(chainDir); ok {
+		if budget = l.limits.Changed(last.Limits); budget != nil {
+			narrate("chain %s resumes on a different budget from its session %d: %s. %s "+
+				"serves it now, and rows either side of this cannot be compared.\n",
+				chainID, last.Session, strings.Join(budget, ", "), l.endpoint)
+		}
+	}
+
 	// What the repository says, which is the test the handoff cannot be trusted for. `ever`
 	// gates it: a chain whose work leaves no trace — a measurement, an investigation — never
 	// moves a repository and would stall on its second session, so movement judges a chain
@@ -266,7 +282,7 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// failed write does not change the ending: a chain that finished and could not say so
 	// still finished, so the failure is narrated and the code stands.
 	record := func(code int, reason chain.Reason, at int, handoff string) (int, error) {
-		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff}
+		e := chain.Ending{Reason: reason, Session: at, Handoff: handoff, Budget: budget}
 		if err := chain.WriteEnding(chainDir, e); err != nil {
 			narrate("chain %s could not record how it stopped: %v\n", chainID, err)
 		}

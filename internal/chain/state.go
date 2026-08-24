@@ -201,6 +201,11 @@ type Ending struct {
 	Reason  Reason `json:"reason"`
 	Session int    `json:"session"`
 	Handoff string `json:"handoff"`
+	// What this run was budgeted differently from its last session, if anything. Recorded
+	// and not only narrated: the terminal a background chain was resumed from is the one
+	// place its warning cannot be read back from, which is the whole reason the ending is
+	// a file.
+	Budget []string `json:"budget_changed,omitempty"`
 }
 
 // WriteEnding records how a chain stopped.

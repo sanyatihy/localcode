@@ -1,9 +1,9 @@
 ---
 id: 0033
 title: Refuse a resume that would change the session budget in silence
-status: Draft
+status: Shipped
 created: 2026-08-24
-shipped:
+shipped: 2026-08-24
 needs: 0032
 ---
 
@@ -38,7 +38,11 @@ what a session row means.
 
 ## Tasks
 
-- [ ] a resume whose session budget differs from the last session's says so before it runs
-- [ ] the difference is recorded where the chain's ending is, so it survives the terminal
+- [x] a resume whose session budget differs from the last session's says so before it runs
+- [x] the difference is recorded where the chain's ending is, so it survives the terminal
 
 ## Log
+- 2026-08-24 — `-sessions` is not compared. The design groups it with the ceiling and the
+  call budget, but a session's row does not depend on the chain's bound, and raising that
+  bound is exactly what a resume after a bounded stop is for — comparing it would warn on
+  the commonest resume there is.
