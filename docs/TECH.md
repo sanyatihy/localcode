@@ -1054,6 +1054,15 @@ the session it starts — saying so when the two disagree. A server that will no
 context is refused rather than guessed at. The file's own value stands for the flow it is
 sourced into by hand.
 
+**A chain stops when the repository stops moving, not when its prose repeats.** Two
+sessions in a row that leave the repository as they found it end it — two and not one,
+because a session that reads before it edits is normal. The `Next` comparison stays as the
+first test and catches an identical pair on sight; what it cannot see is the failure that
+motivated this, where eight consecutive sessions of a 25-session chain committed nothing
+while each reworded the same plan, costing about 49 minutes. Movement only judges a chain
+once that chain has moved a repository at all, so work that leaves no trace — a
+measurement, an investigation — is judged on its handoffs as before.
+
 **A session reports whether the repository moved while it ran.** Its row carries
 `repo_moved`, which is the object database's size and the working tree's state read either
 side of the session: a commit made in any linked worktree lands in the objects they share,

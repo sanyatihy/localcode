@@ -183,6 +183,13 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// A chain that is running has no ending, so the one the run before it left goes first.
 	chain.ClearEnding(chainDir)
 
+	// What the repository says, which is the test the handoff cannot be trusted for. `ever`
+	// gates it: a chain whose work leaves no trace — a measurement, an investigation — never
+	// moves a repository and would stall on its second session, so movement judges a chain
+	// only once that chain has shown it moves anything at all. Until then the `Next`
+	// comparison below is the only evidence there is.
+	ever, still := false, 0
+
 	// record writes how the chain stopped and hands back what the supervisor exits with. A
 	// failed write does not change the ending: a chain that finished and could not say so
 	// still finished, so the failure is narrated and the code stands.
@@ -232,6 +239,22 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 		if prev != "" && r.Next == prev {
 			narrate("chain %s stopped: this session planned what the last one "+
 				"did — read %s\n", chainID, filepath.Join(dir, chain.HandoffName))
+			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
+		}
+		// Two, not one: a session that spends its budget reading before it edits is normal,
+		// and what this catches is a chain that has stopped converging rather than a slow
+		// session. Measured on a 25-session chain, eight in a row committed nothing while the
+		// comparison above stayed silent, because each reworded the same plan.
+		switch {
+		case r.Moved == nil: // no repository to read, so this test does not vote
+		case *r.Moved:
+			ever, still = true, 0
+		case ever:
+			still++
+		}
+		if still >= 2 {
+			narrate("chain %s stopped: %d sessions in a row left the repository as they "+
+				"found it — read %s\n", chainID, still, filepath.Join(dir, chain.HandoffName))
 			return record(1, chain.Stalled, n, filepath.Join(dir, chain.HandoffName))
 		}
 		select {
