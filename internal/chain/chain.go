@@ -78,9 +78,24 @@ const (
 	// mechanical extractor be the floor. Measured: the model tried to stop twice without a
 	// handoff and complied on the third.
 	stopTries = 2
+
+	// callCost is what one tool call adds to a session's context, in tokens. The low end of
+	// the measured range rather than the middle of it, because this bound is the backstop
+	// for when the transcript cannot be read and the ceiling is what should stop a session:
+	// sized on a typical call it would pre-empt the ceiling for every session whose calls
+	// come cheaper than typical, which is half of them. Measured across 35 sessions of one
+	// instruction on real source, a call costs 335 to 1,474 tokens with a median of 671, and
+	// 350 is also what a read and an edit of one file were measured at.
+	callCost = 350
+
+	// callFloor is the smallest budget worth starting a session on. One turn's calls,
+	// because a session that cannot spend one turn cannot read a file, change it and see
+	// what that did.
+	callFloor = batchLimit
 )
 
 // NewLimits derives a session's budget from what the harness was declared, or refuses.
+// A calls of 0 asks for the derived budget; anything above it is the caller's own number.
 //
 // It refuses rather than clamping because a window too small to work in is a
 // configuration mistake with a one-line fix, and the session that discovers it instead
@@ -94,7 +109,7 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	if ceilingPct < 1 || ceilingPct > 100 {
 		return Limits{}, fmt.Errorf("a ceiling of %d%% of the window is not one", ceilingPct)
 	}
-	if calls < 1 {
+	if calls < 0 {
 		return Limits{}, fmt.Errorf("a budget of %d tool calls runs nothing", calls)
 	}
 
@@ -126,6 +141,23 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 			"ceiling of %d, under the %d a session costs before it does anything: serve more "+
 			"context, or reserve less output",
 			maxContext, maxOutput, ceiling, preambleFloor)
+	}
+
+	// The budget follows the window for the reason every other bound here does: a session's
+	// working room is its ceiling less the preamble it starts with, and a call costs what a
+	// call costs. A constant beside them fits neither end of the range served — 30 was three
+	// times what a 10,240 ceiling has room for and about what a 22,528 one does.
+	//
+	// The floor is on the derived number only. A caller who names a budget is measuring
+	// something, and a measurement that the tool rounds up to what it thinks reasonable is
+	// not one.
+	if calls == 0 {
+		if calls = (ceiling - preambleFloor) / callCost; calls < callFloor {
+			return Limits{}, fmt.Errorf("a %d-token ceiling leaves room for %d tool calls, "+
+				"under the %d a session needs to read a file, change it and see what that "+
+				"did: serve more context, or reserve less output",
+				ceiling, calls, callFloor)
+		}
 	}
 	return Limits{Window: window, Ceiling: ceiling, ResultCap: perCall * bytesPerToken,
 		Batch: batchLimit, Calls: calls}, nil

@@ -141,7 +141,7 @@ localcode -fork <id>        # start a new chain from what that one knew
 | flag | default | what it does |
 |---|---|---|
 | `-ceiling <pct>` | as much as fits | how full a session may get before it hands over. Only lowers |
-| `-calls <n>` | 30 | tool calls one session may spend |
+| `-calls <n>` | derived | tool calls one session may spend, overriding what its ceiling implies |
 | `-sessions <n>` | 8 | sessions one instruction may take |
 | `-session-timeout <d>` | 30m | how long one session may run. Off when you are at the keyboard |
 

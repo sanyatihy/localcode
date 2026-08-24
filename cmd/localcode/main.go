@@ -68,7 +68,7 @@ flags:
   -no-serve          refuse if no server is running, rather than starting one
   -net               allow outbound network for this session (loopback only by default)
   -ceiling pct       lower the ceiling below what the reserve already allows
-  -calls n           how many tool calls a session may spend
+  -calls n           override the tool-call budget the ceiling implies
   -sessions n        how many sessions one instruction may take
   -session-timeout d how long one session may run before it is stopped
   -continue          carry on this repository's most recent chain
@@ -86,7 +86,7 @@ func main() {
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
-	calls := fs.Int("calls", 30, "how many tool calls a session may spend")
+	calls := fs.Int("calls", 0, "override the tool-call budget the ceiling implies")
 	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
 	timeout := fs.Duration("session-timeout", 30*time.Minute, "how long one session may run")
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
