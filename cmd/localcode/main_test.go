@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -37,12 +36,20 @@ func fakeCheckout(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, "claude-code.env"), []byte(env), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// What says a directory is a checkout at all, and it is not any harness's file: the
+	// launcher starts the server from here.
+	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "scripts", "serve.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	return root
 }
 
-// stubClaude puts a recording `claude` on PATH, so the launcher can be tested without a
-// model, a server, or the several minutes a 27B answer costs.
-func stubClaude(t *testing.T, script string) string {
+// stubAgent puts a recording binary of that name on PATH, so the launcher can be tested
+// without a model, a server, or the several minutes a 27B answer costs.
+func stubAgent(t *testing.T, name, script string) string {
 	t.Helper()
 	dir := t.TempDir()
 	argv := filepath.Join(dir, "argv")
@@ -50,11 +57,18 @@ func stubClaude(t *testing.T, script string) string {
 	// session as a variable rather than as a flag.
 	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argv + "\nenv > " + argv + ".env\n" +
 		script + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return argv
+}
+
+// stubClaude puts a recording `claude` on PATH, so the launcher can be tested without a
+// model, a server, or the several minutes a 27B answer costs.
+func stubClaude(t *testing.T, script string) string {
+	t.Helper()
+	return stubAgent(t, "claude", script)
 }
 
 // passthroughSandbox substitutes a stand-in for sandbox-exec that drops `-f PROFILE` and
@@ -369,7 +383,7 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 
 func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, false)
+	path, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +441,7 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 		t.Skip("no seatbelt on this platform")
 	}
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, false)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +511,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 	defer srv.Close()
 
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, false)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +534,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 
 func TestNetOpensOutboundForTheSession(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, true)
+	path, err := writeSandboxProfile(state, cwd, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,75 +548,6 @@ func TestNetOpensOutboundForTheSession(t *testing.T) {
 	// Writes stay confined either way: -net is about reachability, not about the filesystem.
 	if !strings.Contains(string(body), "(deny file-write*)") {
 		t.Fatalf("-net must not widen writes:\n%s", body)
-	}
-}
-
-// The gate is this binary, not a fourth shell script, so what enforces the budget is
-// covered by the same `make check` as everything else that decides something.
-func TestSettingsInstallTheGateAsThisBinary(t *testing.T) {
-	root, dir := fakeCheckout(t), t.TempDir()
-	path, err := writeSettings(root, dir, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc struct {
-		Hooks map[string][]struct {
-			Hooks []struct{ Command string } `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(body, &doc); err != nil {
-		t.Fatal(err)
-	}
-	pre, ok := doc.Hooks["PreToolUse"]
-	if !ok || len(pre) == 0 || len(pre[0].Hooks) == 0 {
-		t.Fatalf("no PreToolUse hook is installed:\n%s", body)
-	}
-	if !strings.HasSuffix(pre[0].Hooks[0].Command, " hook gate") {
-		t.Fatalf("the gate must be this binary run as a hook: %q", pre[0].Hooks[0].Command)
-	}
-}
-
-// Stop fires whenever the agent finishes responding, which in an interactive session is
-// every time it hands the keyboard back. Installed there it would refuse the conversation.
-func TestStopIsInstalledOnlyForASessionAnsweringOneInstruction(t *testing.T) {
-	root := fakeCheckout(t)
-	installed := func(oneShot bool) bool {
-		path, err := writeSettings(root, t.TempDir(), oneShot)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var doc struct {
-			Hooks map[string]any `json:"hooks"`
-		}
-		if err := json.Unmarshal(body, &doc); err != nil {
-			t.Fatal(err)
-		}
-		_, ok := doc.Hooks["Stop"]
-		return ok
-	}
-	if !installed(true) {
-		t.Fatal("a session answering one instruction must not be able to end without a handoff")
-	}
-	if installed(false) {
-		t.Fatal("an interactive session would be refused at the end of every turn")
-	}
-}
-
-// An installation under a path with a space in it would otherwise run its first word.
-func TestShellQuoteSurvivesAPathAShellWouldSplit(t *testing.T) {
-	if got := shellQuote("/Users/a b/bin/localcode"); got != "'/Users/a b/bin/localcode'" {
-		t.Fatalf("got %s", got)
-	}
-	if got := shellQuote("/it's/here"); got != `'/it'\''s/here'` {
-		t.Fatalf("a quote in the path must not end the quoting: %s", got)
 	}
 }
 
@@ -689,23 +634,6 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	// quarter of that for a turn's results and 6,144 for the turns is the ceiling.
 	if spec.Limits.Window != 28672 || spec.Limits.Ceiling != 15360 {
 		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
-	}
-}
-
-// The child has to be told the same number, and told it once: two entries for one name
-// leave which of them Claude Code reads to the C library.
-func TestTheDeclarationTheChildIsGivenIsTheServedOne(t *testing.T) {
-	for _, tc := range []struct{ name, in, want string }{
-		{"replaced", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=45056\nB=2", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672\nB=2"},
-		{"appended", "A=1", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
-		{"deduped", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=2", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := setEnv(strings.Split(tc.in, "\n"), "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "28672")
-			if strings.Join(got, "\n") != tc.want {
-				t.Fatalf("got %q, want %q", strings.Join(got, "\n"), tc.want)
-			}
-		})
 	}
 }
 
@@ -818,7 +746,7 @@ func TestSandboxAllowsAWorktreeBesideTheRepositoryAndNothingElseBesideIt(t *test
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(parent)) })
-	profile, err := writeSandboxProfile(t.TempDir(), cwd, false)
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,5 +808,97 @@ func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
 	}
 	if strings.Index(got, ".worktrees") > strings.Index(got, "../"+filepath.Base(kept)) {
 		t.Fatalf("the repository's own choice comes first: %s", got)
+	}
+}
+
+// piCheckout adds what the pi adapter reads out of a checkout: the provider file it loads
+// and takes the model id and the output reservation from, the extension that holds a
+// session to its budget, and the settings a session is served.
+func piCheckout(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, "harness", "pi")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	provider := "export default async function (pi) {\n  pi.registerProvider(\"local\", {\n" +
+		"    models: [\n      {\n        id: \"served/model:Q4\",\n        maxTokens: 4096,\n" +
+		"      },\n    ],\n  });\n}\n"
+	for name, body := range map[string]string{
+		"local-provider.js":       provider,
+		"localcode-gate.js":       "export default function (pi) {}\n",
+		"settings.json.reference": "{}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The point of the flag: one token changed runs the same instruction in another agent,
+// with the same tool set, the same briefing and the same budget.
+func TestHarnessPiStartsTheSessionPiWouldRun(t *testing.T) {
+	root := fakeCheckout(t)
+	piCheckout(t, root)
+	argv := stubAgent(t, "pi", "exit 0")
+	passthroughSandbox(t)
+	quiet(t)
+	t.Chdir(t.TempDir())
+
+	if code, err := run(opts{harness: "pi", ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: healthy(t, http.StatusOK), noServe: true, args: []string{"fix", "the", "tests"}}); err != nil {
+		t.Fatalf("run: code %d err %v", code, err)
+	}
+	got, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := argsOf(got)
+	for _, want := range []string{"--tools", "read,edit,write,bash", "--provider", "local",
+		"--model", "served/model:Q4", "-p", "fix the tests"} {
+		if !slices.Contains(args, want) {
+			t.Errorf("the session was not given %q:\n%s", want, got)
+		}
+	}
+	// The briefing the incumbent's arm gets, or the two arms differ by more than the flag.
+	// Searched over the whole record rather than one argument: the briefing has newlines
+	// in it, and the stub writes an argument per line.
+	for _, want := range []string{"HANDOFF.md", "sandbox", "tool calls"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("the briefing does not mention %q:\n%s", want, got)
+		}
+	}
+	// The session's own directory is where pi is told to write, so what it cost is read
+	// back without searching for it.
+	dir := handoffDirOf(t, argv)
+	if flagValue(args, "--session-dir") != dir {
+		t.Errorf("pi must write its session where the driver kept it: %q", flagValue(args, "--session-dir"))
+	}
+	spec, err := chain.ReadSpec(dir)
+	if err != nil {
+		t.Fatalf("the session was not budgeted: %v", err)
+	}
+	if spec.Harness != "pi" {
+		t.Errorf("the session's record must say which agent ran it: %q", spec.Harness)
+	}
+	// 49,152 served whole, less the 4,096 the provider file declares for a reply.
+	if spec.Limits.Window != 45056 {
+		t.Errorf("the window must be the served context less pi's own reservation: %+v", spec.Limits)
+	}
+}
+
+// A harness nobody drives is refused by name, with the ones that are: a chain silently run
+// in another agent is a comparison of nothing.
+func TestAnUnknownHarnessIsRefusedAndNamesTheOnesThereAre(t *testing.T) {
+	root := fakeCheckout(t)
+	t.Chdir(t.TempDir())
+	code, err := run(opts{harness: "cursor", ceiling: 100, checkout: root,
+		endpoint: healthy(t, http.StatusOK), noServe: true})
+	if code != 2 || err == nil {
+		t.Fatalf("an unknown harness must be refused: code %d err %v", code, err)
+	}
+	for _, want := range []string{"cursor", "claude-code", "pi"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
 	}
 }

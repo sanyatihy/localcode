@@ -30,7 +30,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -43,11 +42,6 @@ import (
 // `make install`. Nothing searches for it: a launcher that guesses which checkout it
 // belongs to picks the wrong one as soon as there are two.
 var checkout = ""
-
-// The tool set 0008 settled, and the pre-approval that lets it run unattended. Both name
-// the same four: --tools is the surface and --allowedTools is what makes it unprompted,
-// and a session that has to ask writes the answer into the repository it is visiting.
-const agentTools = "Bash,Edit,Read,Write"
 
 const usage = `localcode — drive the local model in this repository
 
@@ -63,6 +57,7 @@ usage:
 
 flags:
   -checkout dir      the localcode checkout to read configuration from
+  -harness name      which agent to run the sessions in (%s)
   -endpoint url      the server to use
   -config file       the serving config to start (default config/agent.env)
   -no-serve          refuse if no server is running, rather than starting one
@@ -79,8 +74,9 @@ flags:
 
 func main() {
 	fs := flag.NewFlagSet("localcode", flag.ContinueOnError)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, harness.Names()) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
+	agentName := fs.String("harness", harness.DefaultAgent, "which agent to run the sessions in")
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
@@ -121,6 +117,7 @@ func main() {
 		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""), *jsonl)
 	default:
 		code, err = run(opts{
+			harness:  *agentName,
 			checkout: *checkoutFlag,
 			endpoint: *endpoint,
 			config:   *config,
@@ -143,6 +140,7 @@ func main() {
 }
 
 type opts struct {
+	harness  string
 	checkout string
 	endpoint string
 	config   string
@@ -167,7 +165,15 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 
-	env, err := harness.EnvFromFile(filepath.Join(root, "harness", "claude-code", "claude-code.env"))
+	// The agent runs the sessions, and everything that differs between agents is behind
+	// it: the flags, the environment, the window it is told it has, where it files what a
+	// session cost. Built before the work so a harness that cannot be configured is
+	// refused rather than discovered on the first session.
+	name := o.harness
+	if name == "" {
+		name = harness.DefaultAgent
+	}
+	agent, err := harness.NewAgent(name, root)
 	if err != nil {
 		return 2, err
 	}
@@ -177,32 +183,21 @@ func run(o opts) (int, error) {
 		return 2, fmt.Errorf("no working directory: %w", err)
 	}
 
-	// The budget is derived from the window the harness was declared, so a served config
+	// The budget is derived from the window the harness is told it has, so a served config
 	// and the enforcement over it cannot disagree. Refused rather than guessed: a session
 	// started in a window nothing fits in spends a cold ingest to say `Prompt is too long`.
-	fileContext, maxOutput, err := declared(env)
+	//
+	// What is served is read off the server rather than off any file, because a file
+	// carries one number and `-config` chooses which context is served. What the harness
+	// makes of it is the harness's: the reservation it keeps for a reply is its own.
+	served, err := servedContext(o.endpoint)
 	if err != nil {
 		return 2, err
 	}
-	// And the declaration is read off the server rather than off the file, because the
-	// file carries one number and `-config` chooses which context is served. What is
-	// declared is the whole of it: the harness takes its own reservation off whatever it
-	// is told, so a declaration that has already taken one leaves that much of the served
-	// context unusable by anything.
-	maxContext, err := declaredFromServer(o.endpoint, fileContext)
+	maxContext, maxOutput, err := agent.Window(served)
 	if err != nil {
 		return 2, err
 	}
-	env = setEnv(env, "CLAUDE_CODE_MAX_CONTEXT_TOKENS", strconv.Itoa(maxContext))
-	// And the harness's own check on that number is off, because it is a second answer to
-	// a question this repo has already answered. It holds back about a quarter of whatever
-	// it is told — measured, it refuses past 34,258 tokens of a declared 49,152 — and the
-	// fraction is undocumented, so a window derived from it is a window nobody can account
-	// for. What it was protecting against is the server's own 400, and the gate is what
-	// prevents that here: from a transcript reading, against a ceiling, with a handoff on
-	// the other side of the denial. `claude-code.env` still leaves it on, because a session
-	// somebody runs by hand has no gate.
-	env = setEnv(env, "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT", "1")
 	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
 	if err != nil {
 		return 2, err
@@ -224,18 +219,14 @@ func run(o opts) (int, error) {
 	// keyboard back. Only the first can be chained, and only the first can be refused
 	// permission to stop without leaving a handoff.
 	oneShot := goal != ""
-	settings, err := writeSettings(root, chainDir, oneShot)
-	if err != nil {
+	if err := agent.Prepare(chainDir, oneShot); err != nil {
 		return 2, err
 	}
 
 	// The agent runs inside a seatbelt sandbox, which is what makes exposing an
 	// unrestricted Bash tool defensible: the boundary is the kernel's rather than the
 	// model's judgement, and it needs to know nothing about the language in the repository.
-	claudePath, err := exec.LookPath("claude")
-	if err != nil {
-		return 2, fmt.Errorf("claude is not on PATH: %w", err)
-	}
+	//
 	// Refused rather than skipped: running unsandboxed because the sandbox is missing is
 	// the one failure mode that would be silent and would matter.
 	if _, err := os.Stat(sandboxExec); err != nil {
@@ -244,20 +235,14 @@ func run(o opts) (int, error) {
 	if o.net {
 		fmt.Fprintln(os.Stderr, "network: outbound ENABLED for this session")
 	}
-	profile, err := writeSandboxProfile(state, cwd, o.net)
+	profile, err := writeSandboxProfile(state, cwd, o.net, agent.Writable())
 	if err != nil {
 		return 2, err
 	}
 
-	// A budget on calls is not a budget on tokens: one unbounded `cat` fills a window
-	// inside a single permitted call, and the gate decides on the context as it stood
-	// before that result arrived. This is the harness's own cap on the one tool whose
-	// result has no bound of its own, sized from the window it is protecting.
-	env = append(env, fmt.Sprintf("BASH_MAX_OUTPUT_LENGTH=%d", limits.ResultCap))
-
 	l := launch{
-		claude: claudePath, sandbox: sandboxExec, profile: profile, settings: settings,
-		env: env, limits: limits, briefing: sandboxBriefing(cwd), cwd: cwd,
+		agent: agent, sandbox: sandboxExec, profile: profile,
+		limits: limits, briefing: sandboxBriefing(cwd), cwd: cwd,
 		endpoint: o.endpoint,
 	}
 	if oneShot {
@@ -309,9 +294,11 @@ func resolveCheckout(flagValue string) (string, error) {
 		if candidate == "" {
 			continue
 		}
-		envFile := filepath.Join(candidate, "harness", "claude-code", "claude-code.env")
-		if _, err := os.Stat(envFile); err != nil {
-			return "", fmt.Errorf("%s is not a localcode checkout: no %s", candidate, envFile)
+		// The server script rather than any harness's configuration: which agent a chain
+		// runs in is a choice, and a checkout is a checkout before that choice is made.
+		marker := filepath.Join(candidate, "scripts", "serve.sh")
+		if _, err := os.Stat(marker); err != nil {
+			return "", fmt.Errorf("%s is not a localcode checkout: no %s", candidate, marker)
 		}
 		return candidate, nil
 	}
@@ -365,6 +352,25 @@ func readProps(endpoint string) (*props, error) {
 		return nil, fmt.Errorf("could not read %s/props: %w", endpoint, err)
 	}
 	return &p, nil
+}
+
+// servedContext is what the endpoint says it is serving, which is the only number a
+// session can be budgeted against. The wall a session hits is the served context, and
+// `-config` moves it, so a context taken from a file is a claim about whichever server
+// that file was written for. Taking a file at face value is what killed the sessions the
+// enforcement was first measured on: a budget 3,072 tokens too generous let them edit four
+// files each and then die on `Prompt is too long` with no handoff written.
+func servedContext(endpoint string) (int, error) {
+	p, err := readProps(endpoint)
+	if err != nil {
+		return 0, err
+	}
+	if p == nil || p.Settings.NCtx <= 0 {
+		return 0, fmt.Errorf("%s serves no context it will report, so a session cannot be "+
+			"budgeted against it: what a session may spend is derived from what is served",
+			endpoint)
+	}
+	return p.Settings.NCtx, nil
 }
 
 // errNotReady separates a server that is still loading from one whose answer could not be
@@ -510,66 +516,6 @@ func repoState(repo string) (string, error) {
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
-// writeSettings renders the hooks with absolute paths. harness/claude-code/hooks.json
-// addresses them through $CLAUDE_PROJECT_DIR, which is the repository being visited — so
-// in anybody else's the hooks resolve to scripts that are not there and the session dies
-// saying so. Generated rather than committed, because the path is only known once
-// installed.
-//
-// The gate is this binary run as a hook rather than a fourth script. It reads a transcript
-// and counts against a budget, which is the half of the repository `make check` covers.
-//
-// Stop is installed only for a session answering one instruction. It fires whenever the
-// agent finishes responding, which in an interactive session is every time it hands the
-// keyboard back — refusing there would refuse the conversation itself.
-func writeSettings(root, dir string, oneShot bool) (string, error) {
-	script := func(name string) any {
-		return command(filepath.Join(root, "harness", "claude-code", "hooks", name))
-	}
-	self, err := os.Executable()
-	if err != nil {
-		return "", fmt.Errorf("could not find this binary to install it as a hook: %w", err)
-	}
-	hooks := map[string]any{
-		"SessionStart": script("session-start.sh"),
-		"PreCompact":   script("pre-compact.sh"),
-		"SessionEnd":   script("session-end.sh"),
-		"PreToolUse":   command(shellQuote(self) + " hook gate"),
-	}
-	if oneShot {
-		hooks["Stop"] = command(shellQuote(self) + " hook stop")
-	}
-	doc := map[string]any{"hooks": hooks}
-	body, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, "settings.json")
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		return "", fmt.Errorf("could not write %s: %w", path, err)
-	}
-	return path, nil
-}
-
-// command is one hook entry. Every matcher is empty, so each fires for everything its
-// event covers.
-func command(line string) any {
-	return []any{map[string]any{"hooks": []any{map[string]string{
-		"type":    "command",
-		"command": line,
-	}}}}
-}
-
-// shellQuote guards the one path here that a person did not type: the harness runs a hook
-// through a shell, and an installation under a directory with a space in it would
-// otherwise run the first word of it.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // hook runs one of this binary's own session hooks. The harness spawns them, so they get
 // nothing but stdin and the environment, and the session directory carries the rest.
 //
@@ -600,97 +546,6 @@ func hook(name string) (int, error) {
 		fmt.Println(string(body))
 	}
 	return 0, nil
-}
-
-// declared reads the window the harness was told it has. Both numbers are needed and
-// neither is guessed: the budget is derived from them, and a guessed budget protects
-// against a wall that is not the one there.
-func declared(env []string) (maxContext, maxOutput int, err error) {
-	read := func(name, value string, into *int) error {
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("%s is not a number: %q", name, value)
-		}
-		*into = n
-		return nil
-	}
-	for _, kv := range env {
-		name, value, _ := strings.Cut(kv, "=")
-		switch name {
-		case "CLAUDE_CODE_MAX_CONTEXT_TOKENS":
-			err = read(name, value, &maxContext)
-		case "CLAUDE_CODE_MAX_OUTPUT_TOKENS":
-			err = read(name, value, &maxOutput)
-		}
-		if err != nil {
-			return 0, 0, err
-		}
-	}
-	if maxContext == 0 || maxOutput == 0 {
-		return 0, 0, errors.New("claude-code.env must set both CLAUDE_CODE_MAX_CONTEXT_TOKENS " +
-			"and CLAUDE_CODE_MAX_OUTPUT_TOKENS: a session's budget is derived from them")
-	}
-	return maxContext, maxOutput, nil
-}
-
-// declaredFromServer is the context to declare against what the endpoint reports, which is
-// the whole of it.
-//
-// The wall a session hits is the served context, and `-config` moves it — so a declaration
-// taken from a file is a claim about whichever server that file was written for. Taking it
-// at face value is what killed the sessions the enforcement was first measured on: a budget
-// 3,072 tokens too generous let them edit four files each and then die on `Prompt is too
-// long` with no handoff written.
-//
-// Nothing is subtracted here. The harness holds back its own reservation from whatever it
-// is told — measured, it will not send past about three quarters of the declaration less
-// that reservation — so a declaration that has already taken one off leaves 4,096 tokens of
-// the served context that neither the prompt nor the reply can ever use. The largest prompt
-// it sent at a declared 49,152 was 34,008 tokens, which with the whole reservation on top is
-// 38,104 of the 49,152 served: the declaration cannot overrun the server.
-//
-// It says so when the file disagrees, because the file is what an operator reading the
-// configuration would believe, and a number silently overridden is a number nobody can
-// account for afterwards.
-func declaredFromServer(endpoint string, fileContext int) (int, error) {
-	p, err := readProps(endpoint)
-	if err != nil {
-		return 0, err
-	}
-	if p == nil || p.Settings.NCtx <= 0 {
-		return 0, fmt.Errorf("%s serves no context it will report, so a session cannot be "+
-			"budgeted against it: what a session may spend is derived from what is served",
-			endpoint)
-	}
-	served := p.Settings.NCtx
-	if served != fileContext {
-		fmt.Fprintf(os.Stderr, "context: %d tokens, the whole of what %s serves — "+
-			"claude-code.env declares %d, which is not this server\n",
-			served, endpoint, fileContext)
-	}
-	return served, nil
-}
-
-// setEnv replaces a variable rather than appending a second one. Two entries for one name
-// leave which of them the child reads to the C library, and the whole point of this one is
-// that the session is held to the window it actually has.
-func setEnv(env []string, name, value string) []string {
-	entry := name + "=" + value
-	out := make([]string, 0, len(env)+1)
-	replaced := false
-	for _, kv := range env {
-		if k, _, _ := strings.Cut(kv, "="); k == name {
-			if replaced {
-				continue
-			}
-			kv, replaced = entry, true
-		}
-		out = append(out, kv)
-	}
-	if !replaced {
-		out = append(out, entry)
-	}
-	return out
 }
 
 // newChain makes the directory one run of the tool keeps its sessions in, and names it.
@@ -758,7 +613,7 @@ var sandboxExec = "/usr/bin/sandbox-exec"
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
 // that uses one while appearing to allow it.
-func writeSandboxProfile(state, cwd string, net bool) (string, error) {
+func writeSandboxProfile(state, cwd string, net bool, agentState []string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("no home directory: %w", err)
@@ -770,8 +625,9 @@ func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 		"/private/tmp",
 		filepath.Join(home, "Library", "Caches"), // where macOS toolchains cache
 		filepath.Join(home, ".cache"),            // where XDG ones do
-		filepath.Join(home, ".claude"),           // the agent's own history and project state
 	}
+	// Where the agent files its own state, which only the agent knows.
+	writable = append(writable, agentState...)
 	// Whatever this developer's ecosystems need, named once by them rather than guessed
 	// once by us.
 	writable = append(writable, extraWritable()...)

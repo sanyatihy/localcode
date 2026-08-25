@@ -16,6 +16,7 @@ import (
 
 	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/eval"
+	"github.com/sanyatihy/localcode/internal/harness"
 )
 
 // launch is everything a session needs that does not change from one to the next. Built
@@ -32,11 +33,9 @@ func narrate(format string, args ...any) {
 }
 
 type launch struct {
-	claude   string
+	agent    harness.Agent
 	sandbox  string
 	profile  string
-	settings string
-	env      []string
 	limits   chain.Limits
 	briefing string
 	timeout  time.Duration
@@ -100,33 +99,22 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	}
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
+		Harness: l.agent.Name(),
 	}); err != nil {
 		return row{}, err
 	}
 
-	argv := []string{
-		"--tools", agentTools, "--allowedTools", agentTools,
-		"--settings", l.settings,
-		// The handoff is written outside the repository being visited, so a session leaves
-		// it with exactly the files the work changed. Claude Code confines its file tools
-		// to the workspace, and this is what puts that one directory in it.
-		"--add-dir", stable,
-		"--append-system-prompt", l.briefing + "\n\n" + handoffBriefing(l.limits, handoffPath) +
+	bin, argv, env, err := l.agent.Command(harness.Session{
+		Goal: goal,
+		Briefing: l.briefing + "\n\n" + handoffBriefing(l.limits, handoffPath) +
 			stalledBriefing(dry),
-	}
-	// The instruction goes last and verbatim. What the session before it learned arrives
-	// separately, through the hook 0016 already uses, so a chain cannot drift by rewriting
-	// its own goal at each hop.
-	if goal != "" {
-		// Events rather than a result, because a result arrives once and this machine takes
-		// minutes to reach it. The supervisor renders them, so it owns every line printed.
-		argv = append(argv, "--output-format", "stream-json", "--verbose",
-			"--include-partial-messages", "-p", goal)
-	}
-
-	env := append(append([]string{}, l.env...), "LOCALCODE_HANDOFF_DIR="+dir)
-	if inherit != "" {
-		env = append(env, "LOCALCODE_INHERIT="+inherit)
+		StateDir:  dir,
+		StableDir: stable,
+		Inherit:   inherit,
+		ResultCap: l.limits.ResultCap,
+	})
+	if err != nil {
+		return row{}, err
 	}
 
 	// A wall-clock bound, because none of the others is one. Denied calls still cost a turn
@@ -143,13 +131,12 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		ctx, cancel = context.WithTimeout(ctx, l.timeout)
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, l.sandbox, append([]string{"-f", l.profile, l.claude}, argv...)...)
+	cmd := exec.CommandContext(ctx, l.sandbox, append([]string{"-f", l.profile, bin}, argv...)...)
 	cmd.Env = env
 	cmd.Stderr = os.Stderr
 
 	started := time.Now()
 	var r row
-	var err error
 	if goal == "" {
 		// A developer at a keyboard: the harness draws its own screen and owns the terminal.
 		cmd.Stdin, cmd.Stdout = os.Stdin, os.Stdout
@@ -182,10 +169,10 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 			return row{}, pipeErr
 		}
 		if err = cmd.Start(); err != nil {
-			return row{}, fmt.Errorf("could not start claude: %w", err)
+			return row{}, fmt.Errorf("could not start %s: %w", l.agent.Name(), err)
 		}
 		stop := relay(interrupted, cmd.Process)
-		r.Overrun = render(events, os.Stdout, l.cwd)
+		r.Overrun = l.agent.Render(events, os.Stdout, l.cwd)
 		err = cmd.Wait()
 		r.Interrupted = stop()
 	}
@@ -199,7 +186,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	case errors.As(err, &exit):
 		r.Exit = exit.ExitCode()
 	default:
-		return r, fmt.Errorf("could not start claude: %w", err)
+		return r, fmt.Errorf("could not start %s: %w", l.agent.Name(), err)
 	}
 
 	body := chain.Read(handoffPath)
@@ -213,10 +200,10 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		}
 	}
 	r.Handoff, r.Next = len(body), chain.Next(body)
-	if t := newestTranscript(dir, env); t != "" {
-		r.Peak, r.Turns = chain.Cost(t)
+	if t := l.agent.Transcript(dir); t != "" {
+		r.Peak, r.Turns = l.agent.Cost(t)
 	}
-	r.Calls = chain.Counter(dir, chain.CallsFile(sessionIDOf(dir)))
+	r.Calls = chain.Counter(dir, chain.CallsFile(chain.SessionIDIn(dir)))
 	after := chain.Repo(l.cwd)
 	if moved, known := after.Moved(before); known {
 		r.Moved = &moved
@@ -351,7 +338,16 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// machine has; what is wrong is making it in silence.
 	var budget []string
 	if last, ok := chain.LastSpec(chainDir); ok {
-		if budget = l.limits.Changed(last.Limits); budget != nil {
+		budget = l.limits.Changed(last.Limits)
+		// The agent counts as a bound the same way: a session's rows are what one agent
+		// spent doing the work, and two agents' rows are not a chain's progress over time.
+		// Only when the last session recorded one — a chain that ran before it was recorded
+		// says nothing about what ran it, and inventing a change would be worse than
+		// silence.
+		if last.Harness != "" && last.Harness != l.agent.Name() {
+			budget = append(budget, fmt.Sprintf("harness %s -> %s", last.Harness, l.agent.Name()))
+		}
+		if budget != nil {
 			narrate("chain %s resumes on a different budget from its session %d: %s. %s "+
 				"serves it now, and rows either side of this cannot be compared.\n",
 				chainID, last.Session, strings.Join(budget, ", "), l.endpoint)
@@ -515,51 +511,6 @@ func or(s, fallback string) string {
 	return s
 }
 
-// sessionIDOf reads back the session id the gate counted against. The counter is named
-// after it because a directory can outlive the session that filled it, and a count carried
-// into the next one would spend a budget nobody used. A session that called no tool leaves
-// no counter, and nothing here reports what it cost.
-func sessionIDOf(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	for _, e := range entries {
-		if id, ok := strings.CutPrefix(e.Name(), "calls-"); ok {
-			return id
-		}
-	}
-	return ""
-}
-
-// newestTranscript finds what the session wrote about itself. Claude Code files a
-// transcript under its config directory, keyed by the working directory, so this asks the
-// environment the session ran with rather than guessing where that is.
-func newestTranscript(dir string, env []string) string {
-	config := ""
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, "CLAUDE_CONFIG_DIR="); ok {
-			config = v
-		}
-	}
-	if config == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		config = filepath.Join(home, ".claude")
-	}
-	id := sessionIDOf(dir)
-	if id == "" {
-		return ""
-	}
-	matches, err := filepath.Glob(filepath.Join(config, "projects", "*", id+".jsonl"))
-	if err != nil || len(matches) == 0 {
-		return ""
-	}
-	return matches[0]
-}
-
 // listChains prints what this repository has been asked to do, newest first. It lists
 // chains rather than sessions because a chain is what `-resume` takes: the sessions inside
 // one are a detail of how far it got.
@@ -599,7 +550,7 @@ func ending(dir string, handoff []byte) string {
 }
 
 // selectChain answers which chain this invocation belongs to, and what it was asked to do.
-// Starting clean is the default because that is what `claude` does, and because one handoff
+// Starting clean is the default because that is what starting an agent does, and because one handoff
 // per repository was wrong: a second instruction in the same checkout would have resumed
 // the first and then overwritten what it knew.
 func selectChain(state string, o opts) (dir, id, goal string, err error) {

@@ -22,6 +22,18 @@ import (
 // needed and the decisions start being testable.
 func chainStub(t *testing.T, handoffs ...string) string {
 	t.Helper()
+	return chainStubNamed(t, "claude", handoffs...)
+}
+
+// anchor is the stub's line that names where the handoff goes. The tests that give a stub
+// an extra step insert it in front of this, so what they patch is one string in one place.
+const anchor = "out=$(dirname \"$LOCALCODE_HANDOFF_DIR\")/HANDOFF.md\n"
+
+// chainStubNamed is the same for whichever agent the chain is run in. The handoff goes
+// where the supervisor will look for it — beside the session's own directory — which is
+// what every agent is told in its briefing rather than through a flag.
+func chainStubNamed(t *testing.T, name string, handoffs ...string) string {
+	t.Helper()
 	dir := t.TempDir()
 	count := filepath.Join(dir, "invocations")
 	var cases strings.Builder
@@ -32,13 +44,9 @@ func chainStub(t *testing.T, handoffs ...string) string {
 		"n=$(cat '" + count + "' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '" + count + "'\n" +
 		"printf '%s\\n' \"$LOCALCODE_INHERIT\" > '" + dir + "'/inherit-$n\n" +
 		"printf '%s\\n' \"$*\" > '" + dir + "'/argv-$n\n" +
-		"out=/dev/null\n" +
-		"while [ $# -gt 0 ]; do\n" +
-		"  if [ \"$1\" = \"--add-dir\" ]; then out=\"$2/HANDOFF.md\"; fi\n" +
-		"  shift\n" +
-		"done\n" +
+		anchor +
 		"case $n in\n" + cases.String() + "esac\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -526,7 +534,7 @@ func TestASessionsRowSaysWhetherTheRepositoryMoved(t *testing.T) {
 	// The stub ends in `exit 0`, so the edit goes in ahead of the case that writes the
 	// handoff rather than after it.
 	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))),
-		"out=/dev/null\n", "[ \"$n\" = 1 ] && : > \"$PWD/fixed.go\"\nout=/dev/null\n", 1)
+		anchor, "[ \"$n\" = 1 ] && : > \"$PWD/fixed.go\"\n"+anchor, 1)
 	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +620,7 @@ func movingStub(t *testing.T, moves map[int]bool, nexts ...string) {
 		cases += fmt.Sprintf("[ \"$n\" = %d ] && echo %d >> \"$PWD/worked.go\"\n", n, n)
 	}
 	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))),
-		"out=/dev/null\n", cases+"out=/dev/null\n", 1)
+		anchor, cases+anchor, 1)
 	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -724,7 +732,7 @@ func sleepingStub(t *testing.T, onInt string) (started, caught string) {
 	dir := t.TempDir()
 	started, caught = filepath.Join(dir, "started"), filepath.Join(dir, "caught")
 	body := "#!/bin/sh\n" +
-		"out=/dev/null\n" +
+		anchor +
 		"while [ $# -gt 0 ]; do\n" +
 		"  if [ \"$1\" = \"--add-dir\" ]; then out=\"$2/HANDOFF.md\"; fi\n" +
 		"  shift\n" +
@@ -998,9 +1006,9 @@ func TestASessionsRowSaysWhetherItCommitted(t *testing.T) {
 	// Session 1 commits; session 2 only writes a scratch file, which moves the repository
 	// without leaving anything durable in it.
 	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("none"))
-	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))), "out=/dev/null\n",
+	body := strings.Replace(string(mustRead(t, filepath.Join(stub, "claude"))), anchor,
 		"[ \"$n\" = 1 ] && { : > \"$PWD/fixed.go\"; git add -A; git -c user.name=t -c user.email=t@t commit -qm work; }\n"+
-			"[ \"$n\" = 2 ] && : > \"$PWD/probe.go\"\n"+"out=/dev/null\n", 1)
+			"[ \"$n\" = 2 ] && : > \"$PWD/probe.go\"\n"+anchor, 1)
 	if err := os.WriteFile(filepath.Join(stub, "claude"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1127,5 +1135,87 @@ func TestAResumedChainCarriesTheCountOfWhatTheOldPlanCost(t *testing.T) {
 	}
 	if !strings.Contains(string(argv), "ended without committing anything") {
 		t.Fatal("the session after a resume must still be told what the old plan cost")
+	}
+}
+
+// A chain carries on in the agent it was started in, and its second session inherits what
+// the first left — the whole point of a chain, in the harness that is not the incumbent.
+func TestAPiChainResumesAndCarriesItsHandoff(t *testing.T) {
+	root := fakeCheckout(t)
+	piCheckout(t, root)
+	stub := chainStubNamed(t, "pi", handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	repo := t.TempDir()
+	t.Chdir(repo)
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{harness: "pi", ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(opts{harness: "pi", ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	// The second session was told where the first one's handoff is, and it is a file with
+	// something in it.
+	inherited := strings.TrimSpace(string(mustRead(t, filepath.Join(stub, "inherit-2"))))
+	if inherited == "" {
+		t.Fatal("the second session of a Pi chain inherited nothing")
+	}
+	if !strings.Contains(string(mustRead(t, inherited)), "fix Clamp") {
+		t.Fatalf("what it inherited is not what the first session wrote: %s", inherited)
+	}
+}
+
+// The failure 0033 exists for, in the other agent: a resume budgeted differently is one
+// whose rows either side cannot be compared, and it says so before it runs.
+func TestAPiResumeOnADifferentBudgetSaysSoBeforeItRuns(t *testing.T) {
+	root := fakeCheckout(t)
+	piCheckout(t, root)
+	chainStubNamed(t, "pi", handoffSaying("fix Clamp"), handoffSaying("none"))
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{harness: "pi", ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	if _, err := run(opts{harness: "pi", ceiling: 50, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := said.String(); !strings.Contains(got, "different budget") || !strings.Contains(got, "ceiling") {
+		t.Fatalf("a Pi resume on a changed budget must say so: %q", got)
+	}
+}
+
+// Switching agent mid-chain is the same kind of change and is told the same way: the rows
+// either side of it are what two different agents spent, not one chain's progress.
+func TestAResumeInAnotherAgentSaysSo(t *testing.T) {
+	root := fakeCheckout(t)
+	piCheckout(t, root)
+	chainStubNamed(t, "pi", handoffSaying("fix Clamp"))
+	chainStubNamed(t, "claude", handoffSaying("none"))
+	passthroughSandbox(t)
+	t.Chdir(t.TempDir())
+	quiet(t)
+	url := healthy(t, http.StatusOK)
+
+	if _, err := run(opts{harness: "pi", ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, args: []string{"fix the four tests"}}); err != nil {
+		t.Fatal(err)
+	}
+	said := loud(t)
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
+		endpoint: url, noServe: true, cont: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := said.String(); !strings.Contains(got, "harness pi -> claude-code") {
+		t.Fatalf("a resume in another agent must name both: %q", got)
 	}
 }
