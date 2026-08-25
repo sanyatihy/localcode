@@ -92,7 +92,7 @@ the same way both times.
       `BATCH_SIZE`, and no committed config's behaviour changes
 - [x] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
       `docs/TECH.md` says whether the draft head is adopted at the shipped context
-- [ ] what a chain's sessions actually reuse is measured per request, from the server's own
+- [x] what a chain's sessions actually reuse is measured per request, from the server's own
       log, across a chain of at least four sessions, with the prompt cache's size on the row
 - [ ] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
@@ -130,3 +130,12 @@ the same way both times.
   settles for the boxes below is that the cache may be measured on its benefit alone, and the
   open question about what to do when both sides of the trade pay is answered — only one side
   ever did.
+- 2026-08-25 — measured, and the design had the mechanism the wrong way round. A four-session
+  chain reuses 88.4% overall and **0.02% of its session-opening requests**: each one ingests
+  its whole preamble, 13,555 tokens over three handoffs, 43.5% of everything the chain
+  ingested and 12.1% of its wall. Slot rejection is ruled out — all three were selected by LCP
+  similarity at f_sim 0.638–0.657 against a 0.100 threshold — so the second mechanism this
+  design weighed is not the one operating, and the first is worse than it was written to be.
+  The divergence is at the **head** of the preamble, not its tail, so what is lost is not "the
+  tokens after the divergence — a few hundred" but all of them. The next box is therefore not
+  droppable: making the preamble identical is the only lever the measurement leaves.
