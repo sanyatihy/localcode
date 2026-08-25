@@ -1,9 +1,9 @@
 ---
 id: 0037
 title: Size the ceiling from what sessions do, not from what they might
-status: Shipped
+status: Draft
 created: 2026-08-25
-shipped: 2026-08-25
+shipped:
 needs:
 ---
 
