@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sanyatihy/localcode/internal/chain"
+	"github.com/sanyatihy/localcode/internal/handoff"
 )
 
 // claudeCodeAgent runs a chain's sessions in Anthropic's claude CLI. It is configured
@@ -283,6 +284,14 @@ func (c *claudeCodeAgent) Writable() []string {
 		return nil
 	}
 	return []string{filepath.Join(home, ".claude")}
+}
+
+// Cost and Requests are internal/handoff's readers: what a supervisor reports and what the
+// gate enforces cannot drift apart if they are one count of one file.
+func (c *claudeCodeRecorder) Cost(transcript string) (int, int) { return chain.Cost(transcript) }
+
+func (c *claudeCodeRecorder) Requests(transcript string) ([]handoff.Request, error) {
+	return handoff.Requests(transcript)
 }
 
 func (c *claudeCodeAgent) Render(events io.Reader, out io.Writer, cwd string) string {
