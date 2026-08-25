@@ -58,7 +58,7 @@ refusal.
 - [x] a Pi session is denied a tool call at the ceiling, by `chain.Gate` and not by a second
       answer to the same question
 - [x] a `Read` past the result cap is narrowed rather than refused, as it is under the hooks
-- [ ] a Pi session cannot compact, by a reserve that cannot fire and a cancel that refuses
+- [x] a Pi session cannot compact, by a reserve that cannot fire and a cancel that refuses
 - [ ] a Pi session cannot end without a handoff, within the same grace the `Stop` hook allows
 
 ## Log
