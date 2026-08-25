@@ -46,6 +46,12 @@ add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
 add_opt --batch-size "${BATCH_SIZE:-}"
 add_opt --ubatch-size "${UBATCH_SIZE:-}"
 
+# The host-RAM prompt cache, absent from every config that leaves llama.cpp's 8192 MiB
+# default. On unified memory those MiB are bought from the same pool the KV reservation
+# sits in, so how many a measurement was taken with is part of how it was produced. `0`
+# turns the cache off and is a value, not an absence — add_opt tests for empty, not false.
+add_opt --cache-ram "${CACHE_RAM:-}"
+
 # Speculative decoding, absent from every config that does not use it. The draft model and
 # the mechanism are part of how a measurement was produced, so they live in the config with
 # everything else rather than being passed at the call site.
@@ -68,5 +74,9 @@ SERVER_BIN="${SERVER_BIN:-llama-server}"
 command -v "$SERVER_BIN" >/dev/null 2>&1 || [ -x "$SERVER_BIN" ] || {
   echo "$CONFIG names a server that is not there: $SERVER_BIN" >&2; exit 2; }
 
-echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT via $SERVER_BIN" >&2
+# The banner is read back as well as printed: llama-server logs nothing about its prompt
+# cache, so a log is the only per-request record of a real session and this line is the only
+# place in it that says which cache those requests were served by. `default` is a reading,
+# not a gap — it says the size was llama.cpp's and nobody here chose it.
+echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V cache-ram=${CACHE_RAM:-default} on $HOST:$PORT via $SERVER_BIN" >&2
 exec "$SERVER_BIN" "${args[@]}"

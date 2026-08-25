@@ -1,9 +1,9 @@
 ---
 id: 0041
 title: Stop a chain re-ingesting its preamble every session
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-25
 needs:
 ---
 
@@ -88,27 +88,18 @@ the same way both times.
 
 ## Tasks
 
-- [ ] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
+- [x] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
       `BATCH_SIZE`, and no committed config's behaviour changes
-- [ ] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
+- [x] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
       `docs/TECH.md` says whether the draft head is adopted at the shipped context
-- [ ] what a chain's sessions actually reuse is measured per request, from the server's own
+- [x] what a chain's sessions actually reuse is measured per request, from the server's own
       log, across a chain of at least four sessions, with the prompt cache's size on the row
-- [ ] the preamble a chain sends is identical from session to session, or the measurement
+- [x] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
-- [ ] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
+- [x] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
       carries what changed
 
 ## Open questions
-
-- **What to do when both sides of the trade pay.** If the cache is serving a chain's preamble
-  *and* the draft head only loads without it, the two cannot both be had at this ceiling and
-  the decision is which is worth more — roughly a minute a session against 1.3x on
-  three-quarters of the clock. Leaning towards the head, and towards recording the arithmetic
-  rather than the preference. Raising `iogpu.wired_limit_mb` is the third way out and is
-  deliberately not in this feature: it is a machine-level change with a failure mode nothing
-  here can bound, and it is only worth reaching for once this says the pool is genuinely
-  short.
 
 - **Whether the ceiling is 83.5% or higher.** 0018 measured 516 tokens of a 3,130-token
   preamble differing between two runs of the *same* command, so something in Claude Code's own
@@ -130,3 +121,39 @@ the same way both times.
   chain costs, it needs nothing the reuse measurement produces, and what it settles — whether
   the largest speed lever this project has was ruled out by an unaccounted flag — changes
   whether the reuse is worth chasing at all.
+- 2026-08-25 — the screen came back refused, and the cost side of this feature's trade is
+  gone. `config/mtp-49k-nocache.env` fails exactly as `config/mtp-49k.env` does —
+  `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second — so
+  the 8 GiB prompt cache was not what ruled the draft head out at 49,152 and turning it off
+  does not buy the head back. The mechanism is that `--cache-ram` bounds a cache filled
+  lazily rather than reserving memory at load: the two screens peak 12 MB apart. What that
+  settles for the boxes below is that the cache may be measured on its benefit alone, and the
+  open question about what to do when both sides of the trade pay is answered — only one side
+  ever did.
+- 2026-08-25 — measured, and the design had the mechanism the wrong way round. A four-session
+  chain reuses 88.4% overall and **0.02% of its session-opening requests**: each one ingests
+  its whole preamble, 13,555 tokens over three handoffs, 43.5% of everything the chain
+  ingested and 12.1% of its wall. Slot rejection is ruled out — all three were selected by LCP
+  similarity at f_sim 0.638–0.657 against a 0.100 threshold — so the second mechanism this
+  design weighed is not the one operating, and the first is worse than it was written to be.
+  The divergence is at the **head** of the preamble, not its tail, so what is lost is not "the
+  tokens after the divergence — a few hundred" but all of them. The next box is therefore not
+  droppable: making the preamble identical is the only lever the measurement leaves.
+- 2026-08-25 — the divergence was localcode's own, and it was two strings. Three sessions'
+  request bodies captured at the endpoint differ in the session number inside `--add-dir` and
+  inside the handoff path the briefing names, and in nothing else — not in Claude Code's
+  preamble, which is byte-identical across sessions of one chain. Both now name the chain's
+  directory, and the handoff is moved into the session's own directory as soon as it is read,
+  so nothing downstream changes. Whether that recovers the reuse is the next box: the
+  divergence sits about forty lines into an eight-thousand-character block, so an identical
+  prompt should have been reusing most of it already, and the measurement said one token. One
+  of those two readings is incomplete and only a re-measurement says which.
+- 2026-08-25 — re-measured, and the preamble was the whole of it. The same instruction at the
+  same config and ceiling, four sessions and 20/20 both times, ingests 20,941 tokens against
+  31,179: a third less, and the three requests that follow a handoff fall from 13,555 ingested
+  to 2,236 and from 139.3 s to 24.6 s. Each of them now reuses 3,664–3,665 tokens, the same
+  number to a token, which is the shared preamble. The doubt the box before this one recorded
+  is settled: the two path strings were the whole divergence, and llama-server was reusing one
+  token of a prompt whose leading thousands matched because of them. The wall moved 15 s and
+  is not the measurement — the two chains generated 7,924 and 8,652 tokens doing the same
+  twenty bugs their own way.
