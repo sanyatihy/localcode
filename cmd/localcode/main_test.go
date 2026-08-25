@@ -610,7 +610,7 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	}
 	// The headroom of a 40,960 window: less a quarter for a turn's results, less twice the
 	// 4,096 output reservation.
-	if spec.Limits.Ceiling != 22528 || spec.Limits.Calls != 30 {
+	if spec.Limits.Ceiling != 24576 || spec.Limits.Calls != 30 {
 		t.Fatalf("the flags must reach the session: %+v", spec.Limits)
 	}
 }
@@ -657,7 +657,7 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	// 32,768 served, less 4,096 for a reply, is a 28,672 declaration; less the 4,096 the
 	// harness keeps whatever it is told is a 24,576 window; less a quarter of it for a
 	// turn's results and twice the reservation is the ceiling.
-	if spec.Limits.Window != 24576 || spec.Limits.Ceiling != 10240 {
+	if spec.Limits.Window != 24576 || spec.Limits.Ceiling != 12288 {
 		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
 	}
 }

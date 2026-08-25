@@ -60,7 +60,7 @@ run so far has spent it.
 ## Tasks
 
 - [x] the overshoot past the ceiling is measured across every chain this repository has run
-- [ ] the reserve is derived from that measurement, and refuses when the arithmetic leaves a
+- [x] the reserve is derived from that measurement, and refuses when the arithmetic leaves a
       session no room
 - [ ] the boundary at which the harness refuses a prompt is measured against a server told
       its whole context
@@ -75,3 +75,10 @@ run so far has spent it.
 - 2026-08-25 — four turns land after that reading, not the two the reserve was reasoned
   from: the batch bound permits four calls and the handoff grace three writes. The largest
   single one generated 1,305 tokens against the 639 the problem records.
+- 2026-08-25 — the margin the open question asks for is two, and the measurement supports it:
+  a reserve of a quarter of the window plus 6,144 stands at 2.1x the worst growth recorded at
+  both windows served. The turn term is twice the worst any chain generated, not a fraction
+  of what the harness would allow.
+- 2026-08-25 — the ceiling rises from 22,528 to 24,576 at the shipped window, and a declared
+  context under 20,480 is now refused: the reserve is a constant where it used to follow the
+  output reservation, so the smallest windows lose what the largest gain.
