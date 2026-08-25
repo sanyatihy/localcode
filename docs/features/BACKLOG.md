@@ -26,13 +26,6 @@ trigger nobody watches is not an idea, it is a hedge.
   a ceiling filled lazily and a ladder cell is not where it binds**; what is still unmeasured
   is a long session that has actually saved prefixes into it. Promote when: a session at depth
   is seen swapping with the model's own footprint unchanged.
-- **Raising `iogpu.wired_limit_mb` to admit the draft head at 49,152** — the head refuses
-  there at a wired peak 1.05 GB above the 21.33 GiB Metal ceiling, and 0041 showed the prompt
-  cache is not the 1.05 GB: it costs 12 MB at load. `sudo sysctl iogpu.wired_limit_mb=N`
-  overrides the derivation and is the only remaining route to 1.26–1.57× at the editor
-  context. It is a machine-level change with a failure mode nothing in this repo can bound.
-  Promote when: someone wants the editor profile fast enough to accept that risk, and is at
-  the keyboard to reboot out of it.
 - **Restricting the editor's tool set through the `agent` setting** — the extension spends
   36,309 tokens of preamble before anything is typed and has no equivalent of `--tools`, which
   costs 462 s a turn against 45 s in a terminal (0008). The `agent` setting is documented to
