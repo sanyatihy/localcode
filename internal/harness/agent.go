@@ -5,6 +5,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/sanyatihy/localcode/internal/handoff"
 )
 
 // Agent is one coding agent a chain can run its sessions in. Everything that differs
@@ -50,6 +52,15 @@ type Recorder interface {
 	// none. `dir` is the session's own directory, which is the only thing a reader knows
 	// about a session after it has ended.
 	Transcript(dir string) string
+
+	// Cost is what that record says the session spent: the largest context any turn
+	// reached, and how many turns it took. Zero and zero when there is nothing to read.
+	Cost(transcript string) (peak, turns int)
+
+	// Requests is every call the session made to the model, in order. What one cost and
+	// how long it took is in the record and in nothing else, so a chain's rates are read
+	// from here.
+	Requests(transcript string) ([]handoff.Request, error)
 }
 
 // Session is one session's worth of what the driver knows. Paths rather than contents,

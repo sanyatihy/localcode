@@ -1,6 +1,8 @@
 package harness
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +13,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/sanyatihy/localcode/internal/handoff"
 )
 
 // piAgent runs a chain's sessions in earendil-works/pi. Its configuration travels with the
@@ -171,6 +176,85 @@ func (p *piAgent) Render(events io.Reader, out io.Writer, cwd string) string {
 // `--session-dir`, so the file is in the directory the driver made for that session and
 // nothing has to be searched for.
 type piRecorder struct{}
+
+// Cost is the largest context any turn reached and how many turns there were, read off the
+// calls: pi records a usage per assistant message and nothing else has to be reconstructed.
+func (r piRecorder) Cost(transcript string) (int, int) {
+	calls, err := r.Requests(transcript)
+	if err != nil {
+		return 0, 0
+	}
+	peak := 0
+	for _, c := range calls {
+		if total := c.Ingest + c.Cached + c.Output; total > peak {
+			peak = total
+		}
+	}
+	return peak, len(calls)
+}
+
+// Requests reads pi's session file: one entry per message, and a `usage` on each assistant
+// one. One entry is one call — pi files the whole assistant message as a single entry,
+// content blocks and all, so nothing has to be folded back together the way the incumbent's
+// transcript does.
+//
+// Latency is measured from the entry before the call, which is what the harness had
+// finished when it sent it. A session file records no first-token time, so prefill, decode
+// and whatever the harness spent between them arrive as one number — the same convention
+// the incumbent's reader uses, so the two are comparable.
+func (piRecorder) Requests(transcript string) ([]handoff.Request, error) {
+	f, err := os.Open(transcript)
+	if err != nil {
+		return nil, fmt.Errorf("session file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	var calls []handoff.Request
+	var prev time.Time
+	scan := bufio.NewScanner(f)
+	// An entry holds a whole tool result. The default 64 KB would end the scan silently at
+	// the first big one.
+	scan.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for scan.Scan() {
+		var row struct {
+			Type      string `json:"type"`
+			Timestamp string `json:"timestamp"`
+			Message   struct {
+				Role  string `json:"role"`
+				Usage struct {
+					Input      int `json:"input"`
+					Output     int `json:"output"`
+					CacheRead  int `json:"cacheRead"`
+					CacheWrite int `json:"cacheWrite"`
+				} `json:"usage"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal(scan.Bytes(), &row); err != nil {
+			continue // bookkeeping entries this does not model
+		}
+		at, err := time.Parse(time.RFC3339, row.Timestamp)
+		if err != nil {
+			continue // an entry with no clock cannot bound a call
+		}
+		if row.Type != "message" || row.Message.Role != "assistant" {
+			if at.After(prev) {
+				prev = at
+			}
+			continue
+		}
+		u := row.Message.Usage
+		call := handoff.Request{Ingest: u.Input + u.CacheWrite, Cached: u.CacheRead, Output: u.Output}
+		if !prev.IsZero() {
+			call.Latency = at.Sub(prev)
+		}
+		calls = append(calls, call)
+		prev = at
+	}
+	if err := scan.Err(); err != nil {
+		return calls, fmt.Errorf("read %s: %w", transcript, err)
+	}
+	return calls, nil
+}
 
 func (piRecorder) Transcript(dir string) string {
 	entries, err := os.ReadDir(dir)

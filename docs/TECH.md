@@ -1026,6 +1026,12 @@ Which agent ran a session is in that session's `session.json`, so a chain read b
 afterwards is read by the right adapter. A chain recorded before that field existed reads
 as the default, which is what it will have been.
 
+What a session cost is read by the adapter that ran it: `Recorder` answers where the
+session filed its record, the peak and turns in it, and every call it made. So `localcode
+account` reports a Pi chain in the columns it reports an incumbent one in — measured over
+two Pi sessions: 2,764 tokens of preamble, 3,119 ingested, 15,853 reused, 585 generated,
+107.3 s of 109 s inside a call, decode 7.62 tok/s.
+
 ## A session is budgeted rather than left to fill up
 
 0016 made a full context survivable; this keeps a session from reaching one. Every session

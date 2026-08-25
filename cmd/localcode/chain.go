@@ -201,7 +201,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	}
 	r.Handoff, r.Next = len(body), chain.Next(body)
 	if t := l.agent.Transcript(dir); t != "" {
-		r.Peak, r.Turns = chain.Cost(t)
+		r.Peak, r.Turns = l.agent.Cost(t)
 	}
 	r.Calls = chain.Counter(dir, chain.CallsFile(chain.SessionIDIn(dir)))
 	after := chain.Repo(l.cwd)

@@ -138,7 +138,7 @@ func readAccounts(dir string, rec harness.Recorder) ([]account, error) {
 			a.limits = spec.Limits
 		}
 		if t := rec.Transcript(sessionDir); t != "" {
-			if a.calls, err = handoff.Requests(t); err != nil {
+			if a.calls, err = rec.Requests(t); err != nil {
 				return nil, err
 			}
 		}
