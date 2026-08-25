@@ -52,20 +52,63 @@ reads for `LOCALCODE_HANDOFF_DIR`. A slot that is always reused is a serving fla
 build exposes `--cache-ram`, `--cache-idle-slots` and `--cache-reuse` while the similarity
 threshold is compiled in. Which of those applies is not decidable before the first box.
 
+**`--cache-ram` is the mechanism, it is on, and nothing here set it.** It is what saves a
+finished slot's KV state to host memory so a later request with a matching prefix restores
+rather than reprocesses — which is exactly what a chain's next session needs. It defaults to
+8,192 MiB and no config in this repo names it, so every measurement ever taken here was taken
+with 8 GiB of prompt cache enabled and unaccounted.
+
+**And that 8 GiB is bought from the ceiling.** On unified memory the host prompt cache and
+the Metal KV cache are the same physical resource, and the GPU's share of it is capped —
+21,845 MiB on this machine, two thirds of the 32 GiB. So the reuse this feature is chasing is
+in direct competition with the context a session may reach, and the documented advice for
+Apple Silicon is `--cache-ram 0`, which would close this feature rather than complete it.
+That makes the trade the design's first constraint: what the cache buys has to be measured in
+tokens not re-ingested, against what it costs in context, and neither number exists yet.
+
+**The cost side has a decision waiting on it already.** 0017 ruled the MTP draft head
+inadmissible at 49,152 — the Metal command buffer failing
+`kIOGPUCommandBufferCallbackErrorOutOfMemory` on the first prefill batch — and that screen
+was taken with the 8 GiB prompt cache competing against it, because no config here names
+`--cache-ram` and nothing recorded that it was on. The head is worth 1.26–1.57x on decode,
+and decode is 73–81% of a chain's clock, so it is the largest speed lever this project has
+and it was ruled out by the allocator failure that flag is documented to cause. Screening it
+again with the cache off is how the cost of those 8 GiB is priced: if the head loads and
+generates, the cache has been paying for preamble reuse with the biggest win available.
+
+**Neither the screen nor the measurement can be run by a chain.** Both stop what is serving
+8081 and start something else on it, and a session driven by `localcode` is answered by that
+server — so a chain running either would be killing the model taking its own turns. This
+feature is operator work or frontier-tier work, not local-tier work, and that is a property
+of anything that changes what is served rather than a limitation of the model.
+
 **What must hold afterwards is a number, not an argument.** The same instruction driven on
 the same repository, before and after, with the server's own reused figure per session read
 the same way both times.
 
 ## Tasks
 
+- [ ] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
+      `BATCH_SIZE`, and no committed config's behaviour changes
+- [ ] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
+      `docs/TECH.md` says whether the draft head is adopted at the shipped context
 - [ ] what a chain's sessions actually reuse is measured per request, from the server's own
-      log, across a chain of at least four sessions
+      log, across a chain of at least four sessions, with the prompt cache's size on the row
 - [ ] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
 - [ ] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
       carries what changed
 
 ## Open questions
+
+- **What to do when both sides of the trade pay.** If the cache is serving a chain's preamble
+  *and* the draft head only loads without it, the two cannot both be had at this ceiling and
+  the decision is which is worth more — roughly a minute a session against 1.3x on
+  three-quarters of the clock. Leaning towards the head, and towards recording the arithmetic
+  rather than the preference. Raising `iogpu.wired_limit_mb` is the third way out and is
+  deliberately not in this feature: it is a machine-level change with a failure mode nothing
+  here can bound, and it is only worth reaching for once this says the pool is genuinely
+  short.
 
 - **Whether the ceiling is 83.5% or higher.** 0018 measured 516 tokens of a 3,130-token
   preamble differing between two runs of the *same* command, so something in Claude Code's own
@@ -77,3 +120,13 @@ the same way both times.
   reading any more of llama.cpp.
 
 ## Log
+- 2026-08-25 — the feature widened from getting the reuse to pricing it. `--cache-ram` is
+  8,192 MiB by default and no config here names it, so the 8 GiB it takes from the pool the
+  KV cache is capped in has been unaccounted in every measurement this repo holds — including
+  0017's screen, which ruled the draft head inadmissible at 49,152 on exactly the allocator
+  failure that flag is documented to cause. The screen is now a box, because the open question
+  about whether the cache pays for itself cannot be answered from the benefit alone.
+- 2026-08-25 — the screen goes first. It is twenty minutes against the hours a four-session
+  chain costs, it needs nothing the reuse measurement produces, and what it settles — whether
+  the largest speed lever this project has was ruled out by an unaccounted flag — changes
+  whether the reuse is worth chasing at all.
