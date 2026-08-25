@@ -9,22 +9,57 @@ import (
 )
 
 // The property the whole gate rests on: whatever it permits, the session still has room
-// for the result of that call, for the turn that asked for it, and for the turn that
-// writes the handoff after the denial. A ceiling that does not leave those is a session
-// that hits the wall while being protected from it.
+// for the results of that turn's calls and for what the turns after them generate. A
+// ceiling that does not leave those is a session that hits the wall while being protected
+// from it.
 func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	for _, w := range []struct{ maxContext, maxOutput int }{
-		{45056, 4096}, {32768, 4096}, {24576, 2048}, {16384, 1024},
+		{45056, 4096}, {32768, 4096}, {24576, 2048}, {20480, 1024},
 	} {
 		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
 		if err != nil {
 			t.Fatalf("%d/%d: %v", w.maxContext, w.maxOutput, err)
 		}
-		spent := l.Ceiling + l.Batch*(l.ResultCap/bytesPerToken) + 2*w.maxOutput
+		spent := l.Ceiling + l.Batch*(l.ResultCap/bytesPerToken) + turnReserve
 		if spent > l.Window {
 			t.Fatalf("%d/%d: a session permitted at %d needs %d of a %d window",
 				w.maxContext, w.maxOutput, l.Ceiling, spent, l.Window)
 		}
+	}
+}
+
+// The reserve is sized from what sessions did, so what they did is what has to fit inside
+// it with room to spare. The largest growth past the reading the gate decided on, per
+// window served, is in docs/data/2026-08-25-m2max-32gb-0037-overshoot.jsonl; twice it is
+// the margin the measurement bought, and this is what says the next session still fits.
+func TestTheReserveStandsAtTwiceTheWorstGrowthMeasured(t *testing.T) {
+	for _, c := range []struct{ maxContext, window, worstGrowth int }{
+		{45056, 40960, 7881}, {28672, 24576, 5673},
+	} {
+		l, err := NewLimits(c.maxContext, 4096, 100, 0)
+		if err != nil {
+			t.Fatalf("%d: %v", c.maxContext, err)
+		}
+		if l.Window != c.window {
+			t.Fatalf("%d declares a %d window, got %d", c.maxContext, c.window, l.Window)
+		}
+		if reserve := l.Window - l.Ceiling; reserve < 2*c.worstGrowth {
+			t.Fatalf("a %d window reserves %d against a measured %d of growth, under the "+
+				"%d that is twice it", l.Window, reserve, c.worstGrowth, 2*c.worstGrowth)
+		}
+	}
+}
+
+// A window the reserve fills on its own leaves nothing to work in, and the arithmetic that
+// would size a session in one produces a ceiling at or below zero. Refuse it where the
+// number is, rather than let the preamble floor report it as a different problem.
+func TestNewLimitsRefusesAWindowTheReserveFillsOnItsOwn(t *testing.T) {
+	_, err := NewLimits(12288, 4096, 100, 0)
+	if err == nil {
+		t.Fatal("an 8,192-token window is the whole reserve and must be refused")
+	}
+	if !strings.Contains(err.Error(), "lands after the gate's last reading") {
+		t.Fatalf("the refusal must name what filled the window: %v", err)
 	}
 }
 

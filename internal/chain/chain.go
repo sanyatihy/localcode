@@ -43,6 +43,17 @@ const (
 	// what covers a `Read` of something long.
 	resultShare = 4
 
+	// turnReserve is what the turns that land after the gate's last reading may generate.
+	// Twice the worst any chain has recorded: measured over 8 chains and 69 sessions, at
+	// most four turns arrive after the last model call at or under the ceiling — the batch
+	// bound permits four calls and the handoff grace three writes — and together they
+	// generated 2,774 tokens at the worst against 1,450 at the median. It replaces twice
+	// the output reservation, which held 8,192 for the same turns and was never a
+	// measurement: it was the largest reply the harness would allow, taken twice. Against
+	// this number the whole reserve is 2.1x the largest growth past that reading ever
+	// recorded, at both windows this project serves.
+	turnReserve = 6144
+
 	// batchLimit is how many calls one assistant turn may spend. The harness issues a
 	// turn's calls together and the transcript does not change while they run, so without
 	// this the gate decides once and any number of results land on that one decision:
@@ -118,14 +129,20 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// the reservation is the larger of what was declared and what the harness keeps anyway.
 	window := maxContext - max(maxOutput, outputFloor)
 	perCall := window / (resultShare * batchLimit)
-	reserve := perCall * batchLimit
 
-	// What the gate can permit and still be sure the session survives to write its
-	// handoff. Three things land after the reading it decides on: the results of the calls
-	// it is permitting — a whole turn of them, which is what the batch bound makes finite —
-	// the turn that asked for them, and the turn that answers the denial by writing the
-	// handoff.
-	headroom := window - reserve - 2*maxOutput
+	// What the gate can permit and still be sure the session survives to write its handoff.
+	// Two things land after the reading it decides on, and they are bounded differently:
+	// the results of the calls it is permitting — a whole turn of them at the cap, which is
+	// what the batch bound makes finite — and what the turns that follow generate, which
+	// nothing bounds but the measurement.
+	reserve := perCall*batchLimit + turnReserve
+	if reserve >= window {
+		return Limits{}, fmt.Errorf("a %d-token window with a %d-token reservation leaves %d "+
+			"for a session, under the %d that lands after the gate's last reading: serve more "+
+			"context, or reserve less output",
+			maxContext, max(maxOutput, outputFloor), window, reserve)
+	}
+	headroom := window - reserve
 
 	// As high as the arithmetic allows, and no higher. A fraction below the headroom buys
 	// no safety the reserve does not already buy, and it costs handoffs: one is about 4,265
