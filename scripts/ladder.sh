@@ -192,7 +192,8 @@ try:
 except (OSError, ValueError):
     pass
 wired_peak=max(p["wired_gb"] for p in series)
-wired_headroom_min=min(p["wired_headroom_gb"] for p in series)
+room=[p["wired_headroom_gb"] for p in series if p["wired_headroom_gb"] is not None]
+wired_headroom_min=min(room) if room else None
 
 # WindowServer's progress while the model was under load. Rates are derived from the
 # series rather than in the probe, so the sampling interval stays visible in the raw data.
@@ -215,7 +216,7 @@ print(json.dumps({
   "peak_rss_gb": max(l["llama_rss_gb"], f["llama_rss_gb"]),
   "free_at_peak_gb": min(l["free_gb"], f["free_gb"]),
   "wired_peak_gb": round(wired_peak, 3),
-  "wired_headroom_min_gb": round(wired_headroom_min, 3),
+  "wired_headroom_min_gb": (round(wired_headroom_min, 3) if wired_headroom_min is not None else None),
   "wired_limit_gb": f["wired_limit_gb"], "wired_limit_source": f["wired_limit_source"],
   "wired_samples": len(series) - 2,
   **desktop,

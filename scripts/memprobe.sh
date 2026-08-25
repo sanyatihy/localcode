@@ -41,15 +41,20 @@ swap=$(sysctl -n vm.swapusage | awk '{gsub(/M/,"",$6); print $6}')
 rss=$(ps -Ao rss,comm | awk '/llama-server/ {s+=$1} END {printf "%.3f", s/1024/1024}')
 [ -z "$rss" ] && rss=0
 
-limit_mb=$(sysctl -n iogpu.wired_limit_mb 2>/dev/null || echo 0)
+# Read, never assumed. This used to fall back to three quarters of physical memory when
+# the sysctl answered 0, and on this machine the real ceiling is two thirds — so every
+# headroom figure recorded before 2026-08-25 is 2.67 GiB too generous, and the ladder cell
+# that lost the desktop was reported with 1.71 GiB of room it did not have.
+read -r limit_mb limit_source <<<"$("$(dirname "$0")/gpulimit.sh")"
 if [ "$limit_mb" -gt 0 ]; then
   limit_gb=$(awk -v m="$limit_mb" 'BEGIN{printf "%.3f", m/1024}')
-  limit_source=sysctl
+  headroom=$(awk -v l="$limit_gb" -v w="$wired" 'BEGIN{printf "%.3f", l-w}')
 else
-  limit_gb=$(awk -v b="$(sysctl -n hw.memsize)" 'BEGIN{printf "%.3f", b*0.75/1073741824}')
-  limit_source=default-assumed
+  # Nothing could read it, so there is no headroom to report. `null` rather than a number,
+  # because a wrong ceiling is what this whole change is about.
+  limit_gb=null
+  headroom=null
 fi
-headroom=$(awk -v l="$limit_gb" -v w="$wired" 'BEGIN{printf "%.3f", l-w}')
 
 printf '{"free_gb":%s,"compressed_gb":%s,"swap_used_mb":%s,"llama_rss_gb":%s,"anonymous_gb":%s,"wired_gb":%s,"wired_limit_mb":%s,"wired_limit_gb":%s,"wired_limit_source":"%s","wired_headroom_gb":%s}\n' \
   "$free" "$compressed" "$swap" "$rss" "$anon" "$wired" "$limit_mb" "$limit_gb" "$limit_source" "$headroom"
