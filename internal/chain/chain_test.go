@@ -9,22 +9,77 @@ import (
 )
 
 // The property the whole gate rests on: whatever it permits, the session still has room
-// for the result of that call, for the turn that asked for it, and for the turn that
-// writes the handoff after the denial. A ceiling that does not leave those is a session
-// that hits the wall while being protected from it.
+// for the results of that turn's calls and for what the turns after them generate. A
+// ceiling that does not leave those is a session that hits the wall while being protected
+// from it.
 func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	for _, w := range []struct{ maxContext, maxOutput int }{
-		{45056, 4096}, {32768, 4096}, {24576, 2048}, {16384, 1024},
+		{49152, 4096}, {45056, 4096}, {32768, 4096}, {28672, 2048},
 	} {
 		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
 		if err != nil {
 			t.Fatalf("%d/%d: %v", w.maxContext, w.maxOutput, err)
 		}
-		spent := l.Ceiling + l.Batch*(l.ResultCap/bytesPerToken) + 2*w.maxOutput
+		spent := l.Ceiling + l.Batch*(l.ResultCap/bytesPerToken) + turnReserve
 		if spent > l.Window {
 			t.Fatalf("%d/%d: a session permitted at %d needs %d of a %d window",
 				w.maxContext, w.maxOutput, l.Ceiling, spent, l.Window)
 		}
+	}
+}
+
+// worstGrowth is the largest a session's context grew past the reading the gate decided on,
+// over eight chains and 51 transcripts:
+// docs/data/2026-08-25-m2max-32gb-0037-overshoot.jsonl. It was recorded at a 40,960-token
+// window, whose result cap was larger than any window derived here — so against a smaller
+// one it over-states, which is the direction a floor should err in.
+const worstGrowth = 7881
+
+// worstGenerated is the model's own share of that: the most any session generated over the
+// turns that land after the gate's last reading, from the same rows.
+const worstGenerated = 2774
+
+// The reserve is sized from what sessions did, so what they did has to fit inside it. This
+// is the property the whole feature rests on: whatever the gate permits at the ceiling, the
+// context that follows still lands under the window.
+func TestTheCeilingPlusTheWorstGrowthStaysUnderTheWindow(t *testing.T) {
+	for _, maxContext := range []int{49152, 45056, 32768} {
+		l, err := NewLimits(maxContext, 4096, 100, 0)
+		if err != nil {
+			t.Fatalf("%d: %v", maxContext, err)
+		}
+		if l.Ceiling+worstGrowth >= l.Window {
+			t.Fatalf("%d: a session permitted at %d and growing %d reaches %d of a %d window",
+				maxContext, l.Ceiling, worstGrowth, l.Ceiling+worstGrowth, l.Window)
+		}
+	}
+}
+
+// And the reserve's second term is the one the measurement sets, so it must stand at twice
+// what any session spent it on. The first term is the four maximum-sized results the gate
+// itself permits, which is a bound rather than an observation and is not judged here.
+func TestTheTurnReserveStandsAtTwiceTheWorstGeneration(t *testing.T) {
+	l, err := NewLimits(49152, 4096, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := l.Batch * (l.ResultCap / bytesPerToken)
+	if turns := (l.Window - l.Ceiling) - results; turns < 2*worstGenerated {
+		t.Fatalf("the reserve leaves %d for the turns after the gate's last reading, under "+
+			"the %d that is twice the most one ever generated", turns, 2*worstGenerated)
+	}
+}
+
+// A window the reserve fills on its own leaves nothing to work in, and the arithmetic that
+// would size a session in one produces a ceiling at or below zero. Refuse it where the
+// number is, rather than let the preamble floor report it as a different problem.
+func TestNewLimitsRefusesAWindowTheReserveFillsOnItsOwn(t *testing.T) {
+	_, err := NewLimits(12288, 4096, 100, 0)
+	if err == nil {
+		t.Fatal("an 8,192-token window is the whole reserve and must be refused")
+	}
+	if !strings.Contains(err.Error(), "lands after the gate's last reading") {
+		t.Fatalf("the refusal must name what filled the window: %v", err)
 	}
 }
 

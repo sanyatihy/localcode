@@ -142,8 +142,8 @@ localcode -fork <id>        # start a new chain from what that one knew
 |---|---|---|
 | `-ceiling <pct>` | as much as fits | how full a session may get before it hands over. Only lowers |
 | `-calls <n>` | derived | tool calls one session may spend, overriding what its ceiling implies |
-| `-sessions <n>` | 8 | sessions one instruction may take |
-| `-session-timeout <d>` | 30m | how long one session may run. Off when you are at the keyboard |
+| `-sessions <n>` | 60 | sessions one instruction may take |
+| `-session-timeout <d>` | 1h | how long one session may run. Off when you are at the keyboard |
 
 The ceiling defaults to as much as the arithmetic allows, so `-ceiling` only ever lowers it —
 and lowering it costs a handoff every time it cuts a session short. Reach for `-ceiling 20` to

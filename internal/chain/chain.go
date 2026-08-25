@@ -21,7 +21,7 @@ import (
 // from another envelope either wastes the context or fails to bound it. Pi's 50 KB
 // tool-result cap is around 12,500 tokens, which is the whole of a 12,288-token window.
 type Limits struct {
-	Window    int `json:"window"`     // the prompt budget: the declared context minus the output reservation
+	Window    int `json:"window"`     // the prompt budget: the most of the declared context the harness will send
 	Ceiling   int `json:"ceiling"`    // the context past which the gate permits only the handoff
 	ResultCap int `json:"result_cap"` // bytes one tool result may add to the context
 	Batch     int `json:"batch"`      // how many calls one turn may spend before the context is read again
@@ -42,6 +42,17 @@ const (
 	// 352 an eighth reserved. Only one of the tools has a cap of its own, so the reserve is
 	// what covers a `Read` of something long.
 	resultShare = 4
+
+	// turnReserve is what the turns that land after the gate's last reading may generate.
+	// Twice the worst any chain has recorded: measured over 8 chains and 69 sessions, at
+	// most four turns arrive after the last model call at or under the ceiling — the batch
+	// bound permits four calls and the handoff grace three writes — and together they
+	// generated 2,774 tokens at the worst against 1,450 at the median. It replaces twice
+	// the output reservation, which held 8,192 for the same turns and was never a
+	// measurement: it was the largest reply the harness would allow, taken twice. Against
+	// this number the whole reserve is 2.1x the largest growth past that reading ever
+	// recorded, at both windows this project serves.
+	turnReserve = 6144
 
 	// batchLimit is how many calls one assistant turn may spend. The harness issues a
 	// turn's calls together and the transcript does not change while they run, so without
@@ -100,7 +111,7 @@ const (
 // It refuses rather than clamping because a window too small to work in is a
 // configuration mistake with a one-line fix, and the session that discovers it instead
 // spends a cold ingest to say `Prompt is too long`: declaring 8,192 against a 4,096
-// output reservation leaves 4,096, which is less than the preamble.
+// output reservation leaves 3,072, which is less than the preamble.
 func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	if maxContext <= 0 || maxOutput <= 0 {
 		return Limits{}, fmt.Errorf("a declared window and an output reservation are both "+
@@ -116,16 +127,26 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// The prompt budget, which is the number a session actually has: the reply shares the
 	// served context with the conversation, so the reservation is not available to it — and
 	// the reservation is the larger of what was declared and what the harness keeps anyway.
+	// The whole of the rest, because the harness's own check is off and the wall is the
+	// server's: measured, a 44,509-token prompt is sent against a 49,152 context where the
+	// check would have refused anything past 34,258, and 49,509 is what the server itself
+	// rejects.
 	window := maxContext - max(maxOutput, outputFloor)
 	perCall := window / (resultShare * batchLimit)
-	reserve := perCall * batchLimit
 
-	// What the gate can permit and still be sure the session survives to write its
-	// handoff. Three things land after the reading it decides on: the results of the calls
-	// it is permitting — a whole turn of them, which is what the batch bound makes finite —
-	// the turn that asked for them, and the turn that answers the denial by writing the
-	// handoff.
-	headroom := window - reserve - 2*maxOutput
+	// What the gate can permit and still be sure the session survives to write its handoff.
+	// Two things land after the reading it decides on, and they are bounded differently:
+	// the results of the calls it is permitting — a whole turn of them at the cap, which is
+	// what the batch bound makes finite — and what the turns that follow generate, which
+	// nothing bounds but the measurement.
+	reserve := perCall*batchLimit + turnReserve
+	if reserve >= window {
+		return Limits{}, fmt.Errorf("a %d-token declared context with a %d-token reservation "+
+			"leaves a %d-token window, under the %d that lands after the gate's last reading: "+
+			"serve more context, or reserve less output",
+			maxContext, max(maxOutput, outputFloor), window, reserve)
+	}
+	headroom := window - reserve
 
 	// As high as the arithmetic allows, and no higher. A fraction below the headroom buys
 	// no safety the reserve does not already buy, and it costs handoffs: one is about 4,265
@@ -137,9 +158,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 		ceiling = headroom
 	}
 	if ceiling < preambleFloor {
-		return Limits{}, fmt.Errorf("a %d-token window with a %d-token reservation leaves a "+
-			"ceiling of %d, under the %d a session costs before it does anything: serve more "+
-			"context, or reserve less output",
+		return Limits{}, fmt.Errorf("a %d-token declared context with a %d-token reservation "+
+			"leaves a ceiling of %d, under the %d a session costs before it does anything: "+
+			"serve more context, or reserve less output",
 			maxContext, maxOutput, ceiling, preambleFloor)
 	}
 
