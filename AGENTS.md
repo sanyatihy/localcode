@@ -26,8 +26,9 @@ Do this only when you are asked to plan.
 5. **Put the whole round on one branch named `plan/<something>`, and merge it once.**
    The branch name must contain no four-digit feature id, anywhere in it. A branch name
    containing an id is a claim on that feature.
-6. **Leave every doc `status: Draft`.** `kit ship` and `kit drop` are the only things that
-   change a status. Never edit `status:` or `shipped:` by hand.
+6. **Leave every doc `status: Draft`.** `kit ship`, `kit drop` and `kit reset` are the only
+   things that change a status. Never edit `status:` or `shipped:` by hand — a value the kit
+   does not recognise wedges the doc, and `kit reset <id> "<why>"` is what clears one.
 7. **Never invent a product decision on the human's behalf.** What you cannot settle goes in
    `## Open questions`; what only a human can answer goes to `kit block <id> "<question>"`.
 
