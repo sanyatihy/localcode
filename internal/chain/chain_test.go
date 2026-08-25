@@ -102,8 +102,8 @@ func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := 30720 * 40 / 100; half.Ceiling != want {
-		t.Fatalf("40%% of a 30,720 window is %d, got %d", want, half.Ceiling)
+	if want := 40960 * 40 / 100; half.Ceiling != want {
+		t.Fatalf("40%% of a 40,960 window is %d, got %d", want, half.Ceiling)
 	}
 	all, err := NewLimits(45056, 4096, 100, 30)
 	if err != nil {
@@ -156,9 +156,9 @@ func TestAnExplicitCallBudgetOverridesTheDerivedOne(t *testing.T) {
 // same argument the preamble floor already makes applies: refuse it rather than start a
 // session that cannot read a file, change it and see what that did.
 func TestNewLimitsRefusesACeilingWithNoRoomToWorkIn(t *testing.T) {
-	// 16% of the shipped window clears the preamble floor and little else, which is the
+	// 12% of the shipped window clears the preamble floor and little else, which is the
 	// band this refusal exists for: the old one passed it.
-	_, err := NewLimits(45056, 4096, 16, 0)
+	_, err := NewLimits(45056, 4096, 12, 0)
 	if err == nil {
 		t.Fatal("a ceiling with room for one call must be refused")
 	}

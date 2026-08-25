@@ -106,3 +106,31 @@ func TestProgressStillPrintsTextWhenNothingWasStreamed(t *testing.T) {
 		t.Fatalf("got %q", out.String())
 	}
 }
+
+// The one failure the budget exists to prevent. The harness surfaces the server's body and
+// stops, so without this a session that overran ends with an exit code and nothing that
+// says why — and the sentence carries both numbers, which is the measurement of by how much.
+func TestProgressReportsTheServerRefusingThePrompt(t *testing.T) {
+	const line = `{"type":"result","is_error":true,"result":"API Error: 400 request ` +
+		`(49509 tokens) exceeds the available context size (49152 tokens), try increasing it"}`
+	var out strings.Builder
+	overrun := render(strings.NewReader(line+"\n"), &out, "")
+	if !strings.Contains(overrun, "49509 tokens") || !strings.Contains(overrun, "49152 tokens") {
+		t.Fatalf("the server's own numbers must survive: %q", overrun)
+	}
+	if strings.ContainsAny(overrun, `{}"`) {
+		t.Fatalf("the JSON around the sentence must not: %q", overrun)
+	}
+	if !strings.Contains(out.String(), "the server refused the prompt") {
+		t.Fatalf("it must be said as it happens:\n%s", out.String())
+	}
+}
+
+// And a session that did not overrun says nothing, because an empty string is what the
+// chain records as "this did not happen".
+func TestProgressReportsNoOverrunWhenThereWasNone(t *testing.T) {
+	var out strings.Builder
+	if overrun := render(strings.NewReader(stream), &out, "/repo"); overrun != "" {
+		t.Fatalf("a session that fit must report nothing: %q", overrun)
+	}
+}

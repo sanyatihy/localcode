@@ -70,6 +70,11 @@ type row struct {
 	// reason: a chain read back afterwards cannot tell a session somebody stopped from one
 	// that ended on its own.
 	Interrupted bool `json:"interrupted,omitempty"`
+	// What the server said when a prompt did not fit it, verbatim and with both its
+	// numbers. Present at all means the budget was wrong: the ceiling and the reserve exist
+	// so that no prompt this driver sends can reach it, so one that did is the measurement
+	// that says by how much.
+	Overrun string `json:"context_overrun,omitempty"`
 }
 
 // session runs one, in its own directory, and returns what the harness exited with.
@@ -166,7 +171,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 			return row{}, fmt.Errorf("could not start claude: %w", err)
 		}
 		stop := relay(interrupted, cmd.Process)
-		render(events, os.Stdout, l.cwd)
+		r.Overrun = render(events, os.Stdout, l.cwd)
 		err = cmd.Wait()
 		r.Interrupted = stop()
 	}

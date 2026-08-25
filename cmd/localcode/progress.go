@@ -2,12 +2,31 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 )
+
+// overrunMarker is what llama-server says when a prompt does not fit the context it serves:
+// `request (49509 tokens) exceeds the available context size (49152 tokens), try increasing
+// it`. Measured against build 10450, with the harness's own check off so the request
+// reaches the server at all.
+const overrunMarker = "exceeds the available context size"
+
+// errorSentence cuts the server's sentence out of whatever the harness wrapped it in. The
+// numbers either side of the marker are the whole value of the line, so it keeps them and
+// drops the JSON around them.
+func errorSentence(line string, at int) string {
+	start := strings.LastIndexAny(line[:at], "\"\n") + 1
+	end := strings.IndexAny(line[at:], "\"\n")
+	if end < 0 {
+		return line[start:]
+	}
+	return line[start : at+end]
+}
 
 // render turns the harness's event stream into what a person watching wants to see.
 //
@@ -16,7 +35,12 @@ import (
 // at the shipped window is longer. Nothing distinguishes that from a wedged run. Asking for
 // the events instead means the supervisor owns every line the developer sees, so this
 // prints the model's own words as well as what it is doing.
-func render(events io.Reader, out io.Writer, cwd string) {
+//
+// It returns the server's refusal when one goes past, because that is the one failure the
+// budget exists to prevent and the stream is where it appears: the harness surfaces the
+// body verbatim and stops, so a session that dies of it otherwise ends with an exit code
+// and nothing that says why.
+func render(events io.Reader, out io.Writer, cwd string) (overrun string) {
 	scan := bufio.NewScanner(events)
 	// A line here carries a whole tool result. The default 64 KB would end the stream at the
 	// first big one, and silently — which is the failure this exists to remove.
@@ -27,6 +51,15 @@ func render(events io.Reader, out io.Writer, cwd string) {
 	open, streamed := false, false
 	for scan.Scan() {
 		line := scan.Bytes()
+		// llama-server's own wording, and it names both numbers — the request and the
+		// context it did not fit. Matched on the raw line because it reaches the stream in
+		// whatever shape the harness wraps an error in, and the sentence is the server's
+		// either way.
+		if overrun == "" {
+			if i := bytes.Index(line, []byte(overrunMarker)); i >= 0 {
+				overrun = strings.TrimSpace(errorSentence(string(line), i))
+			}
+		}
 		var row struct {
 			Type  string `json:"type"`
 			Event struct {
@@ -95,6 +128,11 @@ func render(events io.Reader, out io.Writer, cwd string) {
 			streamed = false
 		}
 	}
+	if overrun != "" {
+		_ = closeLine(out, open)
+		say(out, "  ✗ the server refused the prompt: "+overrun)
+	}
+	return overrun
 }
 
 // say writes one line. A terminal that has gone away is not something a session can act

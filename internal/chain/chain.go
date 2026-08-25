@@ -75,16 +75,6 @@ const (
 	// a handoff has to end rather than spin.
 	handoffGrace = 3
 
-	// wallShare is the reciprocal of how much of the declared context, less the
-	// reservation, the harness will actually send. It refuses the rest itself — `Prompt is
-	// too long`, before anything reaches the server — and the refusal is nowhere in the
-	// arithmetic the declaration implies. Bisected at four declarations against one 49,152
-	// server: the largest prompt sent was 0.755 of that quantity at the shipped context and
-	// 0.794 at the smallest measured, so three quarters is under every wall recorded and
-	// `declared − reservation` is above all of them.
-	wallShare = 4
-	wallParts = 3
-
 	// outputFloor is what the harness keeps for a reply whatever it was told to keep.
 	// Bisected against a declared 12,288 by padding a prompt to an exact token count and
 	// reading whether it was refused before it was sent: with 1,024 declared the boundary
@@ -137,10 +127,11 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// The prompt budget, which is the number a session actually has: the reply shares the
 	// served context with the conversation, so the reservation is not available to it — and
 	// the reservation is the larger of what was declared and what the harness keeps anyway.
-	// Three quarters of the rest, because that is the most of it the harness will send: a
-	// window taken as the whole of it is a wall 10,000 tokens further out than the one a
-	// session hits.
-	window := (maxContext - max(maxOutput, outputFloor)) * wallParts / wallShare
+	// The whole of the rest, because the harness's own check is off and the wall is the
+	// server's: measured, a 44,509-token prompt is sent against a 49,152 context where the
+	// check would have refused anything past 34,258, and 49,509 is what the server itself
+	// rejects.
+	window := maxContext - max(maxOutput, outputFloor)
 	perCall := window / (resultShare * batchLimit)
 
 	// What the gate can permit and still be sure the session survives to write its handoff.

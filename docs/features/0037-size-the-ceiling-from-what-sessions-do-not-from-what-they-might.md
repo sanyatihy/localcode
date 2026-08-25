@@ -28,7 +28,21 @@ past the ceiling in that run was 5,486 tokens against the 18,432 held back for i
 ## Design
 
 Two reserves are taken out of the window and they are wrong in different ways, so they are
-measured and taken back separately.
+measured and taken back separately. A third was found by measuring and is the largest: the
+harness holds back a quarter of what it is told, and that check can be turned off.
+
+**The harness's check is a duplicate of a decision already made here.** It exists to stop a
+session sending a prompt the server will refuse, which is what the gate does — from a
+transcript reading, against a ceiling, with a handoff on the other side of the denial. Left
+on, it costs a quarter of the context and cannot be reasoned about, since the fraction is
+undocumented and moves with the version. Off, the bound is ours: the window is what the
+server will take, which is the served context less what a reply may generate.
+
+**What replaces it is an error, not a check.** llama-server names both numbers — `request
+(49509 tokens) exceeds the available context size (49152 tokens)` — so a session that
+overruns says so precisely, and the driver can record it rather than reporting a session
+that failed for no stated reason. That is the failure the reserve exists to prevent, so
+seeing one at all is the signal that the reserve is wrong.
 
 **The output reservation is subtracted twice.** `declaredFromServer` sets
 `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to what is served less the reservation, and `NewLimits`
@@ -60,6 +74,8 @@ run so far has spent it.
       its whole context
 - [x] the window is the largest prompt the harness will send, which takes back the
       reservation subtracted twice and gives up the quarter it never had
+- [x] the harness's own context check is off, and the window is what the server will take
+- [x] a session that overruns the server is recorded as that, and the chain carries on
 
 ## Log
 
@@ -95,3 +111,16 @@ run so far has spent it.
 - 2026-08-25 — the smallest context that still admits a session is now about 28,672 declared.
   Three quarters of a window is what the harness will send, and a quarter of what is left is
   a turn's results, so a small context runs out of working room before it runs out of window.
+- 2026-08-25 — the feature reopens. `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT`
+  turns the harness's check off, which makes three quarters a limit this project chose to
+  accept rather than one that binds. Measured: with it set, a 44,508-token prompt is sent
+  against a declared 49,152 where 34,258 was refused with it unset.
+- 2026-08-25 — what the check was protecting against is now llama-server's own 400, which
+  names the request and the context size. A session cannot recover from it, so the gate is
+  the only thing preventing it and the driver's job is to say when it happened.
+- 2026-08-25 — the ceiling is 27,648 and the budget 66 calls at the shipped context, against
+  22,528 and 51 before any of this. Three quarters of that gain is the harness's check being
+  off and the rest is the two reserves.
+- 2026-08-25 — the smallest context that still admits a session is about 24,576 served, where
+  it was 16,384 before. The reserve is a constant where it used to follow the output
+  reservation, so the small end loses what the large end gains.
