@@ -90,7 +90,7 @@ the same way both times.
 
 - [x] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
       `BATCH_SIZE`, and no committed config's behaviour changes
-- [ ] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
+- [x] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
       `docs/TECH.md` says whether the draft head is adopted at the shipped context
 - [ ] what a chain's sessions actually reuse is measured per request, from the server's own
       log, across a chain of at least four sessions, with the prompt cache's size on the row
@@ -100,15 +100,6 @@ the same way both times.
       carries what changed
 
 ## Open questions
-
-- **What to do when both sides of the trade pay.** If the cache is serving a chain's preamble
-  *and* the draft head only loads without it, the two cannot both be had at this ceiling and
-  the decision is which is worth more — roughly a minute a session against 1.3x on
-  three-quarters of the clock. Leaning towards the head, and towards recording the arithmetic
-  rather than the preference. Raising `iogpu.wired_limit_mb` is the third way out and is
-  deliberately not in this feature: it is a machine-level change with a failure mode nothing
-  here can bound, and it is only worth reaching for once this says the pool is genuinely
-  short.
 
 - **Whether the ceiling is 83.5% or higher.** 0018 measured 516 tokens of a 3,130-token
   preamble differing between two runs of the *same* command, so something in Claude Code's own
@@ -130,3 +121,12 @@ the same way both times.
   chain costs, it needs nothing the reuse measurement produces, and what it settles — whether
   the largest speed lever this project has was ruled out by an unaccounted flag — changes
   whether the reuse is worth chasing at all.
+- 2026-08-25 — the screen came back refused, and the cost side of this feature's trade is
+  gone. `config/mtp-49k-nocache.env` fails exactly as `config/mtp-49k.env` does —
+  `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second — so
+  the 8 GiB prompt cache was not what ruled the draft head out at 49,152 and turning it off
+  does not buy the head back. The mechanism is that `--cache-ram` bounds a cache filled
+  lazily rather than reserving memory at load: the two screens peak 12 MB apart. What that
+  settles for the boxes below is that the cache may be measured on its benefit alone, and the
+  open question about what to do when both sides of the trade pay is answered — only one side
+  ever did.

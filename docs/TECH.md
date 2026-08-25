@@ -358,6 +358,12 @@ layers, 4 KV heads, 256 wide for K and V — so that budget holds ~60,700 tokens
 this config's whole 49,152 window and a call beside it. **It is bought from the same 32 GB
 the weights and the KV reservation sit in**, which 0014's ceiling was walked without.
 
+**But it is a ceiling filled lazily, not a reservation taken at load.** The same config
+screened at 49,152 with the cache at its 8192 MiB default and at `CACHE_RAM=0` peaks at
+22.386 and 22.398 GB of wired memory — **12 MB apart, in favour of the default**. So the
+8 GiB costs nothing a load or a first prompt can see, and what it competes with the KV cache
+for is only whatever prefix it has actually saved.
+
 **`selected slot by LRU` does not mean a lost prefix.** All 15 requests of one run logged it
 and reused 161,735 tokens between them. It says how a slot was chosen, not what the server
 still held.
@@ -677,8 +683,13 @@ that changed the answer would be measuring something else.
   out as a distribution change.
 - **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
   rule reserves for "measured, not taken", and an agent session's prompt is deep.
-- **Editor, 49,152**: refused. The allocator fails on the first prefill batch, where the
-  same config without speculation finishes the fill at 22.02 GB.
+- **Editor, 49,152**: refused, and **the host prompt cache is not why**. The allocator fails
+  on the first prefill batch, where the same config without speculation finishes the fill at
+  22.02 GB. Re-screened at `CACHE_RAM=0` on 2026-08-25 it fails identically —
+  `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second —
+  so the draft head is **not adopted at 49,152**, and 32,768 remains the context it is
+  adopted at. Both rows peak 1.05 GB *above* the 21.33 GiB Metal ceiling, which the earlier
+  screen could not see because it assumed 24.
 - **Attended, any profile**: undecided, and deliberately not guessed. Every screen here ran
   `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
   has not been taken against this config. It peaks at 22.10 GB where the desktop died at
