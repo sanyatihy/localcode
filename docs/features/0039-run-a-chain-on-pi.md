@@ -81,7 +81,7 @@ else.
 - [x] `-harness pi` starts a session against the local endpoint, in the sandbox, with the
       tool set and the appended briefing the Claude Code arm gets
 - [x] a Pi session inherits the handoff the session before it wrote
-- [ ] the supervisor prints a Pi session's work as it happens, not after it
+- [x] the supervisor prints a Pi session's work as it happens, not after it
 - [ ] `localcode account` reports a Pi chain: peak, preamble, ingest, generation, clock
 - [ ] a Pi chain resumes, and refuses a resume on a different budget the way 0033 requires
 

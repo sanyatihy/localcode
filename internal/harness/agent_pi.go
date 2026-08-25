@@ -122,7 +122,10 @@ func (p *piAgent) Command(s Session) (string, []string, []string, error) {
 		"--session-dir", s.StateDir,
 	}
 	if s.Goal != "" {
-		args = append(args, "-p", s.Goal)
+		// Events rather than a result: `pi -p` prints its answer once, at the end, which
+		// on this machine is minutes of silence. The supervisor renders them, so it owns
+		// every line the developer sees.
+		args = append(args, "--mode", "json", "-p", s.Goal)
 	}
 
 	env := append(piEnv(), "PI_CODING_AGENT_DIR="+p.config,
@@ -160,11 +163,8 @@ func piEnv() []string {
 // all of them are under the chain's own directory, which the sandbox already opens.
 func (p *piAgent) Writable() []string { return nil }
 
-// Render is a pass-through for now: pi prints the model's prose as it arrives, which is
-// what a person watching needs, and the event shapes are not read yet.
 func (p *piAgent) Render(events io.Reader, out io.Writer, cwd string) string {
-	_, _ = io.Copy(out, events)
-	return ""
+	return renderPiJSON(events, out, cwd)
 }
 
 // piRecorder finds the session file pi wrote. It is told where to write with
