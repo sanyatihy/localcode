@@ -964,6 +964,20 @@ read a file and edit it, which `Edit` requires of it, so the chain wrote handoff
 changed a line. A window with no room left for the preamble is refused rather than clamped:
 a session started in one spends a cold ingest to say `Prompt is too long`.
 
+**What lands after that reading, measured across every chain here.** Eight chains and 69
+scored sessions — five against the generated fixture, three against a private work
+repository — and 54 of them ended on the ceiling rather than on a call budget or on their
+own work. The overshoot past the ceiling runs 342 to 5,486 tokens with a median of 1,956,
+and the session that came closest to the wall left 12,946 tokens of window unspent. Read
+from the transcripts of the 51 whose state directories survive, what arrives after the last
+model call at or under the ceiling is **at most four turns**: they generate 1,450 tokens at
+the median and 2,774 at the worst, and grow the context by 2,396 and 7,881. So the two
+reserve terms are not equally wrong. The results reach 72% of the four-maximum-sized-results
+bound the gate itself creates, which no run has spent; the turns reach a third of twice the
+output reservation held for them, and nothing in the distribution comes near it. The rows
+are in
+[data/2026-08-25-m2max-32gb-0037-overshoot.jsonl](data/2026-08-25-m2max-32gb-0037-overshoot.jsonl).
+
 **A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
 decides a whole turn's calls, because the harness issues them together and nothing changes
 while they run.
