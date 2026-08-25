@@ -16,8 +16,8 @@ cannot be answered by a project that can only run the incumbent.
 
 ## Non-goals
 
-- No harness registry. Two implementations is what justifies an interface and two is what
-  this creates; a third earns its own argument.
+- No third harness. Hermes and OpenCode already have scorer adapters and neither is being
+  driven here — but what they need is known, and the interface is judged against it.
 - No change to what a session may spend. `internal/chain` decides that and 0038 taught Pi to
   obey it; this is about starting one and reading it back.
 - No comparison. Which harness a chain should use is settled by a run that needs both of
@@ -25,12 +25,33 @@ cannot be answered by a project that can only run the incumbent.
 
 ## Design
 
-**The interface is extracted by the second implementation, not before it.** What the driver
-needs of a harness is five things, and each is already in `chain.go` as a Claude Code
-answer: the argv that starts a one-shot session against an instruction, where the inherited
-handoff is injected, where the session's own account of itself is written, how its event
-stream renders, and what a resume looks like. Claude Code becomes the first implementation
-with no behaviour change; Pi is the second.
+**The interface is extracted by the second implementation, and judged against the fourth.**
+Two is what justifies writing one at all; but `internal/harness` already carries adapters for
+four agents, so what varies across them is measured rather than guessed, and an interface
+that only just fits Claude Code and Pi is one that will be rewritten by whoever adds the
+third. The test is not that it compiles with two — it is that adding a third touches only
+the new adapter.
+
+**So the interface is the driver's needs, not Claude Code's flags renamed.** Six things, each
+of which at least two of the four candidates answer differently:
+
+| what the driver needs | Claude Code | Pi |
+|---|---|---|
+| start one non-interactive session on an instruction | `-p`, flags | `--print`, flags |
+| restrict the tool set | `--tools` | `--tools`, and names differ in case |
+| append to the system prompt | `--append-system-prompt` | `--append-system-prompt` |
+| carry the inherited handoff in | `SessionStart` hook | `session_start`, or the same flag |
+| refuse a tool call at the ceiling | `PreToolUse` hook, subprocess | `tool_call` event, in-process |
+| account for what the session cost | transcript under `CLAUDE_CONFIG_DIR` | session file under `--session-dir` |
+
+Hermes is configured by a YAML file and OpenCode by JSON, and neither has anything like a
+pre-tool-call veto — so the interface must let an adapter say **what it cannot do**, and the
+driver must degrade rather than fail. A harness with no veto is one whose sessions are bounded
+by the call budget and the clock alone, which is worse and is still a chain.
+
+**The property that makes a third harness additive is checkable.** No package outside the
+adapters may name a harness: no `claude` in `cmd/localcode`, no transcript path, no flag
+string, no event shape. That is a grep, so it is a box rather than an aspiration.
 
 **Pi's session file is under `--session-dir`, which the driver already owns.** Claude Code
 files its transcript under `CLAUDE_CONFIG_DIR` keyed by working directory, which is why
@@ -55,6 +76,8 @@ else.
 
 - [ ] what the driver needs of a harness is an interface, with Claude Code behind it and
       nothing about a chain changed
+- [ ] nothing outside the adapters names a harness — no flag, no path, no event shape —
+      and a check holds it that way
 - [ ] `-harness pi` starts a session against the local endpoint, in the sandbox, with the
       tool set and the appended briefing the Claude Code arm gets
 - [ ] a Pi session inherits the handoff the session before it wrote
@@ -63,6 +86,12 @@ else.
 - [ ] a Pi chain resumes, and refuses a resume on a different budget the way 0033 requires
 
 ## Open questions
+
+- **What an adapter does when the harness cannot veto a tool call.** Hermes and OpenCode
+  have no equivalent of `PreToolUse`, so a chain on either is bounded by the call budget and
+  the wall clock and not by its context. Leaning towards the adapter declaring it and the
+  driver saying so at launch, rather than refusing to run — a bound nobody can enforce is
+  still worth recording against.
 
 - **Whether the sandbox profile fits Pi unchanged.** It is written for what Claude Code
   touches; Pi reads `~/.pi` for settings and packages, and a profile that denies it may break
