@@ -1020,6 +1020,13 @@ two hooks enforce it — `localcode hook gate` on `PreToolUse`, `localcode hook 
 a session told in prose to spend three commands reached compaction anyway, and one warned at
 45% of its window acknowledged the warning and carried on.
 
+**Pi is held to that budget by the same binary.** A `tool_call` handler in
+[`harness/pi/localcode-gate.js`](../harness/pi/localcode-gate.js) fills the gate's payload
+from Pi's vocabulary and runs `localcode hook gate`, so the two harnesses cannot hold a
+session to two budgets. The context comes in on the payload as `peak_tokens` rather than
+off a transcript: Pi reports its own, and that reading sums the same four usage fields a
+Claude Code transcript is read for.
+
 **The ceiling is derived from what lands after it.** The gate decides on the context as the
 transcript last recorded it, and two things arrive after that reading: the results of the
 calls it is permitting, and what the turns that follow them generate. So the ceiling is the

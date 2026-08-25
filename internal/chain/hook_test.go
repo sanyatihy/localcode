@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -86,5 +87,27 @@ func TestStopHookRefusesTwiceAndThenRelents(t *testing.T) {
 	}
 	if v, err := Hook("stop", strings.NewReader(payload), dir); err != nil || v.Deny {
 		t.Fatalf("after its refusals the hook must relent: %+v %v", v, err)
+	}
+}
+
+// A harness that keeps its own context is gated on the number it reports. Without this
+// the gate reads a transcript that is not there, takes -1 for the context, and holds a
+// session to nothing but its call budget — which is the bound that is meant to be the
+// backstop.
+func TestAPayloadCarryingItsOwnContextIsGatedOnIt(t *testing.T) {
+	dir, spec := budgeted(t, 100)
+	payload := func(peak int) string {
+		return fmt.Sprintf(`{"session_id":"pi","tool_name":"Bash","peak_tokens":%d,`+
+			`"tool_input":{"command":"go test ./..."}}`, peak)
+	}
+	if v, err := Hook("gate", strings.NewReader(payload(spec.Limits.Ceiling-1)), dir); err != nil || v.Deny {
+		t.Fatalf("a session under the ceiling must be permitted: %+v %v", v, err)
+	}
+	v, err := Hook("gate", strings.NewReader(payload(spec.Limits.Ceiling)), dir)
+	if err != nil || !v.Deny {
+		t.Fatalf("a session at the ceiling must be refused: %+v %v", v, err)
+	}
+	if !strings.Contains(v.Reason, fmt.Sprint(spec.Limits.Ceiling)) {
+		t.Errorf("the refusal does not name the ceiling it enforced: %q", v.Reason)
 	}
 }
