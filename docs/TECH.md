@@ -1036,6 +1036,12 @@ sits at the whole served context rather than 16,384 tokens below it. Measured at
 two-prompt session twice, the served reserve compacted it none, and the cancel alone
 compacted it none.
 
+**And it cannot end having handed nothing on.** `localcode hook stop` answers an
+`agent_end` handler, and its refusal is delivered as a follow-up message rather than an
+exit code, because a message queued there is what Pi continues on. The grace is the Stop
+hook's two refusals: measured, a session given `write` answered the first refusal with a
+handoff, and one given only `read` was refused twice and then allowed to end.
+
 **The ceiling is derived from what lands after it.** The gate decides on the context as the
 transcript last recorded it, and two things arrive after that reading: the results of the
 calls it is permitting, and what the turns that follow them generate. So the ceiling is the
