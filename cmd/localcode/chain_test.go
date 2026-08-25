@@ -137,6 +137,40 @@ func TestChainRunsUntilAHandoffSaysThereIsNothingLeft(t *testing.T) {
 	}
 }
 
+// A session pays for its preamble once, and only if it sends the same one as the session
+// before it: llama-server reuses a prefix, so a prompt differing from the last one's is
+// re-ingested from the point they part. Measured before this held, a chain reused 0.02% of
+// its session-opening requests and spent 43.5% of everything it ingested on preambles it
+// had already paid for — because the session number reached the prompt through both the
+// handoff path and `--add-dir`.
+func TestEverySessionOfAChainSendsTheSamePreamble(t *testing.T) {
+	root := fakeCheckout(t)
+	stub := chainStub(t, handoffSaying("fix Clamp"), handoffSaying("fix Title"), handoffSaying("none"))
+	passthroughSandbox(t)
+
+	if code, _ := runHere(t, opts{checkout: root, args: []string{"fix the four tests"}}); code != 0 {
+		t.Fatalf("a finished chain must exit 0, got %d", code)
+	}
+	first := ""
+	for n := 1; n <= 3; n++ {
+		b, err := os.ReadFile(filepath.Join(stub, fmt.Sprintf("argv-%d", n)))
+		if err != nil {
+			t.Fatalf("session %d recorded no arguments: %v", n, err)
+		}
+		// The whole argument line, because the divergence this guards against was two
+		// characters deep inside one argument. The stub joins them, so a comparison of
+		// named flags would only reach as far as the first space in each.
+		got := string(b)
+		if n == 1 {
+			first = got
+			continue
+		}
+		if got != first {
+			t.Fatalf("session %d sends a preamble session 1 did not:\n%s\n---\n%s", n, first, got)
+		}
+	}
+}
+
 // A chain still writing handoffs is not a chain making progress. Two sessions planning the
 // same step is the shape it fails in, and the file is what a person needs to see next.
 func TestChainStopsWhenTwoSessionsPlanTheSameThing(t *testing.T) {
