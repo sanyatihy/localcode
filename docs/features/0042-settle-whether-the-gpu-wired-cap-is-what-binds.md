@@ -50,6 +50,16 @@ arithmetic those rows were reported under retroactively true rather than inventi
 ceiling. It clears the observed 22.39 GB peak by 2.2 GB and leaves 8 GiB to the system. If
 the head clears there, the walk stops there.
 
+**A second candidate is refused by the same cap and costs one more load.** 0017 screened
+MTPLX — the MLX runtime with native MTP — and recorded `loads, then out of memory under a
+real prompt`. Its shipped `Optimized-Speed` checkpoint is documented to peak at 23.6 GB,
+which is 22,504 MiB against the 21,845 MiB Metal derives here: **659 MiB short**, and the
+rung above clears it by 2.1 GB. Memory was the only thing standing between it and a verdict,
+and that verdict is worth more than a second reading of the cap — per 0017's own non-goals
+MTPLX serves the Anthropic `/v1/messages` 0008 needs and reports acceptance and cache state,
+which are two of the three reasons 0006 stayed on llama.cpp. Screening it here does not
+reopen the runtime question; it removes the reason that question could not be asked.
+
 **A raise is measured unattended and adopted only attended.** VISION's constraint is that no
 config may make the machine unusable for the editor and browser the developer runs while the
 agent works, and that constraint bites harder at a raised cap than anywhere else in this
@@ -67,10 +77,14 @@ draft head at 49,152 is closed for a reason this project has finally established
       value in force so every row taken under it says which cap it was taken at
 - [ ] `config/mtp-49k.env` screens admissible or not at 24,576 MiB, unattended, against the
       same 44,236-token filled prompt 0017 and 0041 used
+- [ ] MTPLX screens admissible or not at the same 24,576 MiB, unattended, against a prompt
+      sized to the context it is served, and its row records which checkpoint
 - [ ] the desktop verdict at the raised cap is taken attended with the head serving, or the
-      box is dropped because the screen above said the cap is not what binds
+      box is dropped because the `config/mtp-49k.env` screen said the cap is not what binds
 - [ ] `docs/TECH.md` says what refused the draft head at 49,152, and `config/machine.json`
       carries the cap this machine is held to or is explicitly left alone
+- [ ] `docs/TECH.md`'s "MTPLX has no route left" is corrected or confirmed, and
+      `docs/VISION.md`'s listing of it among the permanent exclusions with it
 
 ## Open questions
 
@@ -79,9 +93,22 @@ draft head at 49,152 is closed for a reason this project has finally established
   its first sample. Raising the cap moves what the GPU may take from the system side, which
   is the side the compositor is on, so the ceilings could move either way. Leaning towards
   measuring nothing here and letting the ladder re-walk be its own feature.
+- **Whether MTPLX belongs in this feature at all.** This doc's problem is an attribution —
+  what refused the draft head — and MTPLX is 0006's runtime question riding on the same
+  intervention. Against keeping it: two questions in one doc is how a result stops being
+  readable. For keeping it: the experiment is identical, the marginal cost is one load, and
+  a verdict withheld for memory is not a runtime comparison until it exists. Leaning towards
+  keeping it, and splitting only if the screen makes the runtime question live.
 - **Whether `wired_headroom_gb` should be reported at all.** It is a whole-machine figure
   against a GPU-share cap, and this feature rests on those being different quantities. It has
   now been read as a headroom three times. Leaning towards renaming rather than removing, once
   this says what the cap governs.
 
 ## Log
+
+- 2026-08-25 — **MTPLX added as a second candidate on the same raise, and the docs that
+  ruled it out added to the last box.** TECH.md contradicts itself in one paragraph: it
+  grants `mlx_lm` the raised cap as "the 'more memory' this paragraph ruled unavailable" and
+  then says "MTPLX has no route left", and VISION inherits that as a permanent exclusion.
+  MTPLX is 659 MiB short of the derived cap, so the route is the one this feature already
+  walks. Scope tension recorded as an open question rather than settled here.
