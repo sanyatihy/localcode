@@ -275,6 +275,16 @@ func (c *claudeCodeRecorder) Transcript(dir string) string {
 	return matches[0]
 }
 
+// Writable is the agent's own history and project state. One directory, and the sandbox
+// denies everything else it might reach for.
+func (c *claudeCodeAgent) Writable() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	return []string{filepath.Join(home, ".claude")}
+}
+
 func (c *claudeCodeAgent) Render(events io.Reader, out io.Writer, cwd string) string {
 	return renderStreamJSON(events, out, cwd)
 }

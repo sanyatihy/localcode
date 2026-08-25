@@ -36,6 +36,14 @@ func fakeCheckout(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, "claude-code.env"), []byte(env), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// What says a directory is a checkout at all, and it is not any harness's file: the
+	// launcher starts the server from here.
+	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "scripts", "serve.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	return root
 }
 
@@ -368,7 +376,7 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 
 func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, false)
+	path, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +434,7 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 		t.Skip("no seatbelt on this platform")
 	}
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, false)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +504,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 	defer srv.Close()
 
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, false)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +527,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 
 func TestNetOpensOutboundForTheSession(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, true)
+	path, err := writeSandboxProfile(state, cwd, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -731,7 +739,7 @@ func TestSandboxAllowsAWorktreeBesideTheRepositoryAndNothingElseBesideIt(t *test
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(parent)) })
-	profile, err := writeSandboxProfile(t.TempDir(), cwd, false)
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

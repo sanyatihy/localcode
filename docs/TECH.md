@@ -1011,6 +1011,21 @@ with the mechanism and without it, and
 where boxes are driven locally, so it is where those runs happen. Until then this is
 apparatus, not a result.
 
+## One package knows which agent a chain runs in
+
+`harness.Agent` is what the driver needs of a harness: the window it must be told it has,
+what one chain writes before its first session, the command for one session, where the
+agent files what that session cost, where it keeps its own state so the sandbox can let it,
+and how its event stream reads. `cmd/localcode` names no agent, and a test in
+`internal/harness` holds that: it parses every file of `cmd/localcode`, `internal/chain`
+and `internal/handoff` with the comments dropped and fails on a harness's name, its API,
+its event shapes or its files. Comments are exempt on purpose — that is where a decision
+records which agent it was taken against.
+
+Which agent ran a session is in that session's `session.json`, so a chain read back long
+afterwards is read by the right adapter. A chain recorded before that field existed reads
+as the default, which is what it will have been.
+
 ## A session is budgeted rather than left to fill up
 
 0016 made a full context survivable; this keeps a session from reaching one. Every session
