@@ -96,7 +96,7 @@ the same way both times.
       log, across a chain of at least four sessions, with the prompt cache's size on the row
 - [x] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
-- [ ] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
+- [x] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
       carries what changed
 
 ## Open questions
@@ -148,3 +148,12 @@ the same way both times.
   divergence sits about forty lines into an eight-thousand-character block, so an identical
   prompt should have been reusing most of it already, and the measurement said one token. One
   of those two readings is incomplete and only a re-measurement says which.
+- 2026-08-25 — re-measured, and the preamble was the whole of it. The same instruction at the
+  same config and ceiling, four sessions and 20/20 both times, ingests 20,941 tokens against
+  31,179: a third less, and the three requests that follow a handoff fall from 13,555 ingested
+  to 2,236 and from 139.3 s to 24.6 s. Each of them now reuses 3,664–3,665 tokens, the same
+  number to a token, which is the shared preamble. The doubt the box before this one recorded
+  is settled: the two path strings were the whole divergence, and llama-server was reusing one
+  token of a prompt whose leading thousands matched because of them. The wall moved 15 s and
+  is not the measurement — the two chains generated 7,924 and 8,652 tokens doing the same
+  twenty bugs their own way.

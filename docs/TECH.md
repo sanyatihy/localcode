@@ -395,6 +395,23 @@ the handoff is moved into the session's own as soon as it has been read, so a ch
 sessions send byte-identical preambles while every row downstream still finds one handoff
 per session.
 
+**That is worth a third of everything a chain ingests.** The same instruction, the same
+config and the same ceiling, before and after, both finishing 20/20 in four sessions:
+
+| | ingested | reused | the three requests after a handoff | their prompt time |
+|---|---|---|---|---|
+| the session number in the prompt | 31,179 | 88.4% | 13,555 ingested, 0.0% reused | 139.3 s |
+| the chain's paths instead | **20,941** | **92.2%** | **2,236 ingested, 80–85% reused** | **24.6 s** |
+
+**A handoff now costs 745 tokens, not 4,518.** Each session-opening request reuses 3,664–3,665
+tokens — the same figure to a token across all three, which is the shared preamble and the
+evidence that it is shared. What is still ingested is what genuinely differs: the handoff the
+session inherits, which is a different plan every time.
+
+**The wall barely moved — 1,147 s to 1,132 s — and that is not the measurement.** The second
+chain generated 8,652 tokens against 7,924 doing the same twenty bugs its own way, so the
+clock carries work that differs; the token columns do not.
+
 **Only a prefix the server has never seen ingests from zero**, and across two whole sessions
 that is one request. A fresh session is not one: the second session's first request sent the
 same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516
