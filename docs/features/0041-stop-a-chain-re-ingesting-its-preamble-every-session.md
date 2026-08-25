@@ -94,7 +94,7 @@ the same way both times.
       `docs/TECH.md` says whether the draft head is adopted at the shipped context
 - [x] what a chain's sessions actually reuse is measured per request, from the server's own
       log, across a chain of at least four sessions, with the prompt cache's size on the row
-- [ ] the preamble a chain sends is identical from session to session, or the measurement
+- [x] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
 - [ ] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
       carries what changed
@@ -139,3 +139,12 @@ the same way both times.
   The divergence is at the **head** of the preamble, not its tail, so what is lost is not "the
   tokens after the divergence — a few hundred" but all of them. The next box is therefore not
   droppable: making the preamble identical is the only lever the measurement leaves.
+- 2026-08-25 — the divergence was localcode's own, and it was two strings. Three sessions'
+  request bodies captured at the endpoint differ in the session number inside `--add-dir` and
+  inside the handoff path the briefing names, and in nothing else — not in Claude Code's
+  preamble, which is byte-identical across sessions of one chain. Both now name the chain's
+  directory, and the handoff is moved into the session's own directory as soon as it is read,
+  so nothing downstream changes. Whether that recovers the reuse is the next box: the
+  divergence sits about forty lines into an eight-thousand-character block, so an identical
+  prompt should have been reusing most of it already, and the measurement said one token. One
+  of those two readings is incomplete and only a re-measurement says which.
