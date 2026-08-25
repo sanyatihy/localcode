@@ -57,6 +57,7 @@ usage:
 
 flags:
   -checkout dir      the localcode checkout to read configuration from
+  -harness name      which agent to run the sessions in (%s)
   -endpoint url      the server to use
   -config file       the serving config to start (default config/agent.env)
   -no-serve          refuse if no server is running, rather than starting one
@@ -73,8 +74,9 @@ flags:
 
 func main() {
 	fs := flag.NewFlagSet("localcode", flag.ContinueOnError)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, harness.Names()) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
+	agentName := fs.String("harness", harness.DefaultAgent, "which agent to run the sessions in")
 	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
@@ -115,6 +117,7 @@ func main() {
 		code, err = accountHere(os.Stdout, strings.Join(args[1:], ""), *jsonl)
 	default:
 		code, err = run(opts{
+			harness:  *agentName,
 			checkout: *checkoutFlag,
 			endpoint: *endpoint,
 			config:   *config,
@@ -137,6 +140,7 @@ func main() {
 }
 
 type opts struct {
+	harness  string
 	checkout string
 	endpoint string
 	config   string
@@ -165,7 +169,11 @@ func run(o opts) (int, error) {
 	// it: the flags, the environment, the window it is told it has, where it files what a
 	// session cost. Built before the work so a harness that cannot be configured is
 	// refused rather than discovered on the first session.
-	agent, err := harness.NewAgent(harness.DefaultAgent, root)
+	name := o.harness
+	if name == "" {
+		name = harness.DefaultAgent
+	}
+	agent, err := harness.NewAgent(name, root)
 	if err != nil {
 		return 2, err
 	}

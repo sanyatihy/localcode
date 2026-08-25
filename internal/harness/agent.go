@@ -3,6 +3,8 @@ package harness
 import (
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 )
 
 // Agent is one coding agent a chain can run its sessions in. Everything that differs
@@ -76,13 +78,33 @@ type Session struct {
 // which 0010 measured as the one nothing displaces on both axes at once.
 const DefaultAgent = "claude-code"
 
+// agents is every agent this package drives, and the whole of what the rest of the
+// project may choose between. A third one is added here and in its own file, and nowhere
+// else — which is the property `TestNoPackageAboveTheAdaptersNamesAHarness` holds.
+var agents = map[string]struct {
+	agent    func(root string) (Agent, error)
+	recorder func() Recorder
+}{
+	"claude-code": {newClaudeCodeAgent, func() Recorder { return &claudeCodeRecorder{} }},
+	"pi":          {newPiAgent, func() Recorder { return piRecorder{} }},
+}
+
+// Names is every agent there is, for a reader choosing between them.
+func Names() string {
+	names := make([]string, 0, len(agents))
+	for name := range agents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
 // NewAgent returns the agent that name asks for, configured from a localcode checkout.
 // It refuses rather than falling back, and names what it drives: a chain run against a
 // different agent from the one asked for is a comparison of nothing.
 func NewAgent(name, root string) (Agent, error) {
-	switch name {
-	case "claude-code":
-		return newClaudeCodeAgent(root)
+	if a, ok := agents[name]; ok {
+		return a.agent(root)
 	}
 	return nil, unknown(name)
 }
@@ -90,13 +112,12 @@ func NewAgent(name, root string) (Agent, error) {
 // NewRecorder returns just the reader for one agent, which is what a chain read back after
 // the fact needs.
 func NewRecorder(name string) (Recorder, error) {
-	switch name {
-	case "claude-code":
-		return &claudeCodeRecorder{}, nil
+	if a, ok := agents[name]; ok {
+		return a.recorder(), nil
 	}
 	return nil, unknown(name)
 }
 
 func unknown(name string) error {
-	return fmt.Errorf("no harness %q: localcode drives claude-code", name)
+	return fmt.Errorf("no harness %q: localcode drives %s", name, Names())
 }

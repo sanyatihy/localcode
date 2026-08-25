@@ -78,7 +78,7 @@ else.
       nothing about a chain changed
 - [x] nothing outside the adapters names a harness — no flag, no path, no event shape —
       and a check holds it that way
-- [ ] `-harness pi` starts a session against the local endpoint, in the sandbox, with the
+- [x] `-harness pi` starts a session against the local endpoint, in the sandbox, with the
       tool set and the appended briefing the Claude Code arm gets
 - [ ] a Pi session inherits the handoff the session before it wrote
 - [ ] the supervisor prints a Pi session's work as it happens, not after it
@@ -93,13 +93,18 @@ else.
   driver saying so at launch, rather than refusing to run — a bound nobody can enforce is
   still worth recording against.
 
-- **Whether the sandbox profile fits Pi unchanged.** It is written for what Claude Code
-  touches; Pi reads `~/.pi` for settings and packages, and a profile that denies it may break
-  a session in a way that looks like a model failure. Leaning towards finding out with one
-  session rather than reasoning about the profile.
-- **What a Pi session costs before the first word.** Claude Code spends 3,508 tokens of
-  preamble for four tools, and 0008 measured Pi at a fifth the ingest per task. If the
-  preamble is much smaller, the ceiling buys proportionally more work and 0040's comparison
-  is partly a preamble comparison — worth measuring in this feature so that one is not.
-
 ## Log
+
+- **The sandbox profile fits Pi unchanged.** A session writes only into the two directories
+  it is given — `PI_CODING_AGENT_DIR` and `--session-dir`, both under the chain's own state
+  — so the adapter declares nothing extra writable and `~/.pi` is never touched. Measured
+  on the first chain run: an edit landed and the handoff was written with the profile the
+  incumbent's arm gets.
+- **A Pi session's preamble is 2,157 tokens**, against the 3,508 Claude Code spends for the
+  same four tools. Measured as the first request's ingest on that run, with this driver's
+  briefing in it. It is a third less, so 0040's comparison is not mostly a preamble
+  comparison.
+- **The model id and the output reservation are read out of `harness/pi/local-provider.js`**
+  rather than repeated in Go. That file is the declaration pi acts on, and a second copy
+  would be a second answer; the context is in neither, because the provider file reads it
+  off `/props`.
