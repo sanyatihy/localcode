@@ -54,6 +54,13 @@ purpose — a chain that plans its own features and works them until they run ou
 this project runs, and it is what the two earlier instances of the same project were driven
 from, so the incumbent's eight chains and these arms are the same kind of work.
 
+**An arm must not be able to read a solved copy of its own task.** The sandbox allows a
+session to read anywhere, and three earlier instances of this same project sit beside the
+seed — one of them built by a frontier model and complete. A session that lists its parent
+directory finds a finished answer to the instruction it was just given, and what it does
+next is not what a harness comparison is asking about. So the arms run under a parent that
+holds them and nothing else, and the earlier instances are moved out of it for the duration.
+
 **One run an arm is not enough and the doc should say so.** Temperature is 0.7 on the served
 config, so two chains do not do identical work; the spread between two Claude Code chains on
 the same fixture was 46 tool calls against 35. Two runs an arm at minimum, and the finding is
@@ -87,3 +94,17 @@ the direction rather than the ratio.
 - **"Same starting commit" was the wrong words for this seed.** The arms start before there
   is a git repository at all, so what is held identical is the directory, and each arm makes
   its own first commit.
+- **Pair one is void, and the fixture is why.** Arm A finished the instruction in 6 sessions
+  and 2h49m, shipping three features. Arm B stalled in 3 sessions and 37 minutes without a
+  commit: its first session listed the parent directory, found a sibling checkout of the same
+  project carrying a complete implementation, and spent the chain running that code and
+  planning to port it rather than doing the work. Arm A never looked — its one search of the
+  filesystem stopped a level short of that directory — so the arms did not face the same
+  fixture and neither row is a harness reading. Both are re-run under a parent holding
+  nothing but the arms.
+- **A Pi session overshot its ceiling by 16,846 tokens**, peaking at 44,494 against 27,648 in
+  a 45,056 window — against the roughly 5,000 that 0037 measured across 69 Claude Code
+  sessions. It happened on 8 tool calls, so what a single batch can add between two readings
+  of the context is larger under Pi than the reserve was sized for. Recorded rather than
+  fixed: nothing about either harness's bounds changes while the run is on.
+
