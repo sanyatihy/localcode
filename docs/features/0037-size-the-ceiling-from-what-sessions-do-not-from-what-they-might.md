@@ -62,7 +62,7 @@ run so far has spent it.
 - [x] the overshoot past the ceiling is measured across every chain this repository has run
 - [x] the reserve is derived from that measurement, and refuses when the arithmetic leaves a
       session no room
-- [ ] the boundary at which the harness refuses a prompt is measured against a server told
+- [x] the boundary at which the harness refuses a prompt is measured against a server told
       its whole context
 - [ ] the window takes back whatever that measurement shows is reserved twice
 
@@ -82,3 +82,9 @@ run so far has spent it.
 - 2026-08-25 — the ceiling rises from 22,528 to 24,576 at the shipped window, and a declared
   context under 20,480 is now refused: the reserve is a constant where it used to follow the
   output reservation, so the smallest windows lose what the largest gain.
+- 2026-08-25 — the harness refuses at three-quarters of the declared context less its
+  reservation, not at the whole of it: 34,008 tokens sent and 34,258 refused against a
+  declared 49,152, and the same fraction within 4% at three other declarations.
+- 2026-08-25 — the reservation is subtracted twice and taking it back is safe, because the
+  largest prompt sent plus the whole reservation is 38,104 of the 49,152 served. That was
+  the question the box asked; the larger answer is that the window was never the wall.
