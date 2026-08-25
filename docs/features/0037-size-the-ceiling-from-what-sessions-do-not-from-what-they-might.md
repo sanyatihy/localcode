@@ -64,7 +64,7 @@ run so far has spent it.
       session no room
 - [x] the boundary at which the harness refuses a prompt is measured against a server told
       its whole context
-- [ ] the window is the largest prompt the harness will send, which takes back the
+- [x] the window is the largest prompt the harness will send, which takes back the
       reservation subtracted twice and gives up the quarter it never had
 
 ## Log
@@ -94,3 +94,10 @@ run so far has spent it.
   quarter of it the window never had. Taking back the one without giving up the other would
   raise the ceiling to 27,648 against a wall at 34,134 and a growth past it measured at
   7,881 — a session budgeted to land exactly on `Prompt is too long`.
+- 2026-08-25 — the shipped ceiling goes from 22,528 to 19,200 and the call budget from 51 to
+  41. Both are smaller than what shipped and both are the first ones under the wall: a
+  session at the old ceiling that grew the 7,881 tokens the worst one did reached 30,409
+  against a limit of about 31,200 it had never been told about.
+- 2026-08-25 — the smallest context that still admits a session is now about 28,672 declared.
+  Three quarters of a window is what the harness will send, and a quarter of what is left is
+  a turn's results, so a small context runs out of working room before it runs out of window.

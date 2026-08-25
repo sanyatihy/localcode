@@ -14,7 +14,7 @@ import (
 // from it.
 func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	for _, w := range []struct{ maxContext, maxOutput int }{
-		{45056, 4096}, {32768, 4096}, {24576, 2048}, {20480, 1024},
+		{49152, 4096}, {45056, 4096}, {32768, 4096}, {28672, 2048},
 	} {
 		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
 		if err != nil {
@@ -28,25 +28,45 @@ func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	}
 }
 
-// The reserve is sized from what sessions did, so what they did is what has to fit inside
-// it with room to spare. The largest growth past the reading the gate decided on, per
-// window served, is in docs/data/2026-08-25-m2max-32gb-0037-overshoot.jsonl; twice it is
-// the margin the measurement bought, and this is what says the next session still fits.
-func TestTheReserveStandsAtTwiceTheWorstGrowthMeasured(t *testing.T) {
-	for _, c := range []struct{ maxContext, window, worstGrowth int }{
-		{45056, 40960, 7881}, {28672, 24576, 5673},
-	} {
-		l, err := NewLimits(c.maxContext, 4096, 100, 0)
+// worstGrowth is the largest a session's context grew past the reading the gate decided on,
+// over eight chains and 51 transcripts:
+// docs/data/2026-08-25-m2max-32gb-0037-overshoot.jsonl. It was recorded at a 40,960-token
+// window, whose result cap was larger than any window derived here — so against a smaller
+// one it over-states, which is the direction a floor should err in.
+const worstGrowth = 7881
+
+// worstGenerated is the model's own share of that: the most any session generated over the
+// turns that land after the gate's last reading, from the same rows.
+const worstGenerated = 2774
+
+// The reserve is sized from what sessions did, so what they did has to fit inside it. This
+// is the property the whole feature rests on: whatever the gate permits at the ceiling, the
+// context that follows still lands under the window.
+func TestTheCeilingPlusTheWorstGrowthStaysUnderTheWindow(t *testing.T) {
+	for _, maxContext := range []int{49152, 45056, 32768} {
+		l, err := NewLimits(maxContext, 4096, 100, 0)
 		if err != nil {
-			t.Fatalf("%d: %v", c.maxContext, err)
+			t.Fatalf("%d: %v", maxContext, err)
 		}
-		if l.Window != c.window {
-			t.Fatalf("%d declares a %d window, got %d", c.maxContext, c.window, l.Window)
+		if l.Ceiling+worstGrowth >= l.Window {
+			t.Fatalf("%d: a session permitted at %d and growing %d reaches %d of a %d window",
+				maxContext, l.Ceiling, worstGrowth, l.Ceiling+worstGrowth, l.Window)
 		}
-		if reserve := l.Window - l.Ceiling; reserve < 2*c.worstGrowth {
-			t.Fatalf("a %d window reserves %d against a measured %d of growth, under the "+
-				"%d that is twice it", l.Window, reserve, c.worstGrowth, 2*c.worstGrowth)
-		}
+	}
+}
+
+// And the reserve's second term is the one the measurement sets, so it must stand at twice
+// what any session spent it on. The first term is the four maximum-sized results the gate
+// itself permits, which is a bound rather than an observation and is not judged here.
+func TestTheTurnReserveStandsAtTwiceTheWorstGeneration(t *testing.T) {
+	l, err := NewLimits(49152, 4096, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := l.Batch * (l.ResultCap / bytesPerToken)
+	if turns := (l.Window - l.Ceiling) - results; turns < 2*worstGenerated {
+		t.Fatalf("the reserve leaves %d for the turns after the gate's last reading, under "+
+			"the %d that is twice the most one ever generated", turns, 2*worstGenerated)
 	}
 }
 
@@ -82,8 +102,8 @@ func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := 40960 * 40 / 100; half.Ceiling != want {
-		t.Fatalf("40%% of a 40,960 window is %d, got %d", want, half.Ceiling)
+	if want := 30720 * 40 / 100; half.Ceiling != want {
+		t.Fatalf("40%% of a 30,720 window is %d, got %d", want, half.Ceiling)
 	}
 	all, err := NewLimits(45056, 4096, 100, 30)
 	if err != nil {
@@ -136,9 +156,9 @@ func TestAnExplicitCallBudgetOverridesTheDerivedOne(t *testing.T) {
 // same argument the preamble floor already makes applies: refuse it rather than start a
 // session that cannot read a file, change it and see what that did.
 func TestNewLimitsRefusesACeilingWithNoRoomToWorkIn(t *testing.T) {
-	// 12% of the shipped window clears the preamble floor and little else, which is the
+	// 16% of the shipped window clears the preamble floor and little else, which is the
 	// band this refusal exists for: the old one passed it.
-	_, err := NewLimits(45056, 4096, 12, 0)
+	_, err := NewLimits(45056, 4096, 16, 0)
 	if err == nil {
 		t.Fatal("a ceiling with room for one call must be refused")
 	}

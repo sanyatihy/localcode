@@ -608,9 +608,9 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	if spec.Handoff != filepath.Join(dir, chain.HandoffName) {
 		t.Fatalf("the handoff must be in the directory the session may write: %s", spec.Handoff)
 	}
-	// The headroom of a 40,960 window: less a quarter for a turn's results, less twice the
-	// 4,096 output reservation.
-	if spec.Limits.Ceiling != 24576 || spec.Limits.Calls != 30 {
+	// The headroom of a 33,792 window: less a quarter for a turn's results, less the 6,144
+	// the turns after the gate's last reading were measured to generate.
+	if spec.Limits.Ceiling != 19200 || spec.Limits.Calls != 30 {
 		t.Fatalf("the flags must reach the session: %+v", spec.Limits)
 	}
 }
@@ -654,10 +654,10 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the session was not budgeted: %v", err)
 	}
-	// 32,768 served, less 4,096 for a reply, is a 28,672 declaration; less the 4,096 the
-	// harness keeps whatever it is told is a 24,576 window; less a quarter of it for a
-	// turn's results and twice the reservation is the ceiling.
-	if spec.Limits.Window != 24576 || spec.Limits.Ceiling != 12288 {
+	// 32,768 served is declared whole; less the 4,096 the harness keeps whatever it is
+	// told, and three quarters of the rest is the 21,504 it will actually send; less a
+	// quarter of that for a turn's results and 6,144 for the turns is the ceiling.
+	if spec.Limits.Window != 21504 || spec.Limits.Ceiling != 9984 {
 		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
 	}
 }

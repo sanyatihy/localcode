@@ -957,7 +957,9 @@ a session told in prose to spend three commands reached compaction anyway, and o
 transcript last recorded it, and two things arrive after that reading: the results of the
 calls it is permitting, and what the turns that follow them generate. So the ceiling is the
 window less a quarter for results and less 6,144 tokens for the turns, and that is also the
-default: as high as the arithmetic allows and no higher. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
+default: as high as the arithmetic allows and no higher. The window it is a fraction of is
+three quarters of the declared context less the reservation, which is the most of it the
+harness will send. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
 already buy while costing a handoff — measured at half the window, a session could not both
 read a file and edit it, which `Edit` requires of it, so the chain wrote handoffs and never
 changed a line. A window with no room left for the preamble is refused rather than clamped:
@@ -970,9 +972,9 @@ harness would allow, and the reserve held twice that — 8,192 tokens — for tu
 2,774 in the worst session of eight chains. The turn term is therefore the measurement below
 and not the bound: twice the worst recorded, which leaves the whole reserve at 2.1x the
 largest growth ever seen past that reading, at both windows this project serves. It buys
-2,048 tokens of ceiling and costs the smallest windows: a declared context under 20,480 now
-leaves less than a session's preamble once the reserve is out, and is refused rather than
-run.
+2,048 tokens of ceiling and costs the smallest contexts: a declared context under about
+28,672 now leaves too little to read a file, change it and see what that did, and is refused
+rather than run.
 
 **What lands after that reading, measured across every chain here.** Eight chains and 69
 scored sessions — five against the generated fixture, three against a private work
@@ -1047,7 +1049,7 @@ given: at the smaller ceiling no session of the seventeen reached the budget and
 median was 9 calls, while at the larger eleven of eighteen ended on it.
 
 **So the budget follows the ceiling, at the cheapest call rather than the typical one.** It
-is the room above the preamble divided by 350 tokens — 57 calls at the shipped window, 30 at
+is the room above the preamble divided by 350 tokens — 41 calls at the shipped context, 15 at
 32,768 — and 350 is the low end of the measured range because this bound is the backstop for
 when the transcript cannot be read: sized on a typical call it would pre-empt the ceiling for
 every session whose calls come cheaper than typical, which is half of them. A ceiling with

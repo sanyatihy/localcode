@@ -21,7 +21,7 @@ import (
 // from another envelope either wastes the context or fails to bound it. Pi's 50 KB
 // tool-result cap is around 12,500 tokens, which is the whole of a 12,288-token window.
 type Limits struct {
-	Window    int `json:"window"`     // the prompt budget: the declared context minus the output reservation
+	Window    int `json:"window"`     // the prompt budget: the most of the declared context the harness will send
 	Ceiling   int `json:"ceiling"`    // the context past which the gate permits only the handoff
 	ResultCap int `json:"result_cap"` // bytes one tool result may add to the context
 	Batch     int `json:"batch"`      // how many calls one turn may spend before the context is read again
@@ -75,6 +75,16 @@ const (
 	// a handoff has to end rather than spin.
 	handoffGrace = 3
 
+	// wallShare is the reciprocal of how much of the declared context, less the
+	// reservation, the harness will actually send. It refuses the rest itself — `Prompt is
+	// too long`, before anything reaches the server — and the refusal is nowhere in the
+	// arithmetic the declaration implies. Bisected at four declarations against one 49,152
+	// server: the largest prompt sent was 0.755 of that quantity at the shipped context and
+	// 0.794 at the smallest measured, so three quarters is under every wall recorded and
+	// `declared − reservation` is above all of them.
+	wallShare = 4
+	wallParts = 3
+
 	// outputFloor is what the harness keeps for a reply whatever it was told to keep.
 	// Bisected against a declared 12,288 by padding a prompt to an exact token count and
 	// reading whether it was refused before it was sent: with 1,024 declared the boundary
@@ -111,7 +121,7 @@ const (
 // It refuses rather than clamping because a window too small to work in is a
 // configuration mistake with a one-line fix, and the session that discovers it instead
 // spends a cold ingest to say `Prompt is too long`: declaring 8,192 against a 4,096
-// output reservation leaves 4,096, which is less than the preamble.
+// output reservation leaves 3,072, which is less than the preamble.
 func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	if maxContext <= 0 || maxOutput <= 0 {
 		return Limits{}, fmt.Errorf("a declared window and an output reservation are both "+
@@ -127,7 +137,10 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// The prompt budget, which is the number a session actually has: the reply shares the
 	// served context with the conversation, so the reservation is not available to it — and
 	// the reservation is the larger of what was declared and what the harness keeps anyway.
-	window := maxContext - max(maxOutput, outputFloor)
+	// Three quarters of the rest, because that is the most of it the harness will send: a
+	// window taken as the whole of it is a wall 10,000 tokens further out than the one a
+	// session hits.
+	window := (maxContext - max(maxOutput, outputFloor)) * wallParts / wallShare
 	perCall := window / (resultShare * batchLimit)
 
 	// What the gate can permit and still be sure the session survives to write its handoff.
@@ -137,9 +150,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// nothing bounds but the measurement.
 	reserve := perCall*batchLimit + turnReserve
 	if reserve >= window {
-		return Limits{}, fmt.Errorf("a %d-token window with a %d-token reservation leaves %d "+
-			"for a session, under the %d that lands after the gate's last reading: serve more "+
-			"context, or reserve less output",
+		return Limits{}, fmt.Errorf("a %d-token declared context with a %d-token reservation "+
+			"leaves a %d-token window, under the %d that lands after the gate's last reading: "+
+			"serve more context, or reserve less output",
 			maxContext, max(maxOutput, outputFloor), window, reserve)
 	}
 	headroom := window - reserve
@@ -154,9 +167,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 		ceiling = headroom
 	}
 	if ceiling < preambleFloor {
-		return Limits{}, fmt.Errorf("a %d-token window with a %d-token reservation leaves a "+
-			"ceiling of %d, under the %d a session costs before it does anything: serve more "+
-			"context, or reserve less output",
+		return Limits{}, fmt.Errorf("a %d-token declared context with a %d-token reservation "+
+			"leaves a ceiling of %d, under the %d a session costs before it does anything: "+
+			"serve more context, or reserve less output",
 			maxContext, maxOutput, ceiling, preambleFloor)
 	}
 
