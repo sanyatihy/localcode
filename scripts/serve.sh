@@ -74,5 +74,9 @@ SERVER_BIN="${SERVER_BIN:-llama-server}"
 command -v "$SERVER_BIN" >/dev/null 2>&1 || [ -x "$SERVER_BIN" ] || {
   echo "$CONFIG names a server that is not there: $SERVER_BIN" >&2; exit 2; }
 
-echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V on $HOST:$PORT via $SERVER_BIN" >&2
+# The banner is read back as well as printed: llama-server logs nothing about its prompt
+# cache, so a log is the only per-request record of a real session and this line is the only
+# place in it that says which cache those requests were served by. `default` is a reading,
+# not a gap — it says the size was llama.cpp's and nobody here chose it.
+echo "serving $CONFIG: ctx=$CTX_SIZE kv=$CACHE_TYPE_K/$CACHE_TYPE_V cache-ram=${CACHE_RAM:-default} on $HOST:$PORT via $SERVER_BIN" >&2
 exec "$SERVER_BIN" "${args[@]}"

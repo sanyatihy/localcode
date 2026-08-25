@@ -33,6 +33,12 @@ type LogRow struct {
 
 	SlotSelection string `json:"slot_selection"` // lcp | lru
 
+	// What host-RAM prompt cache served this request, read from scripts/serve.sh's banner
+	// at the head of the log. "default" means no config named one, which is what every
+	// measurement in this repo before 2026-08-25 was taken under. Empty means the log did
+	// not start with a banner, so the server was not started by that script.
+	CacheRAM string `json:"cache_ram"`
+
 	PromptTokens    int     `json:"prompt_tokens"`
 	IngestedTokens  int     `json:"ingested_tokens"`
 	CachedTokens    int     `json:"cached_tokens"`
@@ -58,6 +64,7 @@ func Requests(r io.Reader, config, session string) ([]LogRow, error) {
 	open := map[int]*LogRow{}
 	var out []LogRow
 	pending := ""
+	cacheRAM := ""
 
 	sc := bufio.NewScanner(r)
 	// Server lines are short, but a log may carry a wrapped prompt dump; give the scanner
@@ -66,6 +73,8 @@ func Requests(r io.Reader, config, session string) ([]LogRow, error) {
 	for sc.Scan() {
 		line := sc.Text()
 		switch {
+		case strings.HasPrefix(line, "serving "):
+			cacheRAM = fieldAfter(line, "cache-ram=")
 		case strings.Contains(line, "selected slot by LCP similarity"):
 			pending = SelectedByLCP
 		case strings.Contains(line, "selected slot by LRU"):
@@ -75,7 +84,7 @@ func Requests(r io.Reader, config, session string) ([]LogRow, error) {
 			if !ok {
 				continue
 			}
-			open[id] = &LogRow{Config: config, Session: session, TaskID: id, SlotSelection: pending}
+			open[id] = &LogRow{Config: config, Session: session, TaskID: id, SlotSelection: pending, CacheRAM: cacheRAM}
 			pending = ""
 		case strings.Contains(line, "prompt eval time"):
 			if row := openRow(open, line); row != nil {
@@ -146,6 +155,19 @@ func valueAfter(line, key string) (int, bool) {
 	}
 	n, err := strconv.Atoi(rest[:end])
 	return n, err == nil
+}
+
+// fieldAfter reads the whitespace-delimited word following key, and "" when key is absent.
+func fieldAfter(line, key string) string {
+	i := strings.Index(line, key)
+	if i < 0 {
+		return ""
+	}
+	f := strings.Fields(line[i+len(key):])
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0]
 }
 
 // tokensAfter reads the token count from a timing line, which reads
