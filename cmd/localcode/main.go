@@ -87,8 +87,12 @@ func main() {
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
 	calls := fs.Int("calls", 0, "override the tool-call budget the ceiling implies")
-	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
-	timeout := fs.Duration("session-timeout", 30*time.Minute, "how long one session may run")
+	// Both bounds are backstops rather than budgets: what should end a session is its
+	// ceiling and what should end a chain is the work being done. Sized so that neither
+	// binds first on real source, where a session runs 15 to 30 minutes and a chain of one
+	// instruction has taken 36 of them.
+	sessions := fs.Int("sessions", 60, "how many sessions one instruction may take")
+	timeout := fs.Duration("session-timeout", time.Hour, "how long one session may run")
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
@@ -181,15 +185,24 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 	// And the declaration is read off the server rather than off the file, because the
-	// file carries one number and `-config` chooses which context is served. The prompt
-	// and the reply share the served context, so the window is what is served less the
-	// reservation — the same arithmetic the file's own comment states, applied to the
-	// server that is actually running instead of to the one it was written for.
-	maxContext, err := declaredFromServer(o.endpoint, maxOutput, fileContext)
+	// file carries one number and `-config` chooses which context is served. What is
+	// declared is the whole of it: the harness takes its own reservation off whatever it
+	// is told, so a declaration that has already taken one leaves that much of the served
+	// context unusable by anything.
+	maxContext, err := declaredFromServer(o.endpoint, fileContext)
 	if err != nil {
 		return 2, err
 	}
 	env = setEnv(env, "CLAUDE_CODE_MAX_CONTEXT_TOKENS", strconv.Itoa(maxContext))
+	// And the harness's own check on that number is off, because it is a second answer to
+	// a question this repo has already answered. It holds back about a quarter of whatever
+	// it is told — measured, it refuses past 34,258 tokens of a declared 49,152 — and the
+	// fraction is undocumented, so a window derived from it is a window nobody can account
+	// for. What it was protecting against is the server's own 400, and the gate is what
+	// prevents that here: from a transcript reading, against a ceiling, with a handoff on
+	// the other side of the denial. `claude-code.env` still leaves it on, because a session
+	// somebody runs by hand has no gate.
+	env = setEnv(env, "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT", "1")
 	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
 	if err != nil {
 		return 2, err
@@ -620,7 +633,8 @@ func declared(env []string) (maxContext, maxOutput int, err error) {
 	return maxContext, maxOutput, nil
 }
 
-// declaredFromServer is the window to declare against the context the endpoint reports.
+// declaredFromServer is the context to declare against what the endpoint reports, which is
+// the whole of it.
 //
 // The wall a session hits is the served context, and `-config` moves it — so a declaration
 // taken from a file is a claim about whichever server that file was written for. Taking it
@@ -628,10 +642,17 @@ func declared(env []string) (maxContext, maxOutput int, err error) {
 // 3,072 tokens too generous let them edit four files each and then die on `Prompt is too
 // long` with no handoff written.
 //
+// Nothing is subtracted here. The harness holds back its own reservation from whatever it
+// is told — measured, it will not send past about three quarters of the declaration less
+// that reservation — so a declaration that has already taken one off leaves 4,096 tokens of
+// the served context that neither the prompt nor the reply can ever use. The largest prompt
+// it sent at a declared 49,152 was 34,008 tokens, which with the whole reservation on top is
+// 38,104 of the 49,152 served: the declaration cannot overrun the server.
+//
 // It says so when the file disagrees, because the file is what an operator reading the
 // configuration would believe, and a number silently overridden is a number nobody can
 // account for afterwards.
-func declaredFromServer(endpoint string, maxOutput, fileContext int) (int, error) {
+func declaredFromServer(endpoint string, fileContext int) (int, error) {
 	p, err := readProps(endpoint)
 	if err != nil {
 		return 0, err
@@ -642,18 +663,12 @@ func declaredFromServer(endpoint string, maxOutput, fileContext int) (int, error
 			endpoint)
 	}
 	served := p.Settings.NCtx
-	if served <= maxOutput {
-		return 0, fmt.Errorf("%s serves %d tokens against a %d-token output reservation, "+
-			"which leaves a session nothing at all: serve more context, or reserve less output",
-			endpoint, served, maxOutput)
+	if served != fileContext {
+		fmt.Fprintf(os.Stderr, "context: %d tokens, the whole of what %s serves — "+
+			"claude-code.env declares %d, which is not this server\n",
+			served, endpoint, fileContext)
 	}
-	declared := served - maxOutput
-	if declared != fileContext {
-		fmt.Fprintf(os.Stderr, "window: %d tokens, from the %d %s serves less the %d "+
-			"reserved for a reply — claude-code.env declares %d, which is not this server\n",
-			declared, served, endpoint, maxOutput, fileContext)
-	}
-	return declared, nil
+	return served, nil
 }
 
 // setEnv replaces a variable rather than appending a second one. Two entries for one name

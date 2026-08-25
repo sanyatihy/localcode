@@ -954,15 +954,82 @@ a session told in prose to spend three commands reached compaction anyway, and o
 45% of its window acknowledged the warning and carried on.
 
 **The ceiling is derived from what lands after it.** The gate decides on the context as the
-transcript last recorded it, and three things arrive after that reading: the results of the
-calls it is permitting, the turn that asked for them, and the turn that answers the denial
-by writing the handoff. So the ceiling is the window less a quarter for results and twice
-the output reservation, and that is also the default: as high as the arithmetic allows and
-no higher. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
+transcript last recorded it, and two things arrive after that reading: the results of the
+calls it is permitting, and what the turns that follow them generate. So the ceiling is the
+window less a quarter for results and less 6,144 tokens for the turns, and that is also the
+default: as high as the arithmetic allows and no higher. The window it is a fraction of is
+the served context less what a reply may generate, which is the whole of what the server
+will take. `-ceiling` only lowers it, and lowering it buys no safety the reserve does not
 already buy while costing a handoff — measured at half the window, a session could not both
 read a file and edit it, which `Edit` requires of it, so the chain wrote handoffs and never
 changed a line. A window with no room left for the preamble is refused rather than clamped:
 a session started in one spends a cold ingest to say `Prompt is too long`.
+
+**The two terms are bounded differently, and only one of them by the gate.** A quarter of
+the window is exactly the four maximum-sized results a turn is permitted, so that term is a
+bound the gate itself creates. Nothing bounds what the turns generate except the reply the
+harness would allow, and the reserve held twice that — 8,192 tokens — for turns measured at
+2,774 in the worst session of eight chains. The turn term is therefore the measurement below
+and not the bound: twice the worst recorded, which leaves the whole reserve at 2.1x the
+largest growth ever seen past that reading, at both windows this project serves. It buys
+2,048 tokens of ceiling and costs the smallest contexts: a served context under about 24,576
+now leaves too little to read a file, change it and see what that did, and is refused rather
+than run.
+
+**What lands after that reading, measured across every chain here.** Eight chains and 69
+scored sessions — five against the generated fixture, three against a private work
+repository — and 54 of them ended on the ceiling rather than on a call budget or on their
+own work. The overshoot past the ceiling runs 342 to 5,486 tokens with a median of 1,956,
+and the session that came closest to the wall left 12,946 tokens of window unspent. Read
+from the transcripts of the 51 whose state directories survive, what arrives after the last
+model call at or under the ceiling is **at most four turns**: they generate 1,450 tokens at
+the median and 2,774 at the worst, and grow the context by 2,396 and 7,881. So the two
+reserve terms are not equally wrong. The results reach 72% of the four-maximum-sized-results
+bound the gate itself creates, which no run has spent; the turns reach a third of twice the
+output reservation held for them, and nothing in the distribution comes near it. The rows
+are in
+[data/2026-08-25-m2max-32gb-0037-overshoot.jsonl](data/2026-08-25-m2max-32gb-0037-overshoot.jsonl).
+
+**The harness's own context check is off for the sessions `localcode` starts.** It is a
+second answer to a question this repo has already answered: it exists to stop a session
+sending a prompt the server will refuse, which is what the gate does — from a transcript
+reading, against a ceiling, with a handoff on the other side of the denial. Left on it holds
+back about a quarter of whatever it is told, by an undocumented fraction, so a window derived
+from it is a window nobody can account for. With
+`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1` the window is what the server will
+take — measured, a 44,509-token prompt is sent against a 49,152 context where the check
+refused anything past 34,258. `harness/claude-code/claude-code.env` still leaves it on,
+because a session somebody runs by hand has no gate.
+
+**What replaces it is llama-server's own 400, and the driver records it.** `request (49509
+tokens) exceeds the available context size (49152 tokens)` — both numbers, so a session that
+overran says by how much. The harness surfaces the body verbatim and does not recover, so
+the supervisor reads it out of the event stream and writes it to the session's row as
+`context_overrun`. One appearing at all means the budget was wrong: the ceiling and the
+reserve exist so that no prompt this driver sends can reach it.
+
+**The harness sends at most three-quarters of the context it was declared, less its
+reservation — with its own check left on.** Bisected at four declarations against one 49,152 server, by padding a prompt
+to an exact served-token count and reading whether it was sent: at 49,152 declared with
+4,096 reserved the largest prompt that went through counted 34,008 tokens and the smallest
+refused 34,258 — 0.755 of the 45,056 the arithmetic here calls the window, and 0.692 of the
+context. The other three walls sit at 0.768, 0.794 and 0.757 of that same quantity, so
+**three-quarters is under every one of them** while `declared − reservation` is above all
+four. The refusal is the harness's own — `Prompt is too long`, exit 1, and nothing reaches
+the server — which is what makes the measurement cheap in one direction and a cold ingest in
+the other. The rows are in
+[data/2026-08-25-m2max-32gb-0037-prompt-wall.jsonl](data/2026-08-25-m2max-32gb-0037-prompt-wall.jsonl),
+and [`scripts/promptwall.sh`](../scripts/promptwall.sh) re-runs it.
+
+**With the check on, the output reservation is subtracted twice, and it is the smaller
+mistake.** The
+largest prompt the harness will send at a declared 49,152 is 34,008 tokens; with the whole
+4,096 reservation on top that is 38,104 of the 49,152 served, so declaring the served
+context in full cannot overrun it — the same prompt is refused at a declared 48,128 and sent
+at 48,640, which is the wall read the other way round. What the declaration was hiding is
+larger: at the shipped declaration of 45,056 the window was taken as 40,960 while the
+harness would not send past about 31,200, so every session was budgeted against a wall
+10,000 tokens further out than the one it would actually hit.
 
 **A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
 decides a whole turn's calls, because the harness issues them together and nothing changes
@@ -1001,7 +1068,7 @@ given: at the smaller ceiling no session of the seventeen reached the budget and
 median was 9 calls, while at the larger eleven of eighteen ended on it.
 
 **So the budget follows the ceiling, at the cheapest call rather than the typical one.** It
-is the room above the preamble divided by 350 tokens — 51 calls at the shipped window, 25 at
+is the room above the preamble divided by 350 tokens — 66 calls at the shipped context, 30 at
 32,768 — and 350 is the low end of the measured range because this bound is the backstop for
 when the transcript cannot be read: sized on a typical call it would pre-empt the ceiling for
 every session whose calls come cheaper than typical, which is half of them. A ceiling with
