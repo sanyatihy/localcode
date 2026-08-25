@@ -1,9 +1,12 @@
-// Holds a Pi session to the budget `localcode` gave it, by refusing tool calls.
+// Holds a Pi session to the budget `localcode` gave it: a tool call refused at the
+// ceiling, a read narrowed to the result cap, a compaction cancelled, and an end refused
+// while the session has handed nothing on.
 //
 // Loaded beside the provider with a second `-e`. Nothing is decided here: the payload is
-// filled in from Pi's vocabulary, `localcode hook gate` answers, and a refusal is returned
-// as a blocked call. The gate is the same binary and the same code the Claude Code hooks
-// run, so the two harnesses cannot drift into two answers about what a session may spend.
+// filled in from Pi's vocabulary, `localcode hook gate` and `localcode hook stop` answer,
+// and the verdict is returned in Pi's own terms. Those are the binary and the code the
+// Claude Code hooks run, so the two harnesses cannot drift into two answers about what a
+// session may spend.
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
@@ -41,18 +44,18 @@ function fromGate(updated) {
   return out;
 }
 
-// One process per call, which is what the Claude Code hooks already cost. Exit 2 is the
-// refusal and stderr is the reason the model is given; a permitted call the gate held to
-// the result cap comes back on stdout. Anything else stands aside, because a gate that
-// cannot answer must be able to stop a session overrunning and must not be able to stop it
-// working.
-function ask(payload, cwd) {
+// One process per decision, which is what the Claude Code hooks already cost.
+function hook(name, payload, cwd) {
   const bin = process.env.LOCALCODE_BIN || "localcode";
-  const run = spawnSync(bin, ["hook", "gate"], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    cwd,
-  });
+  return spawnSync(bin, ["hook", name], { input: JSON.stringify(payload), encoding: "utf8", cwd });
+}
+
+// Exit 2 is the refusal and stderr is the reason the model is given; a permitted call the
+// gate held to the result cap comes back on stdout. Anything else stands aside, because a
+// gate that cannot answer must be able to stop a session overrunning and must not be able
+// to stop it working.
+function ask(payload, cwd) {
+  const run = hook("gate", payload, cwd);
   if (run.status === 2) {
     return { reason: run.stderr.trim() || "localcode: this session's budget is spent." };
   }
@@ -70,6 +73,17 @@ export default function (pi) {
   // threshold, so it holds whatever `compaction.reserveTokens` the session was served —
   // and it covers the manual and overflow triggers, which no reserve does.
   pi.on("session_before_compact", () => ({ cancel: true }));
+
+  // A session that has handed nothing on is not finished. The same `chain.Stop` the Stop
+  // hook asks answers here, refusals and grace included, and a refusal is delivered as a
+  // follow-up message: Pi continues on what an `agent_end` handler queues, which is the
+  // only thing here that keeps a session going.
+  pi.on("agent_end", (_event, ctx) => {
+    const run = hook("stop", { session_id: ctx.sessionManager.getSessionId() }, ctx.cwd);
+    if (run.status !== 2) return;
+    const reason = run.stderr.trim() || "localcode: this session has handed nothing on.";
+    pi.sendUserMessage(reason, { deliverAs: "followUp" });
+  });
 
   pi.on("tool_call", (event, ctx) => {
     const verdict = ask(
