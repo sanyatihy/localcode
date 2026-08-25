@@ -8,6 +8,7 @@
 // Claude Code hooks run, so the two harnesses cannot drift into two answers about what a
 // session may spend.
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // Pi's tool names against the gate's. Only three matter to it — `Read` takes the result
@@ -68,7 +69,32 @@ function ask(payload, cwd) {
   }
 }
 
+// What the session before this one in the chain left, or "" for the first of a chain. Read
+// once: the file cannot change while the session runs, and it is read into every request.
+function inherited() {
+  const path = process.env.LOCALCODE_INHERIT;
+  if (!path) return "";
+  try {
+    const body = readFileSync(path, "utf8").trim();
+    return body ? `The previous session in this chain left this behind:\n\n${body}` : "";
+  } catch {
+    return ""; // a handoff that cannot be read is one the session was not given
+  }
+}
+
+const INHERITED = inherited();
+
 export default function (pi) {
+  // The inheritance goes in front of the instruction rather than into the system prompt.
+  // The prompt is what every session of the chain sends unchanged and the server holds
+  // between them; a handoff differs per session, and putting it there would cost the whole
+  // preamble again at every hop.
+  pi.on("context", (event) => {
+    if (!INHERITED) return;
+    const carried = { role: "user", content: [{ type: "text", text: INHERITED }], timestamp: 0 };
+    return { messages: [carried, ...event.messages] };
+  });
+
   // A chain hands off; it does not compact. Cancelling is a refusal rather than a
   // threshold, so it holds whatever `compaction.reserveTokens` the session was served —
   // and it covers the manual and overflow triggers, which no reserve does.
