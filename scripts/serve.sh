@@ -46,6 +46,12 @@ add_opt --chat-template-kwargs "${CHAT_TEMPLATE_KWARGS:-}"
 add_opt --batch-size "${BATCH_SIZE:-}"
 add_opt --ubatch-size "${UBATCH_SIZE:-}"
 
+# The host-RAM prompt cache, absent from every config that leaves llama.cpp's 8192 MiB
+# default. On unified memory those MiB are bought from the same pool the KV reservation
+# sits in, so how many a measurement was taken with is part of how it was produced. `0`
+# turns the cache off and is a value, not an absence — add_opt tests for empty, not false.
+add_opt --cache-ram "${CACHE_RAM:-}"
+
 # Speculative decoding, absent from every config that does not use it. The draft model and
 # the mechanism are part of how a measurement was produced, so they live in the config with
 # everything else rather than being passed at the call site.
