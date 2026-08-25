@@ -64,7 +64,8 @@ run so far has spent it.
       session no room
 - [x] the boundary at which the harness refuses a prompt is measured against a server told
       its whole context
-- [ ] the window takes back whatever that measurement shows is reserved twice
+- [ ] the window is the largest prompt the harness will send, which takes back the
+      reservation subtracted twice and gives up the quarter it never had
 
 ## Log
 
@@ -88,3 +89,8 @@ run so far has spent it.
 - 2026-08-25 — the reservation is subtracted twice and taking it back is safe, because the
   largest prompt sent plus the whole reservation is 38,104 of the 49,152 served. That was
   the question the box asked; the larger answer is that the window was never the wall.
+- 2026-08-25 — the last box is rewritten. It asked for the window to take back what is
+  reserved twice, and the measurement says that is 4,096 tokens the window may have and a
+  quarter of it the window never had. Taking back the one without giving up the other would
+  raise the ceiling to 27,648 against a wall at 34,134 and a growth past it measured at
+  7,881 — a session budgeted to land exactly on `Prompt is too long`.
