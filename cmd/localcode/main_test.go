@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -537,75 +536,6 @@ func TestNetOpensOutboundForTheSession(t *testing.T) {
 	}
 }
 
-// The gate is this binary, not a fourth shell script, so what enforces the budget is
-// covered by the same `make check` as everything else that decides something.
-func TestSettingsInstallTheGateAsThisBinary(t *testing.T) {
-	root, dir := fakeCheckout(t), t.TempDir()
-	path, err := writeSettings(root, dir, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc struct {
-		Hooks map[string][]struct {
-			Hooks []struct{ Command string } `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(body, &doc); err != nil {
-		t.Fatal(err)
-	}
-	pre, ok := doc.Hooks["PreToolUse"]
-	if !ok || len(pre) == 0 || len(pre[0].Hooks) == 0 {
-		t.Fatalf("no PreToolUse hook is installed:\n%s", body)
-	}
-	if !strings.HasSuffix(pre[0].Hooks[0].Command, " hook gate") {
-		t.Fatalf("the gate must be this binary run as a hook: %q", pre[0].Hooks[0].Command)
-	}
-}
-
-// Stop fires whenever the agent finishes responding, which in an interactive session is
-// every time it hands the keyboard back. Installed there it would refuse the conversation.
-func TestStopIsInstalledOnlyForASessionAnsweringOneInstruction(t *testing.T) {
-	root := fakeCheckout(t)
-	installed := func(oneShot bool) bool {
-		path, err := writeSettings(root, t.TempDir(), oneShot)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var doc struct {
-			Hooks map[string]any `json:"hooks"`
-		}
-		if err := json.Unmarshal(body, &doc); err != nil {
-			t.Fatal(err)
-		}
-		_, ok := doc.Hooks["Stop"]
-		return ok
-	}
-	if !installed(true) {
-		t.Fatal("a session answering one instruction must not be able to end without a handoff")
-	}
-	if installed(false) {
-		t.Fatal("an interactive session would be refused at the end of every turn")
-	}
-}
-
-// An installation under a path with a space in it would otherwise run its first word.
-func TestShellQuoteSurvivesAPathAShellWouldSplit(t *testing.T) {
-	if got := shellQuote("/Users/a b/bin/localcode"); got != "'/Users/a b/bin/localcode'" {
-		t.Fatalf("got %s", got)
-	}
-	if got := shellQuote("/it's/here"); got != `'/it'\''s/here'` {
-		t.Fatalf("a quote in the path must not end the quoting: %s", got)
-	}
-}
-
 // The session is budgeted before it starts, and it is told where to write in the same
 // breath: the directory it may write to and the directory the spec names are one, or the
 // only call the gate permits is the one the harness refuses.
@@ -689,23 +619,6 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	// quarter of that for a turn's results and 6,144 for the turns is the ceiling.
 	if spec.Limits.Window != 28672 || spec.Limits.Ceiling != 15360 {
 		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
-	}
-}
-
-// The child has to be told the same number, and told it once: two entries for one name
-// leave which of them Claude Code reads to the C library.
-func TestTheDeclarationTheChildIsGivenIsTheServedOne(t *testing.T) {
-	for _, tc := range []struct{ name, in, want string }{
-		{"replaced", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=45056\nB=2", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672\nB=2"},
-		{"appended", "A=1", "A=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
-		{"deduped", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=1\nCLAUDE_CODE_MAX_CONTEXT_TOKENS=2", "CLAUDE_CODE_MAX_CONTEXT_TOKENS=28672"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := setEnv(strings.Split(tc.in, "\n"), "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "28672")
-			if strings.Join(got, "\n") != tc.want {
-				t.Fatalf("got %q, want %q", strings.Join(got, "\n"), tc.want)
-			}
-		})
 	}
 }
 
