@@ -1,9 +1,9 @@
 ---
 id: 0038
 title: Bound a Pi session the way a Claude Code session is bounded
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-25
 needs:
 ---
 
@@ -54,25 +54,19 @@ refusal.
 
 ## Tasks
 
-- [ ] the provider file declares what the server actually serves
-- [ ] a Pi session is denied a tool call at the ceiling, by `chain.Gate` and not by a second
+- [x] the provider file declares what the server actually serves
+- [x] a Pi session is denied a tool call at the ceiling, by `chain.Gate` and not by a second
       answer to the same question
-- [ ] a `Read` past the result cap is narrowed rather than refused, as it is under the hooks
-- [ ] a Pi session cannot compact, by a reserve that cannot fire and a cancel that refuses
-- [ ] a Pi session cannot end without a handoff, within the same grace the `Stop` hook allows
-
-## Open questions
-
-- **Where the peak context comes from.** The gate needs the largest context any call reached,
-  which under Claude Code is read from the transcript by `chain.Cost`. Pi's extension holds
-  per-message `usage` in `ctx.sessionManager` and could pass it in; a second reader in Go
-  could parse Pi's session JSONL instead. Leaning towards the extension passing it, because
-  the reader would be a second home for a fact the harness already has — against it, the
-  supervisor needs to read that file anyway in 0039, and one reader would serve both.
-- **How the extension reaches the gate.** `localcode hook gate` is a binary that takes a
-  payload on stdin, so the extension could shell out to it and keep one implementation; or
-  the gate could be reached over Pi's RPC mode with the supervisor holding the decision.
-  Leaning towards shelling out, since it is what the hooks already do and costs a process per
-  call rather than a protocol.
+- [x] a `Read` past the result cap is narrowed rather than refused, as it is under the hooks
+- [x] a Pi session cannot compact, by a reserve that cannot fire and a cancel that refuses
+- [x] a Pi session cannot end without a handoff, within the same grace the `Stop` hook allows
 
 ## Log
+
+- **Both open questions settled in the building.** The peak context is passed in by the
+  extension, from `ctx.getContextUsage()` — Pi's own reading, which sums the four usage
+  fields `internal/handoff` takes a Claude Code peak from. So no second reader of Pi's
+  session JSONL is written here, and 0039's supervisor inherits none. The extension reaches
+  the gate by running `localcode hook gate`, one process per call, as the hooks already do.
+- **`chain.Payload` gained `peak_tokens`.** A harness that keeps its own context reports it
+  there, and the transcript is read only when it is absent.

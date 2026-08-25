@@ -483,6 +483,9 @@ into `docs/data/`.
 - **Harness configuration is repo-local and different for each**: Pi an extension
   registering a provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`,
   Hermes a top-level `model:` block with `provider: custom`.
+- **Pi's provider file reads the served context from `/props`** rather than declaring a
+  number, because no literal is right for both the comparison's 65,536 and the agent flow's
+  49,152. With no server to read, it refuses to load and names the config to serve.
 - **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.
@@ -1016,6 +1019,28 @@ two hooks enforce it — `localcode hook gate` on `PreToolUse`, `localcode hook 
 `Stop`. Neither asks the model for anything, because instruction was measured not to work:
 a session told in prose to spend three commands reached compaction anyway, and one warned at
 45% of its window acknowledged the warning and carried on.
+
+**Pi is held to that budget by the same binary.** A `tool_call` handler in
+[`harness/pi/localcode-gate.js`](../harness/pi/localcode-gate.js) fills the gate's payload
+from Pi's vocabulary and runs `localcode hook gate`, so the two harnesses cannot hold a
+session to two budgets. The context comes in on the payload as `peak_tokens` rather than
+off a transcript: Pi reports its own, and that reading sums the same four usage fields a
+Claude Code transcript is read for.
+
+**That session cannot compact.** `session_before_compact` cancels every trigger — manual,
+threshold and overflow — and
+[`harness/pi/settings.json.reference`](../harness/pi/settings.json.reference), seeded into
+the `PI_CODING_AGENT_DIR` a run is given, serves a compaction reserve of 0 so the threshold
+sits at the whole served context rather than 16,384 tokens below it. Measured at an
+8,192-token window with the recent-token floor at 100: the default reserve compacted a
+two-prompt session twice, the served reserve compacted it none, and the cancel alone
+compacted it none.
+
+**And it cannot end having handed nothing on.** `localcode hook stop` answers an
+`agent_end` handler, and its refusal is delivered as a follow-up message rather than an
+exit code, because a message queued there is what Pi continues on. The grace is the Stop
+hook's two refusals: measured, a session given `write` answered the first refusal with a
+handoff, and one given only `read` was refused twice and then allowed to end.
 
 **The ceiling is derived from what lands after it.** The gate decides on the context as the
 transcript last recorded it, and two things arrive after that reading: the results of the

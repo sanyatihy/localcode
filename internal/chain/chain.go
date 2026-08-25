@@ -190,6 +190,11 @@ type Payload struct {
 	TranscriptPath string         `json:"transcript_path"`
 	ToolName       string         `json:"tool_name"`
 	ToolInput      map[string]any `json:"tool_input"`
+	// PeakTokens is the context the session has reached, for a harness that keeps that
+	// number itself. Zero on every Claude Code payload, where the transcript is where it
+	// lives; Pi reports it through its extension API and writes a session file this
+	// package has no reader for.
+	PeakTokens int `json:"peak_tokens,omitempty"`
 }
 
 // State is what the gate knows about the session at the moment of a call. Peak is -1 when
