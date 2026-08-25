@@ -83,7 +83,21 @@ type row struct {
 // instruction the next one obeys, which is how a chain freezes at its first handoff.
 func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	interrupted <-chan os.Signal, dry int) (row, error) {
-	handoffPath := filepath.Join(dir, chain.HandoffName)
+	// The chain's directory, not this session's, and that is the whole of what makes a
+	// chain's preamble stable. A path carrying the session number reaches the system
+	// prompt twice — here and in `--add-dir` — so every session sent a prompt differing
+	// from the last one's, and measured that cost the entire preamble rather than the
+	// tokens after it: 13,555 re-ingested over three handoffs, 43.5% of a chain's ingest.
+	// The file is moved into this session's directory as soon as it has been read, so
+	// everything downstream still finds one handoff per session.
+	stable := filepath.Dir(dir)
+	handoffPath := filepath.Join(stable, chain.HandoffName)
+	// A handoff left at that path is the session before's, and a session that read one as
+	// its own would obey an instruction already carried out. The move below normally takes
+	// it; this covers a session that died between writing and being read.
+	if err := os.Remove(handoffPath); err != nil && !os.IsNotExist(err) {
+		return row{}, err
+	}
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
 	}); err != nil {
@@ -96,7 +110,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 		// The handoff is written outside the repository being visited, so a session leaves
 		// it with exactly the files the work changed. Claude Code confines its file tools
 		// to the workspace, and this is what puts that one directory in it.
-		"--add-dir", dir,
+		"--add-dir", stable,
 		"--append-system-prompt", l.briefing + "\n\n" + handoffBriefing(l.limits, handoffPath) +
 			stalledBriefing(dry),
 	}
@@ -189,6 +203,15 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	}
 
 	body := chain.Read(handoffPath)
+	// Read from the chain's directory, kept in this session's: the stable path is what the
+	// prompt names, and the per-session copy is what LatestHandoff and every row below
+	// read. A failed move is not a failed session — the handoff has already been read —
+	// but it would leave the next session the last one's plan, so it ends the chain.
+	if len(body) > 0 {
+		if err := os.Rename(handoffPath, filepath.Join(dir, chain.HandoffName)); err != nil {
+			return r, fmt.Errorf("could not keep the handoff of session %d: %w", n, err)
+		}
+	}
 	r.Handoff, r.Next = len(body), chain.Next(body)
 	if t := newestTranscript(dir, env); t != "" {
 		r.Peak, r.Turns = chain.Cost(t)

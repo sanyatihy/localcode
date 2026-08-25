@@ -387,6 +387,14 @@ conversation was chosen every time. The slot was chosen and the common prefix wa
 token, which places the divergence at the **head** of the preamble rather than its tail: what
 is lost is not the tokens after a handoff path is named, it is all of them.
 
+**The two paths that made it differ are the chain's now, not the session's.** The system
+prompt carried the session number twice — `--add-dir` and the handoff path the briefing
+names — and nothing else about it moved: three sessions' prompts, captured at the endpoint,
+differ in those two strings and in nothing else. Both now name the chain's directory, and
+the handoff is moved into the session's own as soon as it has been read, so a chain's
+sessions send byte-identical preambles while every row downstream still finds one handoff
+per session.
+
 **Only a prefix the server has never seen ingests from zero**, and across two whole sessions
 that is one request. A fresh session is not one: the second session's first request sent the
 same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516

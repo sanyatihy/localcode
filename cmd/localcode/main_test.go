@@ -239,6 +239,19 @@ func envOf(t *testing.T, argv string) []string {
 	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 }
 
+// handoffDirOf is where a session's budget is, which is the directory the supervisor tells
+// it about through LOCALCODE_HANDOFF_DIR rather than through an argument.
+func handoffDirOf(t *testing.T, argv string) string {
+	t.Helper()
+	for _, kv := range envOf(t, argv) {
+		if v, ok := strings.CutPrefix(kv, "LOCALCODE_HANDOFF_DIR="); ok {
+			return v
+		}
+	}
+	t.Fatalf("the session was told no handoff directory")
+	return ""
+}
+
 func flagValue(args []string, name string) string {
 	for i, a := range args {
 		if a == name && i+1 < len(args) {
@@ -614,7 +627,10 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	if dir == "" {
 		t.Fatalf("the session was given no directory to write its handoff in:\n%s", got)
 	}
-	spec, err := chain.ReadSpec(dir)
+	// The budget is in the session's own directory and the handoff path is the chain's:
+	// the prompt names the second so it does not move between sessions, and the hook
+	// finds the first through the environment rather than through an argument.
+	spec, err := chain.ReadSpec(handoffDirOf(t, argv))
 	if err != nil {
 		t.Fatalf("the session was not budgeted: %v", err)
 	}
@@ -664,12 +680,7 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 		endpoint: serving(t, http.StatusOK, 32768), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d err %v", code, err)
 	}
-	got, err := os.ReadFile(argv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := flagValue(argsOf(got), "--add-dir")
-	spec, err := chain.ReadSpec(dir)
+	spec, err := chain.ReadSpec(handoffDirOf(t, argv))
 	if err != nil {
 		t.Fatalf("the session was not budgeted: %v", err)
 	}
