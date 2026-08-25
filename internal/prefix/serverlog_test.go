@@ -1,6 +1,7 @@
 package prefix
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -107,5 +108,34 @@ func TestCheckNoticesADifferentCount(t *testing.T) {
 	bad := Check([]LogRow{{PromptTokens: 1}}, []Row{{PromptTokens: 1}, {PromptTokens: 2}})
 	if len(bad) != 1 || bad[0].Field != "requests" {
 		t.Fatalf("got %v, want one disagreement about the count", bad)
+	}
+}
+
+// The prompt cache is the one thing about a request that llama-server logs nothing about,
+// so the only record of it is the banner scripts/serve.sh writes ahead of the server's
+// own output. A row that does not carry it cannot say which cache produced its reuse.
+func TestRequestsReadsTheCacheBudgetFromTheBanner(t *testing.T) {
+	banner := "serving config/driver-mtp-32k.env: ctx=32768 kv=q8_0/q8_0 cache-ram=%s on 127.0.0.1:8081 via llama-server\n"
+	for _, want := range []string{"default", "0", "8192"} {
+		rows, err := Requests(strings.NewReader(fmt.Sprintf(banner, want)+oneRequest), "driver", "chain")
+		if err != nil {
+			t.Fatalf("requests: %v", err)
+		}
+		if rows[0].CacheRAM != want {
+			t.Errorf("cache_ram %q, want %q", rows[0].CacheRAM, want)
+		}
+	}
+}
+
+// A log from a server nobody started through that script has no banner, and a row that
+// guessed a budget there would be inventing the number this whole feature exists because
+// nobody recorded.
+func TestRequestsLeavesTheCacheBudgetEmptyWithoutABanner(t *testing.T) {
+	rows, err := Requests(strings.NewReader(oneRequest), "agent", "probe")
+	if err != nil {
+		t.Fatalf("requests: %v", err)
+	}
+	if rows[0].CacheRAM != "" {
+		t.Errorf("cache_ram %q, want empty", rows[0].CacheRAM)
 	}
 }
