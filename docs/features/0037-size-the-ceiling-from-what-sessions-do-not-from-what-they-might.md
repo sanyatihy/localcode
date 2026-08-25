@@ -59,7 +59,7 @@ run so far has spent it.
 
 ## Tasks
 
-- [ ] the overshoot past the ceiling is measured across every chain this repository has run
+- [x] the overshoot past the ceiling is measured across every chain this repository has run
 - [ ] the reserve is derived from that measurement, and refuses when the arithmetic leaves a
       session no room
 - [ ] the boundary at which the harness refuses a prompt is measured against a server told
@@ -67,3 +67,11 @@ run so far has spent it.
 - [ ] the window takes back whatever that measurement shows is reserved twice
 
 ## Log
+
+- 2026-08-25 — the overshoot is 5,486 tokens at the worst over 8 chains and 69 sessions, and
+  the growth past the reading the gate decided on is 7,881. The two reserve terms are not
+  equally wrong: the results reach 72% of the bound the gate creates, the turns a third of
+  twice the output reservation.
+- 2026-08-25 — four turns land after that reading, not the two the reserve was reasoned
+  from: the batch bound permits four calls and the handoff grace three writes. The largest
+  single one generated 1,305 tokens against the 639 the problem records.
