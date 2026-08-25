@@ -99,6 +99,7 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	}
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
+		Harness: l.agent.Name(),
 	}); err != nil {
 		return row{}, err
 	}
@@ -540,7 +541,7 @@ func ending(dir string, handoff []byte) string {
 }
 
 // selectChain answers which chain this invocation belongs to, and what it was asked to do.
-// Starting clean is the default because that is what `claude` does, and because one handoff
+// Starting clean is the default because that is what starting an agent does, and because one handoff
 // per repository was wrong: a second instruction in the same checkout would have resumed
 // the first and then overwritten what it knew.
 func selectChain(state string, o opts) (dir, id, goal string, err error) {

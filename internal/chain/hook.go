@@ -21,6 +21,11 @@ type Spec struct {
 	Handoff string `json:"handoff"` // absolute, and the only path the session may write out of turn
 	Chain   string `json:"chain"`
 	Session int    `json:"session"`
+	// Harness is the agent this session ran in, recorded because what it left behind can
+	// only be read by something that knows which one it was. Per session rather than per
+	// chain: a resumed chain may be given a different one, and the rows either side of
+	// that were written by different agents.
+	Harness string `json:"harness,omitempty"`
 }
 
 func WriteSpec(dir string, s Spec) error {
@@ -82,6 +87,14 @@ func (l Limits) Changed(from Limits) []string {
 		}
 	}
 	return out
+}
+
+// HarnessIn is the agent a chain's sessions last ran in, and whether its record says so.
+// A chain that ran before this was recorded says nothing, and a reader has to fall back to
+// what it can — the alternative is refusing to account for chains that already exist.
+func HarnessIn(chainDir string) (string, bool) {
+	s, ok := LastSpec(chainDir)
+	return s.Harness, ok && s.Harness != ""
 }
 
 // ErrNoSpec is a session nobody budgeted.

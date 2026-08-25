@@ -30,6 +30,11 @@ type Agent interface {
 	// sandbox is the driver's, so what comes back is what goes inside it.
 	Command(s Session) (bin string, args, env []string, err error)
 
+	// Writable is where the agent keeps its own state, which the sandbox has to let it
+	// write. The boundary is the driver's and the paths are the agent's: a session denied
+	// its own history directory fails in a way that reads like a model failure.
+	Writable() []string
+
 	// Render turns one session's event stream into the lines a person watching sees, and
 	// returns the server's own refusal when a prompt went past what it serves.
 	Render(events io.Reader, out io.Writer, cwd string) (overrun string)

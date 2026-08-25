@@ -90,7 +90,13 @@ func accountHere(w io.Writer, id, jsonl string) (int, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return 2, fmt.Errorf("no chain %s here: `localcode sessions` lists them", id)
 	}
-	rec, err := harness.NewRecorder("claude-code")
+	// Which agent left these files is the chain's own record. A chain that ran before that
+	// was recorded is read as the default, which is what it will have been.
+	name, ok := chain.HarnessIn(dir)
+	if !ok {
+		name = harness.DefaultAgent
+	}
+	rec, err := harness.NewRecorder(name)
 	if err != nil {
 		return 2, err
 	}

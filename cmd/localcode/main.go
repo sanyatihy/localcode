@@ -227,7 +227,7 @@ func run(o opts) (int, error) {
 	if o.net {
 		fmt.Fprintln(os.Stderr, "network: outbound ENABLED for this session")
 	}
-	profile, err := writeSandboxProfile(state, cwd, o.net)
+	profile, err := writeSandboxProfile(state, cwd, o.net, agent.Writable())
 	if err != nil {
 		return 2, err
 	}
@@ -286,9 +286,11 @@ func resolveCheckout(flagValue string) (string, error) {
 		if candidate == "" {
 			continue
 		}
-		envFile := filepath.Join(candidate, "harness", "claude-code", "claude-code.env")
-		if _, err := os.Stat(envFile); err != nil {
-			return "", fmt.Errorf("%s is not a localcode checkout: no %s", candidate, envFile)
+		// The server script rather than any harness's configuration: which agent a chain
+		// runs in is a choice, and a checkout is a checkout before that choice is made.
+		marker := filepath.Join(candidate, "scripts", "serve.sh")
+		if _, err := os.Stat(marker); err != nil {
+			return "", fmt.Errorf("%s is not a localcode checkout: no %s", candidate, marker)
 		}
 		return candidate, nil
 	}
@@ -603,7 +605,7 @@ var sandboxExec = "/usr/bin/sandbox-exec"
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
 // that uses one while appearing to allow it.
-func writeSandboxProfile(state, cwd string, net bool) (string, error) {
+func writeSandboxProfile(state, cwd string, net bool, agentState []string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("no home directory: %w", err)
@@ -615,8 +617,9 @@ func writeSandboxProfile(state, cwd string, net bool) (string, error) {
 		"/private/tmp",
 		filepath.Join(home, "Library", "Caches"), // where macOS toolchains cache
 		filepath.Join(home, ".cache"),            // where XDG ones do
-		filepath.Join(home, ".claude"),           // the agent's own history and project state
 	}
+	// Where the agent files its own state, which only the agent knows.
+	writable = append(writable, agentState...)
 	// Whatever this developer's ecosystems need, named once by them rather than guessed
 	// once by us.
 	writable = append(writable, extraWritable()...)
