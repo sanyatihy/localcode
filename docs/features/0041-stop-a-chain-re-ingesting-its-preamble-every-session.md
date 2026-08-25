@@ -1,9 +1,9 @@
 ---
 id: 0041
 title: Stop a chain re-ingesting its preamble every session
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-25
 needs:
 ---
 
