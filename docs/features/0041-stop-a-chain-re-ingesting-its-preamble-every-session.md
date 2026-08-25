@@ -88,7 +88,7 @@ the same way both times.
 
 ## Tasks
 
-- [ ] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
+- [x] `serve.sh` passes `CACHE_RAM` when a config names it, the way it already passes
       `BATCH_SIZE`, and no committed config's behaviour changes
 - [ ] `config/mtp-49k-nocache.env` screens admissible or not with the prompt cache off, and
       `docs/TECH.md` says whether the draft head is adopted at the shipped context

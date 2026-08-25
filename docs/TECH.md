@@ -353,7 +353,7 @@ turn adds. Interleaving calls moves none of them.
 
 **The server's host-RAM prompt cache is why.** llama-server keeps a prefix it evicts from a
 slot and restores it for the next request that wants it, bounded by `--cache-ram`: 8192 MiB
-by default, set in no config here. This model's q8_0 KV costs **138.1 KiB a token** — 65
+by default, and `CACHE_RAM` in a config is what moves it — `0` turns the cache off. This model's q8_0 KV costs **138.1 KiB a token** — 65
 layers, 4 KV heads, 256 wide for K and V — so that budget holds ~60,700 tokens, more than
 this config's whole 49,152 window and a call beside it. **It is bought from the same 32 GB
 the weights and the KV reservation sit in**, which 0014's ceiling was walked without.
