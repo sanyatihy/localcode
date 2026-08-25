@@ -46,7 +46,10 @@ func stubClaude(t *testing.T, script string) string {
 	t.Helper()
 	dir := t.TempDir()
 	argv := filepath.Join(dir, "argv")
-	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argv + "\n" + script + "\n"
+	// And its environment beside them: half of what the launcher decides reaches the
+	// session as a variable rather than as a flag.
+	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argv + "\nenv > " + argv + ".env\n" +
+		script + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -223,6 +226,16 @@ func TestResolveCheckoutRefusesSomethingThatIsNotOne(t *testing.T) {
 // argsOf reads the stub's record, which is one argument per line — arguments here contain
 // spaces, so splitting on whitespace would invent tokens that were never passed.
 func argsOf(b []byte) []string {
+	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+}
+
+// envOf reads the stub's record of its own environment, one variable per line.
+func envOf(t *testing.T, argv string) []string {
+	t.Helper()
+	b, err := os.ReadFile(argv + ".env")
+	if err != nil {
+		t.Fatalf("the stub recorded no environment: %v", err)
+	}
 	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 }
 
@@ -608,9 +621,15 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	if spec.Handoff != filepath.Join(dir, chain.HandoffName) {
 		t.Fatalf("the handoff must be in the directory the session may write: %s", spec.Handoff)
 	}
-	// The headroom of a 33,792 window: less a quarter for a turn's results, less the 6,144
+	// The harness's own check on the declaration is off, or a quarter of the window is held
+	// back by an undocumented fraction this repo cannot account for.
+	const off = "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1"
+	if env := envOf(t, argv); !slices.Contains(env, off) {
+		t.Fatalf("the session must run with %s", off)
+	}
+	// The headroom of a 45,056 window: less a quarter for a turn's results, less the 6,144
 	// the turns after the gate's last reading were measured to generate.
-	if spec.Limits.Ceiling != 19200 || spec.Limits.Calls != 30 {
+	if spec.Limits.Ceiling != 27648 || spec.Limits.Calls != 30 {
 		t.Fatalf("the flags must reach the session: %+v", spec.Limits)
 	}
 }
@@ -657,7 +676,7 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	// 32,768 served is declared whole; less the 4,096 the harness keeps whatever it is
 	// told, and three quarters of the rest is the 21,504 it will actually send; less a
 	// quarter of that for a turn's results and 6,144 for the turns is the ceiling.
-	if spec.Limits.Window != 21504 || spec.Limits.Ceiling != 9984 {
+	if spec.Limits.Window != 28672 || spec.Limits.Ceiling != 15360 {
 		t.Fatalf("the served context must be what bounds the session: %+v", spec.Limits)
 	}
 }

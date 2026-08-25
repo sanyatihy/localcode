@@ -190,6 +190,15 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 	env = setEnv(env, "CLAUDE_CODE_MAX_CONTEXT_TOKENS", strconv.Itoa(maxContext))
+	// And the harness's own check on that number is off, because it is a second answer to
+	// a question this repo has already answered. It holds back about a quarter of whatever
+	// it is told — measured, it refuses past 34,258 tokens of a declared 49,152 — and the
+	// fraction is undocumented, so a window derived from it is a window nobody can account
+	// for. What it was protecting against is the server's own 400, and the gate is what
+	// prevents that here: from a transcript reading, against a ceiling, with a handoff on
+	// the other side of the denial. `claude-code.env` still leaves it on, because a session
+	// somebody runs by hand has no gate.
+	env = setEnv(env, "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT", "1")
 	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
 	if err != nil {
 		return 2, err

@@ -863,7 +863,7 @@ func TestAResumeOnADifferentBudgetSaysSoBeforeItRuns(t *testing.T) {
 	}
 	// Both numbers and the endpoint, because a warning that does not name them cannot be
 	// acted on without reading session.json anyway.
-	for _, want := range []string{"ceiling 19200 -> 16896", url} {
+	for _, want := range []string{"ceiling 27648 -> 22528", url} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("the warning must name %q: %q", want, got)
 		}
@@ -923,7 +923,7 @@ func TestAChangedBudgetIsRecordedWithTheChainsEnding(t *testing.T) {
 	if len(e.Budget) == 0 {
 		t.Fatalf("the ending must carry what the budget changed by: %+v", e)
 	}
-	if !strings.Contains(strings.Join(e.Budget, " "), "ceiling 19200 -> 16896") {
+	if !strings.Contains(strings.Join(e.Budget, " "), "ceiling 27648 -> 22528") {
 		t.Fatalf("it must name both numbers: %v", e.Budget)
 	}
 }
