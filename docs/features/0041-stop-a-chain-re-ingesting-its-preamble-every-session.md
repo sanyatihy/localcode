@@ -52,6 +52,20 @@ reads for `LOCALCODE_HANDOFF_DIR`. A slot that is always reused is a serving fla
 build exposes `--cache-ram`, `--cache-idle-slots` and `--cache-reuse` while the similarity
 threshold is compiled in. Which of those applies is not decidable before the first box.
 
+**`--cache-ram` is the mechanism, it is on, and nothing here set it.** It is what saves a
+finished slot's KV state to host memory so a later request with a matching prefix restores
+rather than reprocesses — which is exactly what a chain's next session needs. It defaults to
+8,192 MiB and no config in this repo names it, so every measurement ever taken here was taken
+with 8 GiB of prompt cache enabled and unaccounted.
+
+**And that 8 GiB is bought from the ceiling.** On unified memory the host prompt cache and
+the Metal KV cache are the same physical resource, and the GPU's share of it is capped —
+21,845 MiB on this machine, two thirds of the 32 GiB. So the reuse this feature is chasing is
+in direct competition with the context a session may reach, and the documented advice for
+Apple Silicon is `--cache-ram 0`, which would close this feature rather than complete it.
+That makes the trade the design's first constraint: what the cache buys has to be measured in
+tokens not re-ingested, against what it costs in context, and neither number exists yet.
+
 **What must hold afterwards is a number, not an argument.** The same instruction driven on
 the same repository, before and after, with the server's own reused figure per session read
 the same way both times.
@@ -59,13 +73,20 @@ the same way both times.
 ## Tasks
 
 - [ ] what a chain's sessions actually reuse is measured per request, from the server's own
-      log, across a chain of at least four sessions
+      log, across a chain of at least four sessions, with the prompt cache's size on the row
 - [ ] the preamble a chain sends is identical from session to session, or the measurement
       says it does not matter and this box is dropped
 - [ ] the reuse a chain gets is measured again against the same instruction, and `docs/TECH.md`
       carries what changed
 
 ## Open questions
+
+- **Whether the prompt cache pays for itself at all here.** It costs up to 8 GiB of the same
+  pool the KV cache is capped in, and what it buys is the preamble of the next session — a few
+  thousand tokens at roughly 90 tok/s, so under a minute a session. If the measurement says
+  the cache is being evicted between sessions anyway, `--cache-ram 0` buys context for
+  nothing given up. Leaning towards measuring the reuse before deciding the size, since the
+  same run answers both.
 
 - **Whether the ceiling is 83.5% or higher.** 0018 measured 516 tokens of a 3,130-token
   preamble differing between two runs of the *same* command, so something in Claude Code's own
