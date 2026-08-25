@@ -368,6 +368,25 @@ for is only whatever prefix it has actually saved.
 and reused 161,735 tokens between them. It says how a slot was chosen, not what the server
 still held.
 
+**A chain gets none of that reuse across a handoff.** Four sessions of one instruction on
+`config/driver-mtp-32k.env`, 38 requests, accounted from the server's own log:
+
+| | prompt tokens | ingested | reused |
+|---|---|---|---|
+| the whole chain, 4 sessions | 269,130 | 31,179 | 88.4% |
+| its four session-opening requests | 17,758 | 17,754 | **0.02%** |
+| the same instruction finished in one session, 13 requests | 123,973 | 10,039 | 91.9% |
+
+Each session's first request ingests its whole preamble: 4,199, then 4,589, 4,509 and 4,457.
+The three that follow a handoff are **43.5% of everything the chain ingested** and 139.3 s of
+its 1,147 s — **12.1% of the wall**, spent on tokens the server had held minutes earlier.
+
+**It is not slot rejection.** All three were `selected slot by LCP similarity` at
+`f_sim_best` 0.638–0.657 against a 0.100 threshold, so the slot holding the last session's
+conversation was chosen every time. The slot was chosen and the common prefix was still one
+token, which places the divergence at the **head** of the preamble rather than its tail: what
+is lost is not the tokens after a handoff path is named, it is all of them.
+
 **Only a prefix the server has never seen ingests from zero**, and across two whole sessions
 that is one request. A fresh session is not one: the second session's first request sent the
 same 3,130-token preamble and ingested 516 of it, 4.5 s against 27.6 s. So about **516
