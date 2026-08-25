@@ -31,10 +31,21 @@ function peakTokens(ctx) {
   return ctx.getContextUsage()?.tokens ?? 0;
 }
 
+// The inverse of `toolInput`: a call the gate narrowed comes back in the gate's names.
+function fromGate(updated) {
+  const out = { ...updated };
+  if (typeof updated.file_path === "string") {
+    out.path = updated.file_path;
+    delete out.file_path;
+  }
+  return out;
+}
+
 // One process per call, which is what the Claude Code hooks already cost. Exit 2 is the
-// refusal and stderr is the reason the model is given; anything else stands aside, because
-// a gate that cannot answer must be able to stop a session overrunning and must not be
-// able to stop it working.
+// refusal and stderr is the reason the model is given; a permitted call the gate held to
+// the result cap comes back on stdout. Anything else stands aside, because a gate that
+// cannot answer must be able to stop a session overrunning and must not be able to stop it
+// working.
 function ask(payload, cwd) {
   const bin = process.env.LOCALCODE_BIN || "localcode";
   const run = spawnSync(bin, ["hook", "gate"], {
@@ -42,13 +53,21 @@ function ask(payload, cwd) {
     encoding: "utf8",
     cwd,
   });
-  if (run.status !== 2) return null;
-  return run.stderr.trim() || "localcode: this session's budget is spent.";
+  if (run.status === 2) {
+    return { reason: run.stderr.trim() || "localcode: this session's budget is spent." };
+  }
+  if (run.status !== 0 || !run.stdout.trim()) return {};
+  try {
+    const updated = JSON.parse(run.stdout).hookSpecificOutput?.updatedInput;
+    return updated ? { input: fromGate(updated) } : {};
+  } catch {
+    return {}; // an answer this cannot read is one it did not get
+  }
 }
 
 export default function (pi) {
   pi.on("tool_call", (event, ctx) => {
-    const reason = ask(
+    const verdict = ask(
       {
         session_id: ctx.sessionManager.getSessionId(),
         tool_name: NAMES[event.toolName] ?? event.toolName,
@@ -59,6 +78,9 @@ export default function (pi) {
     );
     // Not terminating: a session at its ceiling still has a handoff to write, and ending
     // the run here would take that away from it.
-    if (reason) return { block: true, reason };
+    if (verdict.reason) return { block: true, reason: verdict.reason };
+    // Narrowed rather than refused: the session reads what it asked for, up to what the
+    // reserve holds for one call. Pi takes the patched arguments as they stand here.
+    if (verdict.input) Object.assign(event.input, verdict.input);
   });
 }
