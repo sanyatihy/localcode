@@ -54,7 +54,7 @@ refusal.
 
 ## Tasks
 
-- [ ] the provider file declares what the server actually serves
+- [x] the provider file declares what the server actually serves
 - [ ] a Pi session is denied a tool call at the ceiling, by `chain.Gate` and not by a second
       answer to the same question
 - [ ] a `Read` past the result cap is narrowed rather than refused, as it is under the hooks

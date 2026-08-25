@@ -483,6 +483,9 @@ into `docs/data/`.
 - **Harness configuration is repo-local and different for each**: Pi an extension
   registering a provider, OpenCode a `provider` block using `@ai-sdk/openai-compatible`,
   Hermes a top-level `model:` block with `provider: custom`.
+- **Pi's provider file reads the served context from `/props`** rather than declaring a
+  number, because no literal is right for both the comparison's 65,536 and the agent flow's
+  49,152. With no server to read, it refuses to load and names the config to serve.
 - **Hermes refuses any context window under 64,000 tokens**, checked before any request. Pi
   and OpenCode run at 32k and Hermes cannot, so a like-for-like comparison must put all three
   at 64k — where a cold ingest costs 13.1 minutes against 5.4 at 32k.

@@ -6,9 +6,35 @@
 //
 // Pi ignores OPENAI_BASE_URL: pointing it at a local server without this file sends
 // the request to api.openai.com and returns 401.
-export default function (pi) {
+const SERVER = "http://127.0.0.1:8081";
+
+// The context is read from the server rather than written down here, because no literal
+// is right for both configs this repo serves: the harness comparison runs at 65,536 and
+// the agent flow at 49,152. `default_generation_settings.n_ctx` is the per-slot context —
+// what one session may actually use — and is the field `localcode` already declares
+// Claude Code's window from.
+async function servedContext() {
+  let props;
+  try {
+    const resp = await fetch(`${SERVER}/props`, { signal: AbortSignal.timeout(3000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    props = await resp.json();
+  } catch (cause) {
+    throw new Error(
+      `could not read ${SERVER}/props: ${cause.message}` +
+        " — start one with `make serve CONFIG=config/agent.env`",
+    );
+  }
+  const nCtx = props?.default_generation_settings?.n_ctx;
+  if (!(nCtx > 0)) throw new Error(`${SERVER}/props reports no n_ctx, so the served context is unknown`);
+  return nCtx;
+}
+
+// Pi awaits the factory before startup continues, so the fetched window is in place for
+// an interactive session and for `pi --list-models` alike.
+export default async function (pi) {
   pi.registerProvider("local", {
-    baseUrl: "http://127.0.0.1:8081/v1",
+    baseUrl: `${SERVER}/v1`,
     // llama-server does not check the key, but Pi expects the field. The env var is
     // named so a real gateway could be dropped in without editing this file.
     apiKey: "$LOCAL_OPENAI_API_KEY",
@@ -22,7 +48,9 @@ export default function (pi) {
         reasoning: true,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 32768,
+        // The whole of it: prompt and reply share the served context, and what a session
+        // may spend inside it is 0038's gate rather than a slice withheld here.
+        contextWindow: await servedContext(),
         maxTokens: 4096,
       },
     ],
