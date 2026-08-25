@@ -234,11 +234,16 @@ The exact margin with a browser open is **not currently measured**, since every 
 before 2026-08-19 used the summed-RSS metric. `scripts/memprobe.sh` and `scripts/ladder.sh`
 now record `anonymous_gb`, so the next run of either produces the honest number.
 
-**The mechanism is not yet established.** Wired peak moves only 0.54 GB across a doubling of
-context, and the failing cell had 1.71 GB of headroom against an assumed 24 GB limit where
-the passing cell had 1.82 GB. That difference cannot explain a collapse, so either the limit
-sits near 22.3 GB rather than 24 — it is `default-assumed`, never read — or something other
-than the cap is binding. 0014's raise experiment separates the two.
+**The limit was never read, and it is lower than either guess.** Metal reports a recommended
+maximum working set of 22,906,503,168 bytes — **21.33 GiB, exactly two thirds of the 32** —
+where the instrument assumed three quarters. So every `wired_headroom_gb` recorded before
+2026-08-25 is **2.67 GiB too generous**, and the failing cell's reported 1.71 GB of room was
+never there. What is still not established is the mechanism: `vm_stat`'s wired count is all
+of the machine's wired memory and the cap governs the GPU's share of it, so the two are not
+the same quantity and the 0.54 GB that wired moves across a doubling of context is not what
+crossed the ceiling. What a raise experiment would now settle is whether the cap binds at
+all — `sudo sysctl iogpu.wired_limit_mb=N` overrides the derivation, and the sysctl is what
+this reads first.
 
 **This does not mean memory never binds.** Only one quant was tested. Q6_K weights are
 roughly 6 GB heavier, and larger models and longer contexts are untested. 0004's quant
@@ -614,8 +619,12 @@ native MTP, loads on this machine and then runs out of GPU memory under a real p
 
 **What would reverse it**, now that a larger machine is decided against: `mlx_lm` gaining
 `qwen3_5_mtp` support *and* beating llama.cpp's own MTP path, which is a measured number rather
-than a hypothetical. Or MLX gaining `/v1/messages`. The memory route is closed — more RAM would
-have stopped slot count competing with the model, and none is coming. **MTPLX has no route
+than a hypothetical. Or MLX gaining `/v1/messages` — or the driver no longer needing it, which
+is what a chain on Pi would mean. **The memory route is not closed after all**: it was read as
+closed because more RAM was what would have stopped slot count competing with the model, and
+the ceiling turns out to be a cap at two thirds of the RAM already installed rather than the
+RAM itself. `mlx_lm` buys cache capacity from that pool eagerly, so a raised cap is the "more
+memory" this paragraph ruled unavailable. **MTPLX has no route
 left**: its 20.68 GB checkpoint needed room this machine does not have, and that was the only
 thing standing between it and a verdict.
 
@@ -1459,8 +1468,11 @@ Each of these has already caused a wrong number in this repo.
   silently inflates any headroom estimate built on it. Use `stat -L -f%z`.
 - **Resident size and swap cannot see GPU-wired pressure.** A config can leave swap
   untouched, report a comfortable resident size, and still starve the compositor:
-  `iogpu.wired_limit_mb` is a separate budget, defaulting to about 75% of physical memory,
-  and Metal buffers come out of it. The symptom is a glitching desktop, not a slow model —
+  `iogpu.wired_limit_mb` is a separate budget and Metal buffers come out of it. **It
+  defaults to two thirds of physical memory here, not the three quarters this repo assumed
+  for its first month** — 21,845 MiB of 32 GiB, read from Metal's recommended maximum
+  working set by [`scripts/gpulimit.sh`](../scripts/gpulimit.sh). The sysctl answers `0`,
+  which means the kernel derived a limit and will not print it, not that there is none. The symptom is a glitching desktop, not a slow model —
   and the model reports success throughout, because it is the process that got the memory.
 - **A pass criterion that only asks about the model is blind to the machine.** 0003's
   ladder marked 64k `ok` while that context made the desktop unusable. Any measurement
