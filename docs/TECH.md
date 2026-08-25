@@ -1027,6 +1027,15 @@ session to two budgets. The context comes in on the payload as `peak_tokens` rat
 off a transcript: Pi reports its own, and that reading sums the same four usage fields a
 Claude Code transcript is read for.
 
+**That session cannot compact.** `session_before_compact` cancels every trigger — manual,
+threshold and overflow — and
+[`harness/pi/settings.json.reference`](../harness/pi/settings.json.reference), seeded into
+the `PI_CODING_AGENT_DIR` a run is given, serves a compaction reserve of 0 so the threshold
+sits at the whole served context rather than 16,384 tokens below it. Measured at an
+8,192-token window with the recent-token floor at 100: the default reserve compacted a
+two-prompt session twice, the served reserve compacted it none, and the cancel alone
+compacted it none.
+
 **The ceiling is derived from what lands after it.** The gate decides on the context as the
 transcript last recorded it, and two things arrive after that reading: the results of the
 calls it is permitting, and what the turns that follow them generate. So the ceiling is the

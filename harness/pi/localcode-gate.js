@@ -66,6 +66,11 @@ function ask(payload, cwd) {
 }
 
 export default function (pi) {
+  // A chain hands off; it does not compact. Cancelling is a refusal rather than a
+  // threshold, so it holds whatever `compaction.reserveTokens` the session was served —
+  // and it covers the manual and overflow triggers, which no reserve does.
+  pi.on("session_before_compact", () => ({ cancel: true }));
+
   pi.on("tool_call", (event, ctx) => {
     const verdict = ask(
       {
