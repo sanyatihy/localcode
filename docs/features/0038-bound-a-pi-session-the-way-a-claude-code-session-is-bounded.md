@@ -1,9 +1,9 @@
 ---
 id: 0038
 title: Bound a Pi session the way a Claude Code session is bounded
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-25
 needs:
 ---
 
