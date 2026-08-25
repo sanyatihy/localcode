@@ -87,8 +87,12 @@ func main() {
 	net := fs.Bool("net", false, "allow outbound network for this session")
 	ceiling := fs.Int("ceiling", 100, "how much of the window a session may fill, in percent")
 	calls := fs.Int("calls", 0, "override the tool-call budget the ceiling implies")
-	sessions := fs.Int("sessions", 8, "how many sessions one instruction may take")
-	timeout := fs.Duration("session-timeout", 30*time.Minute, "how long one session may run")
+	// Both bounds are backstops rather than budgets: what should end a session is its
+	// ceiling and what should end a chain is the work being done. Sized so that neither
+	// binds first on real source, where a session runs 15 to 30 minutes and a chain of one
+	// instruction has taken 36 of them.
+	sessions := fs.Int("sessions", 60, "how many sessions one instruction may take")
+	timeout := fs.Duration("session-timeout", time.Hour, "how long one session may run")
 	cont := fs.Bool("continue", false, "carry on this repository's most recent chain")
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
