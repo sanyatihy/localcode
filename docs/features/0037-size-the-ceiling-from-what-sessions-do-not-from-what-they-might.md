@@ -51,12 +51,6 @@ reserve derived from an observed distribution needs a floor the distribution can
 four maximum-sized results a turn is permitted are a bound the gate itself creates, and no
 run so far has spent it.
 
-## Open questions
-
-- What margin over the worst observed overshoot is enough. Two is a guess; the distribution
-  across every chain in `docs/data/` is what should answer it, and it may say the tail is too
-  short to extrapolate from at all.
-
 ## Tasks
 
 - [x] the overshoot past the ceiling is measured across every chain this repository has run
