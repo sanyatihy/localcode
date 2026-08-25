@@ -124,7 +124,7 @@ func Hook(name string, payload io.Reader, dir string) (Verdict, error) {
 // session's own bounds every attempt is charged, which is what keeps a session that answers
 // a refusal with another call from being refused forever.
 func gate(p Payload, spec Spec, dir string) Verdict {
-	s := State{Peak: Peak(p.TranscriptPath)}
+	s := State{Peak: peakOf(p)}
 	// Every counter is bumped before it is decided on, never after. The harness runs a
 	// turn's calls concurrently, so several of these are deciding at once, and taking a
 	// number first is what gives each of them a different one to decide against.
@@ -150,6 +150,17 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 		v.Input = input
 	}
 	return v
+}
+
+// peakOf is the context the gate decides on: what the payload carries, or what the
+// transcript says. One or the other, because two readers of one number are two answers to
+// one question — and the harness that reports its own is the harness whose transcript this
+// package cannot read.
+func peakOf(p Payload) int {
+	if p.PeakTokens > 0 {
+		return p.PeakTokens
+	}
+	return Peak(p.TranscriptPath)
 }
 
 // stop counts its refusals rather than reading the harness's stop_hook_active, because the
