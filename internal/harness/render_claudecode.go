@@ -1,4 +1,4 @@
-package main
+package harness
 
 import (
 	"bufio"
@@ -28,7 +28,8 @@ func errorSentence(line string, at int) string {
 	return line[start : at+end]
 }
 
-// render turns the harness's event stream into what a person watching wants to see.
+// renderStreamJSON turns Claude Code's `--output-format stream-json` into what a person
+// watching wants to see.
 //
 // `claude -p` prints its result and nothing before it, which on this machine is minutes of
 // silence: one measured session spent 591 s deciding before it said anything, and a session
@@ -40,7 +41,7 @@ func errorSentence(line string, at int) string {
 // budget exists to prevent and the stream is where it appears: the harness surfaces the
 // body verbatim and stops, so a session that dies of it otherwise ends with an exit code
 // and nothing that says why.
-func render(events io.Reader, out io.Writer, cwd string) (overrun string) {
+func renderStreamJSON(events io.Reader, out io.Writer, cwd string) (overrun string) {
 	scan := bufio.NewScanner(events)
 	// A line here carries a whole tool result. The default 64 KB would end the stream at the
 	// first big one, and silently — which is the failure this exists to remove.

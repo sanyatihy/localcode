@@ -12,6 +12,7 @@ import (
 	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/handoff"
+	"github.com/sanyatihy/localcode/internal/harness"
 )
 
 // account is what one session cost, read off the files it left behind. The supervisor's
@@ -89,7 +90,11 @@ func accountHere(w io.Writer, id, jsonl string) (int, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return 2, fmt.Errorf("no chain %s here: `localcode sessions` lists them", id)
 	}
-	accounts, err := readAccounts(dir)
+	rec, err := harness.NewRecorder("claude-code")
+	if err != nil {
+		return 2, err
+	}
+	accounts, err := readAccounts(dir, rec)
 	if err != nil {
 		return 2, err
 	}
@@ -111,7 +116,7 @@ func accountHere(w io.Writer, id, jsonl string) (int, error) {
 // that row is appended once the session has ended, so a chain read while it works would
 // otherwise be missing the session doing the work. What the file adds is the wall clock,
 // which is the supervisor's measurement and is in nothing the session itself wrote.
-func readAccounts(dir string) ([]account, error) {
+func readAccounts(dir string, rec harness.Recorder) ([]account, error) {
 	timed, err := recordedSeconds(dir)
 	if err != nil {
 		return nil, err
@@ -126,7 +131,7 @@ func readAccounts(dir string) ([]account, error) {
 		if spec, err := chain.ReadSpec(sessionDir); err == nil {
 			a.limits = spec.Limits
 		}
-		if t := newestTranscript(sessionDir, os.Environ()); t != "" {
+		if t := rec.Transcript(sessionDir); t != "" {
 			if a.calls, err = handoff.Requests(t); err != nil {
 				return nil, err
 			}

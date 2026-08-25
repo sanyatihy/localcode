@@ -1,4 +1,4 @@
-package main
+package harness
 
 import (
 	"strings"
@@ -24,7 +24,7 @@ const stream = `{"type":"system","subtype":"init","cwd":"/repo"}
 
 func TestProgressShowsEachCallAsItHappens(t *testing.T) {
 	var out strings.Builder
-	render(strings.NewReader(stream), &out, "/repo")
+	renderStreamJSON(strings.NewReader(stream), &out, "/repo")
 	got := out.String()
 
 	// The prose arrives a token at a time and has to come out whole, on its own line.
@@ -54,7 +54,7 @@ func TestProgressShowsEachCallAsItHappens(t *testing.T) {
 // for a reason nobody can see — which is the failure this whole thing removes.
 func TestProgressPassesThroughWhatItCannotParse(t *testing.T) {
 	var out strings.Builder
-	render(strings.NewReader("Warning: no stdin data received in 3s\n{\"type\":\"result\"}\n"), &out, "")
+	renderStreamJSON(strings.NewReader("Warning: no stdin data received in 3s\n{\"type\":\"result\"}\n"), &out, "")
 	if !strings.Contains(out.String(), "no stdin data") {
 		t.Fatalf("got %q", out.String())
 	}
@@ -67,7 +67,7 @@ func TestProgressSurvivesAResultBiggerThanAScannerBuffer(t *testing.T) {
 	in := `{"type":"user","message":{"content":[{"type":"tool_result","content":"` + big + `"}]}}` + "\n" +
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"after.go"}}]}}` + "\n"
 	var out strings.Builder
-	render(strings.NewReader(in), &out, "")
+	renderStreamJSON(strings.NewReader(in), &out, "")
 	if !strings.Contains(out.String(), "→ Read after.go") {
 		t.Fatalf("the stream stopped at the big result:\n%s", out.String())
 	}
@@ -78,7 +78,7 @@ func TestProgressClosesAStreamedLineBeforeAnythingElse(t *testing.T) {
 	in := `{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Fixing it now:"}}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/repo/a.go"}}]}}`
 	var out strings.Builder
-	render(strings.NewReader(in), &out, "/repo")
+	renderStreamJSON(strings.NewReader(in), &out, "/repo")
 	if !strings.Contains(out.String(), "Fixing it now:\n  → Edit a.go") {
 		t.Fatalf("got %q", out.String())
 	}
@@ -90,7 +90,7 @@ func TestProgressDoesNotPrintStreamedTextTwice(t *testing.T) {
 {"type":"stream_event","event":{"type":"content_block_stop"}}
 {"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}`
 	var out strings.Builder
-	render(strings.NewReader(in), &out, "")
+	renderStreamJSON(strings.NewReader(in), &out, "")
 	if n := strings.Count(out.String(), "done"); n != 1 {
 		t.Fatalf("text printed %d times: %q", n, out.String())
 	}
@@ -101,7 +101,7 @@ func TestProgressDoesNotPrintStreamedTextTwice(t *testing.T) {
 func TestProgressStillPrintsTextWhenNothingWasStreamed(t *testing.T) {
 	in := `{"type":"assistant","message":{"content":[{"type":"text","text":"no partials here"}]}}`
 	var out strings.Builder
-	render(strings.NewReader(in), &out, "")
+	renderStreamJSON(strings.NewReader(in), &out, "")
 	if !strings.Contains(out.String(), "no partials here") {
 		t.Fatalf("got %q", out.String())
 	}
@@ -114,7 +114,7 @@ func TestProgressReportsTheServerRefusingThePrompt(t *testing.T) {
 	const line = `{"type":"result","is_error":true,"result":"API Error: 400 request ` +
 		`(49509 tokens) exceeds the available context size (49152 tokens), try increasing it"}`
 	var out strings.Builder
-	overrun := render(strings.NewReader(line+"\n"), &out, "")
+	overrun := renderStreamJSON(strings.NewReader(line+"\n"), &out, "")
 	if !strings.Contains(overrun, "49509 tokens") || !strings.Contains(overrun, "49152 tokens") {
 		t.Fatalf("the server's own numbers must survive: %q", overrun)
 	}
@@ -130,7 +130,7 @@ func TestProgressReportsTheServerRefusingThePrompt(t *testing.T) {
 // chain records as "this did not happen".
 func TestProgressReportsNoOverrunWhenThereWasNone(t *testing.T) {
 	var out strings.Builder
-	if overrun := render(strings.NewReader(stream), &out, "/repo"); overrun != "" {
+	if overrun := renderStreamJSON(strings.NewReader(stream), &out, "/repo"); overrun != "" {
 		t.Fatalf("a session that fit must report nothing: %q", overrun)
 	}
 }

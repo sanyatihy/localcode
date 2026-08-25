@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/sanyatihy/localcode/internal/handoff"
 )
@@ -92,6 +93,24 @@ func Cost(transcript string) (peak, turns int) {
 func Peak(transcript string) int {
 	peak, _ := Cost(transcript)
 	return peak
+}
+
+// SessionIDIn reads back the session id the gate counted against, from the counter it
+// named after it. A directory can outlive the session that filled it, and a count carried
+// into the next one would spend a budget nobody used — so the id is what the file says
+// rather than what the directory is called. A session that called no tool leaves no
+// counter, and this answers "".
+func SessionIDIn(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if id, ok := strings.CutPrefix(e.Name(), "calls-"); ok {
+			return id
+		}
+	}
+	return ""
 }
 
 // Read returns a handoff's contents, or nil when there is none.

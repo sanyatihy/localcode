@@ -74,7 +74,7 @@ else.
 
 ## Tasks
 
-- [ ] what the driver needs of a harness is an interface, with Claude Code behind it and
+- [x] what the driver needs of a harness is an interface, with Claude Code behind it and
       nothing about a chain changed
 - [ ] nothing outside the adapters names a harness — no flag, no path, no event shape —
       and a check holds it that way
