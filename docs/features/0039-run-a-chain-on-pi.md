@@ -1,9 +1,9 @@
 ---
 id: 0039
 title: Run a chain on Pi
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-25
 needs: 0038
 ---
 
