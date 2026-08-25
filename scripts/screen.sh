@@ -130,7 +130,8 @@ except (OSError, ValueError):
     pass
 # The load is what is being judged, so the peak is taken over the whole window including it.
 wired_peak=max(p["wired_gb"] for p in series)
-headroom_min=min(p["wired_headroom_gb"] for p in series)
+room=[p["wired_headroom_gb"] for p in series if p["wired_headroom_gb"] is not None]
+headroom_min=min(room) if room else None
 desktop=deskverdict.verdict(deskverdict.load("$desk"), "$CONDITION")
 
 swap_grew=round(after["swap_used_mb"]-before["swap_used_mb"], 1)
@@ -168,7 +169,7 @@ row={"record": "screen", "condition": "$CONDITION", "label": "$LABEL", "ctx": $C
      "server_rss_gb": float("$rss"),
      "wired_at_load_gb": loaded["wired_gb"],
      "wired_peak_gb": round(wired_peak, 3),
-     "wired_headroom_min_gb": round(headroom_min, 3),
+     "wired_headroom_min_gb": (round(headroom_min, 3) if headroom_min is not None else None),
      "wired_limit_gb": after["wired_limit_gb"], "wired_limit_source": after["wired_limit_source"],
      "wired_samples": len(series) - 3,
      "desktop_baseline_cores": $baseline,

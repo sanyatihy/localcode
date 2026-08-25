@@ -51,6 +51,23 @@ here should be compared across machines without saying so.
 | `2026-08-25-m2max-32gb-0037-overshoot.jsonl` | apparatus + 23 sessions + 5 aggregates | How far past its ceiling a session actually goes, over **every chain this repository has run** — eight chains and 69 scored sessions, five against the generated twenty-bug fixture and three against a private work repository. Per-session rows are here only for the 24-session chain that has no other home; the other seven are read from the four chain files above, which stay the home for theirs, and the aggregates cover all eight. `overshoot_tokens` is `peak_context_tokens` less the ceiling and is what the reserve exists to cover. `grew_after_the_reading` is the harder number: the context at the peak less the context at the **last model call at or under the ceiling**, which is the reading the gate decided on — so it counts the results that landed and the turns that followed together, and `generated_after_the_reading` is the model's own share of it. Those three columns come from each session's own transcript and so are absent for the three chains of 0023 and 0025, whose state directories were not kept; those sessions carry an overshoot and no growth. **Not regenerable**, and only counts are recorded from the private repository three of the chains ran against. |
 | `2026-08-25-m2max-32gb-0037-prompt-wall.jsonl` | apparatus + 48 probes + 7 summaries | Where Claude Code refuses a prompt against the context it was declared, bisected at four declarations on one `config/agent.env` server at 49,152. `sent` is the whole measurement: the refusal is the harness's own, so a refused probe reaches the server not at all and costs a second, while an accepted one pays a cold ingest — which is why each wall is a bracket between the largest padding sent and the smallest refused rather than a single number. `counted_tokens` is the padding plus the 3,508 the preamble and instruction cost for this tool set, measured by a one-token probe. `processed_tokens` is the server's own counter and is **not** what the harness sent: every probe after the first reuses a cached prefix, so it processes far less than it counted. The padding is one word stream at 4.1 characters a token and no other density was tried, so a harness counting characters rather than tokens would not be distinguished here. Rows carrying `enforcement: off` are the same measurement with `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1`, which is what `localcode` sets: there the wall is the server's, and `refused_by` says which of the two turned a prompt away. Regenerable with [`../../scripts/promptwall.sh`](../../scripts/promptwall.sh) against the same config, at about one cold ingest a wall. |
 
+## Erratum: the GPU wired ceiling, 2026-08-25
+
+Every `wired_headroom_gb` and `wired_headroom_min_gb` recorded before this date is **2.67 GiB
+too generous**, in every ladder and screen row that carries one. `scripts/memprobe.sh` fell
+back to three quarters of physical memory whenever `sysctl iogpu.wired_limit_mb` answered 0 —
+which it always does, because 0 means the kernel derived a limit and will not print it. Read
+from Metal instead, this machine's ceiling is 22,906,503,168 bytes: **21,845 MiB, two thirds
+of 32 GiB**, not the 24,576 assumed. `wired_limit_source` says `default-assumed` on every
+affected row, which is how they are found.
+
+`wired_gb` and `wired_peak_gb` are unaffected — they are `vm_stat` readings and the erratum
+is in what they were compared against. The desktop verdicts are unaffected too: they are
+taken from the compositor rather than from headroom. What changes is the argument built on
+the headroom column, and [../TECH.md](../TECH.md) carries the restatement.
+
+The rows are left as written, for the reason the erratum below gives.
+
 ## Erratum: page size, 2026-08-18
 
 `2026-08-17-m2max-32gb-ceiling-ladder.jsonl` was written by a `memprobe.sh` that assumed a
