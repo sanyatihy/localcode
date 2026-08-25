@@ -338,7 +338,16 @@ func runChain(l launch, chainDir, chainID, goal string, bound int) (int, error) 
 	// machine has; what is wrong is making it in silence.
 	var budget []string
 	if last, ok := chain.LastSpec(chainDir); ok {
-		if budget = l.limits.Changed(last.Limits); budget != nil {
+		budget = l.limits.Changed(last.Limits)
+		// The agent counts as a bound the same way: a session's rows are what one agent
+		// spent doing the work, and two agents' rows are not a chain's progress over time.
+		// Only when the last session recorded one — a chain that ran before it was recorded
+		// says nothing about what ran it, and inventing a change would be worse than
+		// silence.
+		if last.Harness != "" && last.Harness != l.agent.Name() {
+			budget = append(budget, fmt.Sprintf("harness %s -> %s", last.Harness, l.agent.Name()))
+		}
+		if budget != nil {
 			narrate("chain %s resumes on a different budget from its session %d: %s. %s "+
 				"serves it now, and rows either side of this cannot be compared.\n",
 				chainID, last.Session, strings.Join(budget, ", "), l.endpoint)

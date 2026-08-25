@@ -83,7 +83,7 @@ else.
 - [x] a Pi session inherits the handoff the session before it wrote
 - [x] the supervisor prints a Pi session's work as it happens, not after it
 - [x] `localcode account` reports a Pi chain: peak, preamble, ingest, generation, clock
-- [ ] a Pi chain resumes, and refuses a resume on a different budget the way 0033 requires
+- [x] a Pi chain resumes, and refuses a resume on a different budget the way 0033 requires
 
 ## Open questions
 
@@ -108,3 +108,9 @@ else.
   rather than repeated in Go. That file is the declaration pi acts on, and a second copy
   would be a second answer; the context is in neither, because the provider file reads it
   off `/props`.
+- **The box says "refuses" and 0033 does not.** That feature settled on narrating and
+  recording a changed budget rather than refusing one, because a smaller window is
+  sometimes the only one the machine has. This follows 0033 rather than the word here, and
+  adds the agent to what is compared: a resume in another agent says `harness pi ->
+  claude-code` in the same line, because those rows are what two agents spent rather than
+  one chain's progress.
