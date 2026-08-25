@@ -988,6 +988,28 @@ output reservation held for them, and nothing in the distribution comes near it.
 are in
 [data/2026-08-25-m2max-32gb-0037-overshoot.jsonl](data/2026-08-25-m2max-32gb-0037-overshoot.jsonl).
 
+**The harness sends at most three-quarters of the context it was declared, less its
+reservation.** Bisected at four declarations against one 49,152 server, by padding a prompt
+to an exact served-token count and reading whether it was sent: at 49,152 declared with
+4,096 reserved the largest prompt that went through counted 34,008 tokens and the smallest
+refused 34,258 — 0.755 of the 45,056 the arithmetic here calls the window, and 0.692 of the
+context. The other three walls sit at 0.768, 0.794 and 0.757 of that same quantity, so
+**three-quarters is under every one of them** while `declared − reservation` is above all
+four. The refusal is the harness's own — `Prompt is too long`, exit 1, and nothing reaches
+the server — which is what makes the measurement cheap in one direction and a cold ingest in
+the other. The rows are in
+[data/2026-08-25-m2max-32gb-0037-prompt-wall.jsonl](data/2026-08-25-m2max-32gb-0037-prompt-wall.jsonl),
+and [`scripts/promptwall.sh`](../scripts/promptwall.sh) re-runs it.
+
+**So the output reservation is subtracted twice, and it is the smaller mistake.** The
+largest prompt the harness will send at a declared 49,152 is 34,008 tokens; with the whole
+4,096 reservation on top that is 38,104 of the 49,152 served, so declaring the served
+context in full cannot overrun it — the same prompt is refused at a declared 48,128 and sent
+at 48,640, which is the wall read the other way round. What the declaration was hiding is
+larger: at the shipped declaration of 45,056 the window was taken as 40,960 while the
+harness would not send past about 31,200, so every session was budgeted against a wall
+10,000 tokens further out than the one it would actually hit.
+
 **A turn is bounded as well as a session, at four calls.** One transcript reading otherwise
 decides a whole turn's calls, because the harness issues them together and nothing changes
 while they run.
