@@ -23,6 +23,7 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`chainfixture.py`](chainfixture.py) | write the twenty-bug repository a chain is measured on, buggy or repaired, so two runs start identical by construction |
 | [`chainrun.sh`](chainrun.sh) | drive one instruction to completion on one serving config, and score it by the fixture's own tests |
 | [`gpulimit.sh`](gpulimit.sh) | the ceiling on what the GPU may wire, read from Metal rather than assumed — the sysctl answers 0 and 0 is not unlimited |
+| [`gpuraise.sh`](gpuraise.sh) | apply or undo a raise of that cap by one command, refusing a lowering and one the system side cannot survive |
 | [`memprobe.sh`](memprobe.sh) | one JSON object of the memory facts that decide whether a config is viable |
 | [`deskprobe.sh`](deskprobe.sh) | one JSON object of the compositor's state, so the desktop is judged from outside the model process |
 | [`deskverdict.py`](deskverdict.py) | the desktop rule itself, in one place because `ladder.sh` and `screen.sh` both apply it |
