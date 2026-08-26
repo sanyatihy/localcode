@@ -71,7 +71,7 @@ the direction rather than the ratio.
 - [x] one instruction on a real repository is driven on both harnesses from one starting
       state, twice an arm, and each chain's ending is recorded — its own work or a bound
 - [x] the rows are recorded with what landed, what each session cost, and how it ended
-- [ ] `docs/TECH.md` says which harness a chain runs on and what beat what
+- [x] `docs/TECH.md` says which harness a chain runs on and what beat what
 
 ## Open questions
 
@@ -126,4 +126,10 @@ the direction rather than the ratio.
   self-contained page with no external reference in it. Pair one's arms each answered all
   four clauses of the instruction; pair two's each shipped two features of three. **No arm
   in any chain wrote a test**, and none was asked to.
+- **The verdict is split by job, and the flag's default is left alone.** Pi wins every
+  per-session column and the one pair that finished; 0010's patch sweep put the incumbent
+  ahead one turn at a time. TECH says to drive a chain with `-harness pi` and to reach for
+  the incumbent for one-shot patch work. Flipping `harness.DefaultAgent` is a backlog line
+  rather than a box here: four chains settle which is cheaper, not what a fresh checkout
+  should do by default.
 
