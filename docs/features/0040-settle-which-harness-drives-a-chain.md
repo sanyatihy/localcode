@@ -1,9 +1,9 @@
 ---
 id: 0040
 title: Settle which harness drives a chain
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-26
 needs: 0039
 ---
 
