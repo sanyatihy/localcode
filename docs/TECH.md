@@ -35,6 +35,7 @@ Design arguments stay in the feature docs; this is the state of the machine.
 
 - [Claude Code against the local endpoint](#claude-code-against-the-local-endpoint)
 - [Sessions hand off instead of compacting](#sessions-hand-off-instead-of-compacting)
+- [Pi drives a chain for half the ingest, and the incumbent is displaced at this job](#pi-drives-a-chain-for-half-the-ingest-and-the-incumbent-is-displaced-at-this-job)
 - [A chain's clock is its model calls, and half its ingest is preamble](#a-chains-clock-is-its-model-calls-and-half-its-ingest-is-preamble)
 
 **Splitting the work across two tiers**
@@ -1031,6 +1032,58 @@ session filed its record, the peak and turns in it, and every call it made. So `
 account` reports a Pi chain in the columns it reports an incumbent one in — measured over
 two Pi sessions: 2,764 tokens of preamble, 3,119 ingested, 15,853 reused, 585 generated,
 107.3 s of 109 s inside a call, decode 7.62 tok/s.
+
+## Pi drives a chain for half the ingest, and the incumbent is displaced at this job
+
+Four chains, two an arm, one instruction each: build a project from scratch out of a
+directory holding two months of a private work project's export data, plan its own features,
+and work them until none are left. `-harness` is the only thing that differed between the
+arms of a pair; both ran the served config's defaults, one at a time against a cold server,
+each alone under its own parent directory. Counts only, as
+[0032](features/0032-let-a-session-s-call-budget-follow-the-window-it-was-given.md) records
+them; the rows are in
+[`2026-08-26-m2max-32gb-0040-harness-pairs.jsonl`](data/2026-08-26-m2max-32gb-0040-harness-pairs.jsonl).
+
+| per session, median | Claude Code | Pi |
+|---|---|---|
+| preamble | 5,464 | **2,925** |
+| tokens per tool call | 774 | **597** |
+| overshoot past the ceiling | 2,478 | **1,130** |
+| tool calls | 34 | 34 |
+| generated | 9,283 | 12,820 |
+
+**Pi buys more work with the same window.** It pays 54% of the incumbent's preamble and 77%
+of its tokens per tool call, so the same ceiling holds more of the session's actual work —
+and it overshoots that ceiling by half as much, which is the reserve
+[0037](features/0037-size-the-ceiling-from-what-sessions-do-not-from-what-they-might.md)
+sized fitting it better than it fits the incumbent. Pi's preamble is also the steadier
+number: 2,131 to 3,188 across seven sessions against 956 to 7,187 across ten.
+
+**One pair finished, and Pi finished it in half the sessions** — 3 sessions and 1h32m
+against 6 and 2h49m, both ending on their own work rather than a bound, both answering all
+four clauses of the instruction. In the second pair both arms stopped on the 1h session
+timeout in session 4 with the same third feature outstanding, so sessions-to-finish rests on
+one pair and is a direction rather than a ratio.
+
+**What landed is comparable, and thin in the same place.** Every arm's pipeline runs when
+rebuilt from its own tracked source in a clean directory, and every page it emits is
+self-contained. The incumbent's finished dashboard is the richer artifact — six charts
+against two — and Pi's second chain is the only one that built an executable quality gate
+with an exit code. **No arm in any chain wrote a test.**
+
+**This does not overturn [0010](#nothing-displaces-claude-code-and-the-two-axes-disagree),
+it splits it.** That sweep scored one turn against a patch fixture and put Claude Code ahead
+14/15 to 12/15. A chain is the other job, and at it Pi is cheaper per session on every
+column a task mix cannot move. So: **drive a chain with `-harness pi`; reach for the
+incumbent for one-shot patch work.** The flag's default is still `claude-code` — flipping
+it is a backlog line, not something these four chains alone settle.
+
+**Two caveats travel with this.** Wall clock is not the column: Pi's second chain spent
+1,779 s outside what the recorder counts as a model call against the incumbent's 89 s, and
+whether that is generation the Pi reader fails to attribute or genuine idle is unsettled.
+And the arms only measure the harness where nothing else is in reach — an earlier Pi chain
+that could see a sibling checkout solving the same task spent all three of its sessions
+reading it, which is a fact about the fixture and not about Pi.
 
 ## A session is budgeted rather than left to fill up
 
