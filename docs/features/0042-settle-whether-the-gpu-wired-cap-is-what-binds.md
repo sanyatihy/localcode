@@ -75,7 +75,7 @@ draft head at 49,152 is closed for a reason this project has finally established
 
 - [x] a raise is applied and undone by one command, and `scripts/memprobe.sh` reports the
       value in force so every row taken under it says which cap it was taken at
-- [ ] `config/mtp-49k.env` screens admissible or not at 24,576 MiB, unattended, against the
+- [x] `config/mtp-49k.env` screens admissible or not at 24,576 MiB, unattended, against the
       same 44,236-token filled prompt 0017 and 0041 used
 - [ ] MTPLX screens admissible or not at the same 24,576 MiB, unattended, against a prompt
       sized to the context it is served, and its row records which checkpoint
@@ -106,7 +106,7 @@ draft head at 49,152 is closed for a reason this project has finally established
 
 ## Log
 
-- 2026-08-25 — **MTPLX added as a second candidate on the same raise, and the docs that
+- 2026-08-26 — **MTPLX added as a second candidate on the same raise, and the docs that
   ruled it out added to the last box.** TECH.md contradicts itself in one paragraph: it
   grants `mlx_lm` the raised cap as "the 'more memory' this paragraph ruled unavailable" and
   then says "MTPLX has no route left", and VISION inherits that as a permanent exclusion.
