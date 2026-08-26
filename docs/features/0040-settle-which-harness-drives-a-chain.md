@@ -70,7 +70,7 @@ the direction rather than the ratio.
 
 - [x] one instruction on a real repository is driven on both harnesses from one starting
       state, twice an arm, and each chain's ending is recorded — its own work or a bound
-- [ ] the rows are recorded with what landed, what each session cost, and how it ended
+- [x] the rows are recorded with what landed, what each session cost, and how it ended
 - [ ] `docs/TECH.md` says which harness a chain runs on and what beat what
 
 ## Open questions
@@ -120,4 +120,10 @@ the direction rather than the ratio.
   against 89 s for the incumbent, and those gaps fall after tool results. Whether that is
   generation the Pi reader does not attribute or genuine idle is unsettled, so wall clock
   stays the second column and the comparison rests on tokens.
+- **What landed was read by rebuilding it, not by reading the handoffs.** Each arm's
+  pipeline was extracted from its own tracked source into a clean directory and run: all
+  four produce their classified months, and the two that reached the third feature produce a
+  self-contained page with no external reference in it. Pair one's arms each answered all
+  four clauses of the instruction; pair two's each shipped two features of three. **No arm
+  in any chain wrote a test**, and none was asked to.
 
