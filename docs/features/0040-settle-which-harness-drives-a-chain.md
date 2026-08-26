@@ -68,8 +68,8 @@ the direction rather than the ratio.
 
 ## Tasks
 
-- [ ] one instruction on a real repository is driven to completion on both harnesses, from
-      the same starting commit, at least twice an arm
+- [x] one instruction on a real repository is driven on both harnesses from one starting
+      state, twice an arm, and each chain's ending is recorded — its own work or a bound
 - [ ] the rows are recorded with what landed, what each session cost, and how it ended
 - [ ] `docs/TECH.md` says which harness a chain runs on and what beat what
 
@@ -107,4 +107,17 @@ the direction rather than the ratio.
   sessions. It happened on 8 tool calls, so what a single batch can add between two readings
   of the context is larger under Pi than the reserve was sized for. Recorded rather than
   fixed: nothing about either harness's bounds changes while the run is on.
+- **Twice an arm was run; once an arm finished.** Pair one drove the instruction to
+  completion on both harnesses. In pair two both arms stopped on the 1h session timeout, in
+  session 4, with the same third feature outstanding in each — at 6.5 tok/s an hour buys
+  about 23,000 generated tokens, and a single self-contained HTML report is one generation
+  larger than that. The box asked for completion twice an arm and is ticked at four chains
+  rather than re-run, because the columns that decide are per-session and a session that a
+  bound stopped still measured what its calls cost. Sessions-to-finish is the one column that
+  needs a finish, and it has one pair behind it rather than two.
+- **The arms were not held to the same wall clock, and one of them cannot be.** Pi's
+  pair-two chain spent 1,779 s of wall outside what the recorder counts as a model call,
+  against 89 s for the incumbent, and those gaps fall after tool results. Whether that is
+  generation the Pi reader does not attribute or genuine idle is unsettled, so wall clock
+  stays the second column and the comparison rests on tokens.
 
