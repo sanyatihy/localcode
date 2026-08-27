@@ -117,7 +117,7 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
       session it cannot read to the end still exits on its own code rather than its clock
 - [x] One place decides whether a session may end without a handoff, so an interactive
       session is never refused one
-- [ ] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
+- [x] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
       network to build or to run
 - [ ] Every number a row carries is the number its instrument reported, and one swap
       threshold decides void across the whole report
@@ -125,3 +125,8 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
       size a session's budget have tests
 
 ## Log
+- 2026-08-27 — `GOPROXY=off` gave `isBuildFailure` a message it did not know. An
+  unresolvable import used to be resolved over the network and now fails against the
+  module cache, which reports itself as `finding module for package` and was scored
+  `fail_test_failed`. It is invalid Go rather than Go that is wrong, so the two markers
+  join the list. Caused by this box, so fixed in it.

@@ -2,11 +2,13 @@ package chain
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Snapshot is what a repository looked like at one moment: how many objects its database
@@ -141,11 +143,27 @@ func worktrees(dir string) []string {
 	return paths
 }
 
+// gitTimeout bounds one read-only git command. This runs four ways twice a session, one of
+// them per worktree, and it is the only blocking call in the supervisor's loop that had no
+// bound: an index lock or a stalled filesystem hangs the chain outside the session clock,
+// so nothing in the system would have ended it.
+//
+// A var so a test can shorten it: a bound nothing can exercise is a bound asserted rather
+// than held.
+var gitTimeout = 10 * time.Second
+
 // git runs one read-only command in a repository. Errors are the caller's cue that there
 // is no repository here, not something to report: a chain is allowed to run outside
-// version control and this test simply abstains.
+// version control and this test simply abstains — which is also what makes a deadline safe
+// to add, since expiring reads as the abstention the design already handles.
+//
+// The context is the function's own rather than a parameter. The caller is a snapshot
+// taken either side of a session and has nothing to cancel it for, and threading one
+// through `Repo` and `Snapshot` would be ceremony over a call nobody waits on.
 func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	out, err := cmd.Output()
 	return string(out), err
 }
