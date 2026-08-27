@@ -121,7 +121,7 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
       network to build or to run
 - [x] Every number a row carries is the number its instrument reported, and one swap
       threshold decides void across the whole report
-- [ ] The remaining readers are correct at their bounds, and the three functions that
+- [x] The remaining readers are correct at their bounds, and the three functions that
       size a session's budget have tests
 
 ## Log

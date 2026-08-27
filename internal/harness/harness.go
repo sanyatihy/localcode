@@ -65,10 +65,12 @@ func withPWD(env []string, dir string) []string {
 	return append(out, "PWD="+dir)
 }
 
+// tail keeps the last n bytes, cut on a rune boundary: this carries a command's own error
+// text, and a cut through a multi-byte rune corrupts the one thing it is showing.
 func tail(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) <= n {
 		return s
 	}
-	return "…" + s[len(s)-n:]
+	return "…" + strings.ToValidUTF8(s[len(s)-n:], "")
 }
