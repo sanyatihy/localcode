@@ -471,6 +471,14 @@ func TestDoneReadsTheFirstClauseAndNotTheWholeLine(t *testing.T) {
 		"no tests exist for the even-length case",
 		"fix Clamp",
 		"",
+		// A bare `no` is an answer to a question, and punctuation puts the sentence that
+		// carries its meaning outside the clause this reads. Each of these ended a chain
+		// at exit 0 and reported success on work that had failed.
+		"No, the tests still fail",
+		"No. The build is broken.",
+		"No — still investigating",
+		"no; median.go does not compile",
+		"No",
 	}
 	for _, line := range unfinished {
 		if Done([]byte("**Next:** " + line + "\n")) {

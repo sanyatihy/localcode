@@ -157,6 +157,12 @@ type opts struct {
 }
 
 func run(o opts) (int, error) {
+	// Before the server, because a bound below one runs no session at all: the loop skips
+	// its body and records a chain that stopped at its bound one session before it began.
+	// Finding that out by starting a model costs twenty seconds and most of the machine.
+	if o.sessions < 1 {
+		return 2, fmt.Errorf("-sessions is %d: a bound below one runs nothing", o.sessions)
+	}
 	root, err := resolveCheckout(o.checkout)
 	if err != nil {
 		return 2, err

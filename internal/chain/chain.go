@@ -366,19 +366,27 @@ func field(line string) bool {
 //
 // A qualifier after the word is allowed only from a short list, because "none of the
 // tests pass" is the opposite of done and starts the same way.
+//
+// `no` needs that qualifier and the other three do not, because punctuation is what ends
+// a clause and the clause is all this sees. `No, the tests still fail`, `No. The build is
+// broken.` and `No — still investigating` all reduce to `no` and read as finished, which
+// reports success on failure. A bare `no` is an answer to a question and the sentence
+// carrying its meaning is on the far side of the comma; `none`, `nothing` and `done` are
+// what the briefing asks for and cannot open a negation that way.
 func Done(handoff []byte) bool {
 	head := strings.ToLower(strings.TrimSpace(clause(Next(handoff))))
 	words := strings.Fields(head)
 	if len(words) == 0 {
 		return false
 	}
-	switch strings.Trim(words[0], " .,;:`*-—–") {
+	bare := strings.Trim(words[0], " .,;:`*-—–")
+	switch bare {
 	case "none", "nothing", "done", "no":
 	default:
 		return false
 	}
 	if len(words) == 1 {
-		return true
+		return bare != "no"
 	}
 	switch words[1] {
 	case "for", "left", "further", "more", "remaining", "else", "to", "needed",

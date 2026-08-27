@@ -111,7 +111,7 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
 
 ## Tasks
 
-- [ ] A chain's ending names what happened: no negation reads as finished, and a bound
+- [x] A chain's ending names what happened: no negation reads as finished, and a bound
       below one is refused rather than recorded as a chain that stopped at session -3
 - [ ] The event stream reports what it could not read instead of going quiet, and a
       session it cannot read to the end still exits on its own code rather than its clock
