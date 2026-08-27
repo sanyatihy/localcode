@@ -1,7 +1,6 @@
 package harness
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -23,10 +22,7 @@ import (
 // body verbatim and stops, so a session that dies of it otherwise ends with an exit code
 // and nothing that says why.
 func renderStreamJSON(events io.Reader, out io.Writer, cwd string) (overrun string) {
-	scan := bufio.NewScanner(events)
-	// A line here carries a whole tool result. The default 64 KB would end the stream at the
-	// first big one, and silently — which is the failure this exists to remove.
-	scan.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scan := newEventScanner(events)
 	// Whether a half-written line of the model's prose is still open, so nothing else is
 	// printed onto the end of it, and whether this message's text has already been
 	// streamed a token at a time.
@@ -110,6 +106,7 @@ func renderStreamJSON(events io.Reader, out io.Writer, cwd string) (overrun stri
 			streamed = false
 		}
 	}
+	finish(scan, events, out, open)
 	if overrun != "" {
 		_ = closeLine(out, open)
 		say(out, "  ✗ the server refused the prompt: "+overrun)

@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"io"
 	"strings"
 	"testing"
 )
@@ -70,6 +71,44 @@ func TestProgressSurvivesAResultBiggerThanAScannerBuffer(t *testing.T) {
 	renderStreamJSON(strings.NewReader(in), &out, "")
 	if !strings.Contains(out.String(), "→ Read after.go") {
 		t.Fatalf("the stream stopped at the big result:\n%s", out.String())
+	}
+}
+
+// Past the buffer a scanner stops the way it stops at the end of a stream, so a render
+// that does not ask reports a truncated session as a complete one. Asserted at the bound
+// rather than under it: the test above passes at 300 KB whether the bound is guarded or
+// not, which is how it went unguarded.
+func TestARenderPastItsBufferSaysSoRatherThanGoingQuiet(t *testing.T) {
+	line := `{"type":"user","message":{"content":[{"type":"tool_result","content":"` +
+		strings.Repeat("x", eventBuffer+1) + `"}]}}`
+	for _, r := range []struct {
+		name   string
+		render func(io.Reader, io.Writer, string) string
+	}{
+		{"claude-code", renderStreamJSON},
+		{"pi", renderPiJSON},
+	} {
+		t.Run(r.name, func(t *testing.T) {
+			var out strings.Builder
+			r.render(strings.NewReader(line+"\ntrailing\n"), &out, "")
+			if !strings.Contains(out.String(), "could not be read past") {
+				t.Fatalf("a stream this could not read must say so: %q", out.String())
+			}
+		})
+	}
+}
+
+// The caller reads this off a pipe and then waits on the process, so a render that stops
+// reading leaves the child blocked in its own write and the session dies on the
+// supervisor's clock instead of its exit code.
+func TestARenderPastItsBufferDrainsWhatItWillNotShow(t *testing.T) {
+	rest := strings.Repeat("y", 64*1024)
+	events := strings.NewReader(strings.Repeat("x", eventBuffer+1) + "\n" + rest)
+	var out strings.Builder
+	renderStreamJSON(events, &out, "")
+	if events.Len() != 0 {
+		t.Fatalf("%d bytes left unread: a reader that stops wedges the process it reads from",
+			events.Len())
 	}
 }
 
