@@ -3,6 +3,7 @@ package chain
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -71,5 +72,31 @@ func TestChainLayoutIsWhatSaysHowFarAChainGot(t *testing.T) {
 func TestCounterNamesCannotLeaveTheSessionDirectory(t *testing.T) {
 	if got := CallsFile("../../etc/passwd"); got != "calls-passwd" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+// Two chains started in one second are `…-150405` and `…-150405-2`, and as strings `-10`
+// sorts before `-2`. Past nine of them `-continue` took the wrong chain.
+func TestChainsOrderTheDisambiguatingSuffixAsANumber(t *testing.T) {
+	state := t.TempDir()
+	ids := []string{
+		"20260827-150405", "20260827-150405-2", "20260827-150405-10",
+		"20260827-150406", "20260826-090000",
+	}
+	for _, id := range ids {
+		if err := os.MkdirAll(filepath.Join(state, "chains", id), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Chains(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"20260827-150406", "20260827-150405-10", "20260827-150405-2", "20260827-150405",
+		"20260826-090000",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("newest first:\n got %v\nwant %v", got, want)
 	}
 }

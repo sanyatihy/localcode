@@ -141,13 +141,15 @@ func shortPath(path, cwd string) string {
 	return rel
 }
 
+// oneLine cuts to width bytes on a rune boundary: what it shows is a command or a path a
+// person reads, and a cut through a multi-byte rune shows them a replacement character.
 func oneLine(s string, width int) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
 	if len(s) > width {
-		return s[:width] + "…"
+		return strings.ToValidUTF8(s[:width], "") + "…"
 	}
 	return s
 }

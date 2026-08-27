@@ -25,9 +25,9 @@ func renderPiJSON(events io.Reader, out io.Writer, cwd string) (overrun string) 
 			}
 		}
 		var row struct {
-			Type     string `json:"type"`
-			ToolName string `json:"toolName"`
-			Args     map[string]any
+			Type     string          `json:"type"`
+			ToolName string          `json:"toolName"`
+			Args     map[string]any  `json:"args"`
 			Result   json.RawMessage `json:"result"`
 			Event    struct {
 				Type  string `json:"type"`
