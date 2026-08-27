@@ -124,7 +124,7 @@ func TestRunWritesNothingToTheRepository(t *testing.T) {
 	}
 	t.Chdir(repo)
 
-	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 
@@ -149,7 +149,7 @@ func TestRunPreapprovesTheToolsItExposes(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
+	if code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d, err %v", code, err)
 	}
 	got, err := os.ReadFile(argv)
@@ -171,7 +171,7 @@ func TestRunIsInteractiveWithoutAPrompt(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if _, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
+	if _, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(argv)
@@ -189,7 +189,7 @@ func TestRunRefusesWhenTheServerIsNotReady(t *testing.T) {
 
 	// 503 is what llama-server answers while it loads: something is listening, and it
 	// cannot serve yet.
-	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: healthy(t, http.StatusServiceUnavailable), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a loading server must refuse, got code %d err %v", code, err)
 	}
@@ -201,7 +201,7 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: healthy(t, http.StatusOK), noServe: true})
 	if err != nil || code != 3 {
 		t.Fatalf("want exit 3 passed through, got %d err %v", code, err)
 	}
@@ -209,6 +209,21 @@ func TestRunPropagatesTheAgentsExitCode(t *testing.T) {
 
 // -no-serve is what a script wants: it must refuse rather than spend twenty seconds and
 // most of the machine's memory on the caller's behalf.
+// A bound below one runs no session at all: the loop skips its body and the chain records
+// that it stopped at its bound, one session before it began. Refused before the server,
+// because finding it out by starting a model costs twenty seconds and most of the machine.
+func TestABoundBelowOneIsRefusedBeforeAnythingIsStarted(t *testing.T) {
+	for _, bound := range []int{0, -3} {
+		code, err := run(opts{ceiling: 100, calls: 30, sessions: bound, checkout: t.TempDir()})
+		if code != 2 || err == nil {
+			t.Fatalf("-sessions %d: want a refusal, got code %d err %v", bound, code, err)
+		}
+		if !strings.Contains(err.Error(), "runs nothing") {
+			t.Fatalf("-sessions %d: the refusal must say what it refuses: %v", bound, err)
+		}
+	}
+}
+
 func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
 	root := fakeCheckout(t)
 	stubClaude(t, "exit 0")
@@ -219,7 +234,7 @@ func TestRunRefusesRatherThanServingWhenToldNotTo(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing is listening now
 
-	code, err := run(opts{ceiling: 100, calls: 30, checkout: root, endpoint: url, noServe: true})
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root, endpoint: url, noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("want a refusal, got code %d err %v", code, err)
 	}
@@ -560,7 +575,7 @@ func TestRunBudgetsTheSessionAndOpensTheDirectoryItMustWrite(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+	if code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d err %v", code, err)
 	}
@@ -604,7 +619,7 @@ func TestRunRefusesAWindowNothingFitsIn(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: serving(t, http.StatusOK, 8192), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a window under the preamble must be refused: code %d err %v", code, err)
@@ -621,7 +636,7 @@ func TestRunBudgetsAgainstTheServedContextAndNotTheFile(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	if code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+	if code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: serving(t, http.StatusOK, 32768), noServe: true}); err != nil || code != 0 {
 		t.Fatalf("run: code %d err %v", code, err)
 	}
@@ -645,7 +660,7 @@ func TestRunRefusesAServerThatReportsNoContext(t *testing.T) {
 	passthroughSandbox(t)
 	t.Chdir(t.TempDir())
 
-	code, err := run(opts{ceiling: 100, calls: 30, checkout: root,
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, checkout: root,
 		endpoint: serving(t, http.StatusOK, 0), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("a server reporting no context must be refused: code %d err %v", code, err)
@@ -891,7 +906,7 @@ func TestHarnessPiStartsTheSessionPiWouldRun(t *testing.T) {
 func TestAnUnknownHarnessIsRefusedAndNamesTheOnesThereAre(t *testing.T) {
 	root := fakeCheckout(t)
 	t.Chdir(t.TempDir())
-	code, err := run(opts{harness: "cursor", ceiling: 100, checkout: root,
+	code, err := run(opts{harness: "cursor", ceiling: 100, sessions: 1, checkout: root,
 		endpoint: healthy(t, http.StatusOK), noServe: true})
 	if code != 2 || err == nil {
 		t.Fatalf("an unknown harness must be refused: code %d err %v", code, err)
