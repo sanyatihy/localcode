@@ -500,6 +500,11 @@ firing, and the `xhigh` cell that used to run unbounded now finishes at 95 s aga
 budget. This is not a safety net that should ever fire — it is what stops a sweep being open-ended, after a single task spent 15 minutes
 reasoning and produced no answer.
 
+**The grader is denied the network.** Both tiers score an answer by running `go test` over
+code the model wrote, so it runs with `GOPROXY=off` — an invented import fails against the
+module cache rather than being fetched, and is scored as invalid Go — and, where
+`sandbox-exec` is, under a generated profile allowing nothing but loopback.
+
 Budgets are set from the fast end (`reasoning off`) plus headroom, so a task hitting its
 budget means something changed, not that the number was tight. One pass over the 14 tasks
 costs **5.4 minutes** with reasoning off; the same pass at `xhigh` cost 16.8 and did not
@@ -1375,7 +1380,10 @@ writes which it was to `chain.json` beside its rows — one of `finished`, `stal
 `bound`, `timeout` or `interrupted`, the session it happened at, and the handoff to open —
 so a run whose narration went to a stream nobody kept is still readable afterwards. The
 step is read from the `**Next:**` line or from the lines under it, and a handoff carrying
-none is neither an ending a session may take nor a step a later one can repeat.
+none is neither an ending a session may take nor a step a later one can repeat. The words
+that end a chain are `none`, `nothing` and `done`; `no` ends one only with a qualifier
+after it, because the step is read up to its first punctuation and `No, the tests still
+fail` reduces to the same word as `none`.
 Starting clean is the default, `-continue` takes the newest chain, `-resume` takes one by
 id, `-fork` starts a new one from what another knew, and `localcode sessions` lists them
 with how each one ended.
