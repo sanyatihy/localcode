@@ -677,9 +677,15 @@ is what a chain on Pi would mean. **The memory route is not closed after all**: 
 closed because more RAM was what would have stopped slot count competing with the model, and
 the ceiling turns out to be a cap at two thirds of the RAM already installed rather than the
 RAM itself. `mlx_lm` buys cache capacity from that pool eagerly, so a raised cap is the "more
-memory" this paragraph ruled unavailable. **MTPLX has no route
-left**: its 20.68 GB checkpoint needed room this machine does not have, and that was the only
-thing standing between it and a verdict.
+memory" this paragraph ruled unavailable. **MTPLX has a route, it was taken, and it still
+does not fit.** Screened at 24,576 MiB the `Optimized-Speed-FP16` checkpoint answers 200 to a
+44,236-token prompt at 49,152, where at the derived cap it errored — but it peaks at 26,089
+and 26,302 MiB across two runs and swaps both times, so both rows are `void_swapped` and are
+read for the peak rather than for a verdict they do not carry. Admitting it needs a cap above
+26,302 MiB, which leaves the system under 6.3 GiB and `scripts/gpuraise.sh` refuses. **What
+excludes it here is the reserve, not the absence of a route.** Its peak arrives during the
+fill and not the load — 21.0–21.2 GiB wired once loaded, either run — because it allocates KV
+per request, so a cap does not bound it the way it bounds llama.cpp.
 
 **One caveat on the benchmark itself.** The suite interleaves 14 distinct prompts before
 repeating any, which is what forced the slot-count problem. A real agent session is one
@@ -699,7 +705,7 @@ the same weights, loading no second model.
 |---|---|---|
 | **native MTP**, `--spec-type draft-mtp` | none — the target's own head | admissible at 32,768, refused at 49,152 |
 | DFlash2 drafter, PR #27342 | 1.1 GB | GPU out of memory at load, both contexts |
-| MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | loads, then out of memory under a real prompt |
+| MTPLX (MLX, native MTP) | a 20.68 GB checkpoint of its own | out of memory under a real prompt at the derived cap; at 24,576 MiB it answers, peaking at 26,089–26,302 MiB and swapping |
 
 **The ratio is of decode and not of wall, measured client-side from the gap to the first
 token.** A speculative decoder moves decode and cannot move prefill. At depth prefill is most

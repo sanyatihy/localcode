@@ -81,8 +81,9 @@ remembered.
 - **Hardware is fixed: M2 Max, 32 GB unified memory, 30 GPU cores.** A larger machine was
   considered and decided against, so this is the envelope every answer here is for. **Some
   exclusions are therefore permanent rather than provisional** — Q5_K_M and Q6_K stay ruled
-  out *by projection*, and no run will ever test that; MTPLX stays inadmissible; Hermes stays
-  unattended-only. Where a conclusion rests on a projection this machine cannot check, it says
+  out *by projection*, and no run will ever test that; **MTPLX is excluded by measurement
+  rather than by assumption**, its filled peak sitting 1.5 GiB above what this machine can cap
+  at while leaving the system its reserve; Hermes stays unattended-only. Where a conclusion rests on a projection this machine cannot check, it says
   so and stays that way.
   **Measured numbers are still recorded with the machine they came from**, and this machine's
   limits still live in `config/machine.json` rather than in code — for the second audience
