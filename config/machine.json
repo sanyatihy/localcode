@@ -2,6 +2,8 @@
   "note": "Every limit this machine imposes, measured rather than assumed. Nothing in Go or in a script may carry one of these numbers: they are readings from one laptop, and anyone reproducing these choices is on different silicon. docs/TECH.md says how each was measured.",
   "machine": "m2max-32gb",
 
+  "gpu_wired_cap_mb": "deliberately not carried. scripts/gpulimit.sh reads the cap from Metal at runtime, so a number here would duplicate a reading already taken; and a raise applied by scripts/gpuraise.sh is a sysctl a reboot undoes, which makes it an override somebody applied rather than a limit this machine imposes. 0042 measured that the derived 21,845 MiB is what refuses the draft head at 49,152 and that 24,576 admits it.",
+
   "min_headroom_gb": 4.0,
 
   "desk_profiles": [
