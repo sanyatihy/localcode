@@ -172,7 +172,14 @@ func (r *messagesResponse) toResponse(wall time.Duration) *Response {
 	// prompt_tokens on the chat path counts the whole prompt. Summing them is what makes
 	// the two comparable; recording input_tokens raw would show a prompt shrinking as the
 	// cache warmed.
-	out.Usage.PromptTokens = r.Usage.InputTokens + r.Usage.CacheReadInputTokens
+	//
+	// All three, because a token written to the cache was read from the prompt as much as
+	// one served out of it. `cache_creation_input_tokens` was decoded here and added to
+	// nothing, so whenever the server reported a cache write this path read short against
+	// the chat path it exists to be compared with. internal/handoff sums the same three
+	// off a transcript.
+	out.Usage.PromptTokens = r.Usage.InputTokens + r.Usage.CacheReadInputTokens +
+		r.Usage.CacheWriteInputTokens
 	out.Usage.CompletionTokens = r.Usage.OutputTokens
 	out.Usage.PromptTokensDetails.CachedTokens = r.Usage.CacheReadInputTokens
 	return &out

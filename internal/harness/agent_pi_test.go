@@ -86,3 +86,15 @@ func TestPiRecorderReadsASessionThatSpentNothing(t *testing.T) {
 		t.Errorf("peak %d over %d turns, want nothing", peak, turns)
 	}
 }
+
+// A transcript that cannot be read is not a session that spent nothing. The gate tests the
+// peak against a ceiling, so answering 0 there says the session is well inside its budget
+// when what happened is that nobody could measure it. chain.Cost answers -1 and this one
+// answered 0, against an interface that documented one of them.
+func TestPiRecorderAnswersUnmeasuredRatherThanNothing(t *testing.T) {
+	var rec piRecorder
+	if peak, turns := rec.Cost(filepath.Join(t.TempDir(), "no-such-session.jsonl")); peak != -1 || turns != 0 {
+		t.Errorf("peak %d over %d turns, want -1 and 0: nothing to read is not nothing spent",
+			peak, turns)
+	}
+}

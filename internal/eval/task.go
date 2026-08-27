@@ -357,9 +357,11 @@ func checkToolCall(exp Expect, calls []ToolCall, content string) (Outcome, strin
 	return Pass, ""
 }
 
+// truncate cuts to n bytes on a rune boundary. A detail is the server's own words, and a
+// cut through a multi-byte rune puts a replacement character in the middle of them.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return strings.ToValidUTF8(s[:n], "") + "…"
 }

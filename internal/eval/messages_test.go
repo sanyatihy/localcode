@@ -106,6 +106,34 @@ func TestMessagesToolUseIsScoredLikeAToolCall(t *testing.T) {
 	}
 }
 
+// A token written to the cache was read from the prompt as much as one served out of it,
+// and the chat path's prompt_tokens counts both. `cache_creation_input_tokens` was decoded
+// and added to nothing, so a run that warmed the cache read short against the very path
+// this one exists to be compared with.
+func TestMessagesCountsTheWholePromptIncludingWhatWasWrittenToCache(t *testing.T) {
+	srv := messagesServer(t, `{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn",
+		"usage":{"input_tokens":4,"output_tokens":9,"cache_read_input_tokens":19,
+		"cache_creation_input_tokens":7}}`, nil)
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 5*time.Second)
+	c.API = APIMessages
+	resp, err := c.Complete(context.Background(), chatRequest{
+		Messages: []Message{{Role: "user", Content: "x"}}, MaxTokens: 8,
+	})
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if resp.Usage.PromptTokens != 30 {
+		t.Errorf("prompt tokens = %d, want 4+19+7", resp.Usage.PromptTokens)
+	}
+	// Only what the server already held is cached; what it wrote there it also read.
+	if resp.Usage.PromptTokensDetails.CachedTokens != 19 {
+		t.Errorf("cached = %d, want the 19 it did not have to read",
+			resp.Usage.PromptTokensDetails.CachedTokens)
+	}
+}
+
 func TestMessagesTruncationIsNotAQualityFailure(t *testing.T) {
 	srv := messagesServer(t, `{"content":[{"type":"text","text":"partial"}],"stop_reason":"max_tokens"}`, nil)
 	defer srv.Close()

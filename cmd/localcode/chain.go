@@ -97,9 +97,12 @@ func (l launch) session(dir string, n int, chainID, goal, inherit string,
 	if err := os.Remove(handoffPath); err != nil && !os.IsNotExist(err) {
 		return row{}, err
 	}
+	// `goal` is what says which kind of session this is, and it is the only thing that
+	// does: a session answering an instruction ends once and may be held to leaving a
+	// handoff, and one at a keyboard ends every time it hands the keyboard back.
 	if err := chain.WriteSpec(dir, chain.Spec{
 		Limits: l.limits, Handoff: handoffPath, Chain: chainID, Session: n,
-		Harness: l.agent.Name(),
+		Harness: l.agent.Name(), OneShot: goal != "",
 	}); err != nil {
 		return row{}, err
 	}

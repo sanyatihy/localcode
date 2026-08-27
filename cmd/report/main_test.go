@@ -34,6 +34,47 @@ func TestPairedRatioVoidsThrottledAndSwappedRuns(t *testing.T) {
 	}
 }
 
+// One report, one reading of "void". The summary allowed 20 MB of slack because macOS
+// moves swap around without the run causing it; the paired section voided any growth at
+// all, so the same run read clean in one half and void in the other.
+func TestBothHalvesOfTheReportVoidASwappedRunAtOneThreshold(t *testing.T) {
+	// Inside the slack: neither half may call this void.
+	slack := decodeRow(1, 10)
+	slack.SwapDeltaMB = swapSlackMB
+	p := &pairAgg{}
+	p.add(slack)
+	if p.swapped != 0 || len(p.secPerToken) != 1 {
+		t.Fatalf("swap within the slack was voided: swapped=%d kept=%d",
+			p.swapped, len(p.secPerToken))
+	}
+
+	// Past it: both must.
+	past := decodeRow(1, 10)
+	past.SwapDeltaMB = swapSlackMB + 1
+	p = &pairAgg{}
+	p.add(past)
+	if p.swapped != 1 || len(p.secPerToken) != 0 {
+		t.Fatalf("swap past the slack reached the mean: swapped=%d kept=%d",
+			p.swapped, len(p.secPerToken))
+	}
+
+	dir := t.TempDir()
+	results := filepath.Join(dir, "rows.jsonl")
+	for _, r := range []eval.Row{slack, past} {
+		r.Config, r.TaskID, r.Kind, r.Outcome = "c", "t", "toolcall", eval.Pass
+		if err := eval.AppendRow(results, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := runReport(t, "-results", results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "VOID: 1 run(s) swapped") {
+		t.Fatalf("the summary must void exactly the run the paired section does:\n%s", out)
+	}
+}
+
 // A stall is not a slow decode. One sample far past the median of its own side is
 // rejected, and rejecting it is recorded rather than silent.
 func TestPairedRatioRejectsAStall(t *testing.T) {

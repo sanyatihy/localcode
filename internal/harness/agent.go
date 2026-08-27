@@ -26,9 +26,9 @@ type Agent interface {
 	Window(served int) (declared, output int, err error)
 
 	// Prepare is what one chain needs written before its first session. Called once, with
-	// the chain's directory, and told whether the sessions in it answer an instruction:
-	// an agent that refuses to stop without a handoff must not refuse a conversation.
-	Prepare(chainDir string, oneShot bool) error
+	// the chain's directory. Whether a session may be refused permission to stop is not
+	// here: it is one decision, it is the supervisor's, and it travels in the spec.
+	Prepare(chainDir string) error
 
 	// Command is the binary, the arguments and the environment for one session. The
 	// sandbox is the driver's, so what comes back is what goes inside it.
@@ -54,7 +54,9 @@ type Recorder interface {
 	Transcript(dir string) string
 
 	// Cost is what that record says the session spent: the largest context any turn
-	// reached, and how many turns it took. Zero and zero when there is nothing to read.
+	// reached, and how many turns it took. Peak is -1 when there is nothing to read,
+	// because a peak is tested against a ceiling and a 0 there is a session that spent
+	// nothing rather than one nobody could measure.
 	Cost(transcript string) (peak, turns int)
 
 	// Requests is every call the session made to the model, in order. What one cost and

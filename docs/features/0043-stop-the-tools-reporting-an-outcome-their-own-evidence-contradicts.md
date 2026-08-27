@@ -1,9 +1,9 @@
 ---
 id: 0043
 title: Stop the tools reporting an outcome their own evidence contradicts
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-27
 needs:
 ---
 
@@ -111,17 +111,22 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
 
 ## Tasks
 
-- [ ] A chain's ending names what happened: no negation reads as finished, and a bound
+- [x] A chain's ending names what happened: no negation reads as finished, and a bound
       below one is refused rather than recorded as a chain that stopped at session -3
-- [ ] The event stream reports what it could not read instead of going quiet, and a
+- [x] The event stream reports what it could not read instead of going quiet, and a
       session it cannot read to the end still exits on its own code rather than its clock
-- [ ] One place decides whether a session may end without a handoff, so an interactive
+- [x] One place decides whether a session may end without a handoff, so an interactive
       session is never refused one
-- [ ] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
+- [x] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
       network to build or to run
-- [ ] Every number a row carries is the number its instrument reported, and one swap
+- [x] Every number a row carries is the number its instrument reported, and one swap
       threshold decides void across the whole report
-- [ ] The remaining readers are correct at their bounds, and the three functions that
+- [x] The remaining readers are correct at their bounds, and the three functions that
       size a session's budget have tests
 
 ## Log
+- 2026-08-27 — `GOPROXY=off` gave `isBuildFailure` a message it did not know. An
+  unresolvable import used to be resolved over the network and now fails against the
+  module cache, which reports itself as `finding module for package` and was scored
+  `fail_test_failed`. It is invalid Go rather than Go that is wrong, so the two markers
+  join the list. Caused by this box, so fixed in it.

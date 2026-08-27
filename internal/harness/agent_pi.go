@@ -91,7 +91,7 @@ func (p *piAgent) Window(served int) (int, int, error) {
 // unless told otherwise, which is the machine's rather than the checkout's — and what this
 // file carries is a compaction reserve of 0, because a chain hands off rather than
 // compacting.
-func (p *piAgent) Prepare(chainDir string, oneShot bool) error {
+func (p *piAgent) Prepare(chainDir string) error {
 	body, err := os.ReadFile(filepath.Join(p.root, "harness", "pi", "settings.json.reference"))
 	if err != nil {
 		return fmt.Errorf("pi settings not readable: %w", err)
@@ -179,10 +179,16 @@ type piRecorder struct{}
 
 // Cost is the largest context any turn reached and how many turns there were, read off the
 // calls: pi records a usage per assistant message and nothing else has to be reconstructed.
+//
+// Peak is -1 when there is nothing to read, which is what chain.Cost answers and what the
+// Recorder interface documents. The two disagreed, and a 0 peak is a session that spent
+// nothing rather than a session nobody could measure.
 func (r piRecorder) Cost(transcript string) (int, int) {
 	calls, err := r.Requests(transcript)
 	if err != nil {
-		return 0, 0
+		// -1, the way chain.Cost answers it. The gate tests the peak against a ceiling, so
+		// a nothing-read that answered 0 would read as a session that had spent nothing.
+		return -1, 0
 	}
 	peak := 0
 	for _, c := range calls {

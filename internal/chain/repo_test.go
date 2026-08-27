@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // run is a git command a test needs to have worked. Identity on the command line rather
@@ -196,5 +197,34 @@ func TestAddingAWorktreeIsNotACommit(t *testing.T) {
 	run(t, dir, "worktree", "add", "-q", "-b", "claimed", filepath.Join(t.TempDir(), "claimed"))
 	if committed, known := Repo(dir).Committed(before); !known || committed {
 		t.Fatalf("a new branch at an old commit is not a commit: committed %v known %v", committed, known)
+	}
+}
+
+// The only blocking call in the supervisor's loop that had no bound. A git that never
+// answers — an index lock, a stalled filesystem — hung the chain outside the session
+// clock, so nothing in the system would have ended it.
+func TestARepoReadingThatNeverAnswersIsAbandonedRatherThanWaitedOut(t *testing.T) {
+	bin := t.TempDir()
+	script := filepath.Join(bin, "git")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	was := gitTimeout
+	gitTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { gitTimeout = was })
+
+	done := make(chan Snapshot, 1)
+	go func() { done <- Repo(t.TempDir()) }()
+	select {
+	case s := <-done:
+		// Abandoned reads as no repository here, which is the abstention the design
+		// already handles: a chain outside version control is not a chain that stalled.
+		if s.Known {
+			t.Fatal("a git that never answered must not be read as a repository")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the reading was waited out rather than bounded")
 	}
 }
