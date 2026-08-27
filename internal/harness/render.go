@@ -1,12 +1,43 @@
 package harness
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 )
+
+// eventBuffer is the largest event line a renderer will read. A line carries a whole tool
+// result, so the scanner's 64 KB default ends a stream at the first big one.
+const eventBuffer = 16 * 1024 * 1024
+
+// newEventScanner reads an agent's event stream a line at a time, at this package's bound
+// rather than the scanner's own.
+func newEventScanner(events io.Reader) *bufio.Scanner {
+	scan := bufio.NewScanner(events)
+	scan.Buffer(make([]byte, 0, 64*1024), eventBuffer)
+	return scan
+}
+
+// finish ends a render, and is what makes a bound that was hit visible instead of silent.
+//
+// A scanner past its buffer stops exactly as it does at the end of a stream, so a render
+// that does not ask reports a truncated session as a complete one — the failure the
+// buffer was raised to remove, moved rather than fixed. Asking is half of it: the caller
+// reads this off a pipe and then waits on the process, and a reader that stops leaves the
+// child blocked in its own write. So the rest is drained and thrown away. The session then
+// ends on its exit code rather than on the supervisor's clock, which is what a row would
+// otherwise record it as.
+func finish(scan *bufio.Scanner, events io.Reader, out io.Writer, open bool) {
+	if err := scan.Err(); err != nil {
+		_ = closeLine(out, open)
+		say(out, fmt.Sprintf("  ✗ the event stream could not be read past %d bytes (%v) — "+
+			"what follows is not shown, and the session runs on", eventBuffer, err))
+		_, _ = io.Copy(io.Discard, events)
+	}
+}
 
 // overrunMarker is what llama-server says when a prompt does not fit the context it serves:
 // `request (49509 tokens) exceeds the available context size (49152 tokens), try increasing

@@ -1,7 +1,6 @@
 package harness
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -16,10 +15,7 @@ import (
 // reports a tool call as an execution rather than as a content block — so the parsing is
 // its own and the presentation is shared.
 func renderPiJSON(events io.Reader, out io.Writer, cwd string) (overrun string) {
-	scan := bufio.NewScanner(events)
-	// A line here carries a whole tool result. The default 64 KB would end the stream at
-	// the first big one, and silently.
-	scan.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scan := newEventScanner(events)
 	open := false
 	for scan.Scan() {
 		line := scan.Bytes()
@@ -70,6 +66,7 @@ func renderPiJSON(events io.Reader, out io.Writer, cwd string) (overrun string) 
 			}
 		}
 	}
+	finish(scan, events, out, open)
 	if overrun != "" {
 		_ = closeLine(out, open)
 		say(out, "  ✗ the server refused the prompt: "+overrun)
