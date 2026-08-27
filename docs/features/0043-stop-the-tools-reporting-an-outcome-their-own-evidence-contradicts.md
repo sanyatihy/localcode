@@ -119,7 +119,7 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
       session is never refused one
 - [x] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
       network to build or to run
-- [ ] Every number a row carries is the number its instrument reported, and one swap
+- [x] Every number a row carries is the number its instrument reported, and one swap
       threshold decides void across the whole report
 - [ ] The remaining readers are correct at their bounds, and the three functions that
       size a session's budget have tests
