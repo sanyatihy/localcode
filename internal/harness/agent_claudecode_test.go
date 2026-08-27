@@ -11,11 +11,11 @@ import (
 // settingsOf runs Prepare and hands back what it wrote. The adapter is built by hand
 // rather than through NewAgent: what the hooks say does not depend on there being a
 // `claude` on PATH, and a test that needed one would be testing the machine.
-func settingsOf(t *testing.T, oneShot bool) []byte {
+func settingsOf(t *testing.T) []byte {
 	t.Helper()
 	c := &claudeCodeAgent{root: t.TempDir()}
 	dir := t.TempDir()
-	if err := c.Prepare(dir, oneShot); err != nil {
+	if err := c.Prepare(dir); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "settings.json"))
@@ -28,7 +28,7 @@ func settingsOf(t *testing.T, oneShot bool) []byte {
 // The gate is this binary, not a fourth shell script, so what enforces the budget is
 // covered by the same `make check` as everything else that decides something.
 func TestSettingsInstallTheGateAsThisBinary(t *testing.T) {
-	body := settingsOf(t, true)
+	body := settingsOf(t)
 	var doc struct {
 		Hooks map[string][]struct {
 			Hooks []struct{ Command string } `json:"hooks"`
@@ -46,24 +46,18 @@ func TestSettingsInstallTheGateAsThisBinary(t *testing.T) {
 	}
 }
 
-// Stop fires whenever the agent finishes responding, which in an interactive session is
-// every time it hands the keyboard back. Installed there it would refuse the conversation.
-func TestStopIsInstalledOnlyForASessionAnsweringOneInstruction(t *testing.T) {
-	installed := func(oneShot bool) bool {
-		var doc struct {
-			Hooks map[string]any `json:"hooks"`
-		}
-		if err := json.Unmarshal(settingsOf(t, oneShot), &doc); err != nil {
-			t.Fatal(err)
-		}
-		_, ok := doc.Hooks["Stop"]
-		return ok
+// Stop is installed for every session, and the hook reads the spec to decide which of them
+// it may refuse. Installed unconditionally so that one thing decides it: an adapter that
+// has to remember is an adapter that can forget, and one of the two did.
+func TestStopIsInstalledForEverySessionAndTheHookDecides(t *testing.T) {
+	var doc struct {
+		Hooks map[string]any `json:"hooks"`
 	}
-	if !installed(true) {
+	if err := json.Unmarshal(settingsOf(t), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc.Hooks["Stop"]; !ok {
 		t.Fatal("a session answering one instruction must not be able to end without a handoff")
-	}
-	if installed(false) {
-		t.Fatal("an interactive session would be refused at the end of every turn")
 	}
 }
 

@@ -1,11 +1,13 @@
 package chain
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -125,6 +127,10 @@ func Read(path string) []byte {
 // Chains lists a repository's chains, newest first. The id is a timestamp, so sorting the
 // names is sorting the runs — which is what `-continue` needs and what `localcode
 // sessions` prints.
+//
+// The disambiguating suffix is compared as a number, not as text. Two chains started in
+// one second are `…-150405` and `…-150405-2`, and as strings `-10` sorts before `-2`: past
+// nine of them `-continue` would take the wrong one.
 func Chains(state string) ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(state, "chains"))
 	if err != nil {
@@ -139,8 +145,38 @@ func Chains(state string) ([]string, error) {
 			ids = append(ids, e.Name())
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(ids)))
+	slices.SortFunc(ids, func(a, b string) int { return -compareChainID(a, b) })
 	return ids, nil
+}
+
+// compareChainID orders two ids oldest first: by the timestamp they open with, and then by
+// the suffix as a number. An id this does not recognise falls back to the whole string, so
+// a directory nobody here named still sorts somewhere stable.
+func compareChainID(a, b string) int {
+	baseA, nA := chainIDParts(a)
+	baseB, nB := chainIDParts(b)
+	if c := strings.Compare(baseA, baseB); c != 0 {
+		return c
+	}
+	return cmp.Compare(nA, nB)
+}
+
+// chainIDParts splits `20260827-150405-2` into its timestamp and its 2. A bare id is 1,
+// which is what `newChain` gives the first chain of a second.
+func chainIDParts(id string) (base string, n int) {
+	base, suffix, ok := strings.Cut(id, "-")
+	rest, tail, hasTail := strings.Cut(suffix, "-")
+	if !ok {
+		return id, 1
+	}
+	if !hasTail {
+		return id, 1
+	}
+	n, err := strconv.Atoi(tail)
+	if err != nil {
+		return id, 1
+	}
+	return base + "-" + rest, n
 }
 
 // Sessions lists the sessions a chain holds, in the order they ran. A numbered directory

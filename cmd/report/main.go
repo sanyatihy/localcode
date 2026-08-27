@@ -162,12 +162,10 @@ func run(args []string, stdout, stderr *os.File) error {
 		}
 		a.total++
 		a.outcomes[r.Outcome]++
-		// 20 MB of slack: macOS moves swap around by a few MB without the run causing it,
-		// and flagging that as contamination would cry wolf on every clean sweep.
 		switch {
 		case !r.MemMeasured:
 			a.unmeasured++
-		case r.SwapDeltaMB > 20:
+		case r.SwapDeltaMB > swapSlackMB:
 			a.swapped++
 			if r.SwapDeltaMB > a.maxSwap {
 				a.maxSwap = r.SwapDeltaMB
@@ -293,6 +291,15 @@ func versus(a, base *agg) string {
 	return strings.Join(parts, "  ")
 }
 
+// swapSlackMB is the swap growth a run is allowed before its timings are void. macOS moves
+// swap around by a few MB without the run causing it, and flagging that would cry wolf on
+// every clean sweep.
+//
+// One number, because two readings of one word is not a threshold. The summary allowed 20
+// and the paired section voided any growth at all, so a run read clean in one half of a
+// report and void in the other. 20 is the one with a measurement behind it.
+const swapSlackMB = 20
+
 // minPairs is how many accepted samples a side needs before its mean is a mean. Fewer
 // than three is one machine state and a coincidence, not a measurement.
 const minPairs = 3
@@ -325,7 +332,7 @@ func (p *pairAgg) add(r eval.Row) {
 	// A run whose swap grew measured the pager, and one the machine capped measured the
 	// cap. The vision calls the first void rather than slow; the second is the same kind
 	// of thing. Counted and named, never averaged in.
-	if r.MemMeasured && r.SwapDeltaMB > 0 {
+	if r.MemMeasured && r.SwapDeltaMB > swapSlackMB {
 		p.swapped++
 		return
 	}
