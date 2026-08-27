@@ -1,9 +1,9 @@
 ---
 id: 0042
 title: Settle whether the GPU wired cap is what binds
-status: Draft
+status: Shipped
 created: 2026-08-25
-shipped:
+shipped: 2026-08-27
 needs: 0041
 ---
 
