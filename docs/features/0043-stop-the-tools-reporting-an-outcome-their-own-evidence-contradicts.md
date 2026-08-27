@@ -115,7 +115,7 @@ derived from and have no test at all. `cmd/prefixprobe` is at 0.0%.
       below one is refused rather than recorded as a chain that stopped at session -3
 - [x] The event stream reports what it could not read instead of going quiet, and a
       session it cannot read to the end still exits on its own code rather than its clock
-- [ ] One place decides whether a session may end without a handoff, so an interactive
+- [x] One place decides whether a session may end without a handoff, so an interactive
       session is never refused one
 - [ ] Nothing in a session's loop blocks without a bound, and the grader cannot reach the
       network to build or to run

@@ -225,7 +225,7 @@ func run(o opts) (int, error) {
 	// keyboard back. Only the first can be chained, and only the first can be refused
 	// permission to stop without leaving a handoff.
 	oneShot := goal != ""
-	if err := agent.Prepare(chainDir, oneShot); err != nil {
+	if err := agent.Prepare(chainDir); err != nil {
 		return 2, err
 	}
 

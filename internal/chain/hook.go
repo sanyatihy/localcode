@@ -26,6 +26,12 @@ type Spec struct {
 	// chain: a resumed chain may be given a different one, and the rows either side of
 	// that were written by different agents.
 	Harness string `json:"harness,omitempty"`
+	// OneShot is whether this session answers an instruction. Only such a session may be
+	// refused permission to stop: an interactive one ends every time it hands the keyboard
+	// back, and refusing there refuses the conversation itself. It lives here rather than
+	// in each adapter because the supervisor is the only thing that knows, and an adapter
+	// that has to remember is an adapter that can forget.
+	OneShot bool `json:"one_shot,omitempty"`
 }
 
 func WriteSpec(dir string, s Spec) error {
@@ -179,7 +185,16 @@ func peakOf(p Payload) int {
 // stop counts its refusals rather than reading the harness's stop_hook_active, because the
 // count is what the bound is expressed in and the counter is per session id in a directory
 // that belongs to one session.
+//
+// A session nobody gave an instruction to is never refused. It ends every time it hands
+// the keyboard back, so a refusal there is a refusal of the conversation: measured, an
+// interactive Pi session was told twice that it had handed nothing on, because its
+// extension asks on every `agent_end` and only the supervisor knows which kind of session
+// this is.
 func stop(p Payload, spec Spec, dir string) Verdict {
+	if !spec.OneShot {
+		return Verdict{}
+	}
 	v := Stop(Read(spec.Handoff), spec.Handoff, Counter(dir, StopFile(p.SessionID)))
 	if v.Deny {
 		Bump(dir, StopFile(p.SessionID))

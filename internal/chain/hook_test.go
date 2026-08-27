@@ -15,7 +15,9 @@ func budgeted(t *testing.T, calls int) (dir string, spec Spec) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec = Spec{Limits: l, Handoff: filepath.Join(dir, HandoffName)}
+	// One-shot, because that is the session every bound here is written for. The
+	// interactive case has a test of its own.
+	spec = Spec{Limits: l, Handoff: filepath.Join(dir, HandoffName), OneShot: true}
 	if err := WriteSpec(dir, spec); err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +89,26 @@ func TestStopHookRefusesTwiceAndThenRelents(t *testing.T) {
 	}
 	if v, err := Hook("stop", strings.NewReader(payload), dir); err != nil || v.Deny {
 		t.Fatalf("after its refusals the hook must relent: %+v %v", v, err)
+	}
+}
+
+// An interactive session ends every time it hands the keyboard back, so refusing it is
+// refusing the conversation. Asserted at the hook rather than at either adapter: measured,
+// Pi asked on every `agent_end` because its Prepare ignored the flag it was handed, and
+// only the supervisor knows which kind of session this is.
+func TestTheStopHookNeverRefusesASessionNobodyInstructed(t *testing.T) {
+	dir, spec := budgeted(t, 8)
+	spec.OneShot = false
+	if err := WriteSpec(dir, spec); err != nil {
+		t.Fatal(err)
+	}
+	// Past the point a one-shot session would have been refused twice over, and with no
+	// handoff written, which is the only thing a refusal is ever about.
+	for i := 0; i <= stopTries+1; i++ {
+		v, err := Hook("stop", strings.NewReader(`{"session_id":"s1"}`), dir)
+		if err != nil || v.Deny {
+			t.Fatalf("turn %d: an interactive session must be allowed to end: %+v %v", i, v, err)
+		}
 	}
 }
 
