@@ -83,7 +83,7 @@ draft head at 49,152 is closed for a reason this project has finally established
       sized to the context it is served, and its row records which checkpoint
 - [x] the desktop verdict at the raised cap is taken attended with the head serving, or the
       box is dropped because the `config/mtp-49k.env` screen said the cap is not what binds
-- [ ] `docs/TECH.md` says what refused the draft head at 49,152, and `config/machine.json`
+- [x] `docs/TECH.md` says what refused the draft head at 49,152, and `config/machine.json`
       carries the cap this machine is held to or is explicitly left alone
 - [ ] `docs/TECH.md`'s "MTPLX has no route left" is corrected or confirmed, and
       `docs/VISION.md`'s listing of it among the permanent exclusions with it

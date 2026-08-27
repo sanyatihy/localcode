@@ -730,17 +730,21 @@ that changed the answer would be measuring something else.
   out as a distribution change.
 - **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
   rule reserves for "measured, not taken", and an agent session's prompt is deep.
-- **Editor, 49,152**: refused, and **the host prompt cache is not why**. The allocator fails
-  on the first prefill batch, where the same config without speculation finishes the fill at
-  22.02 GB. Re-screened at `CACHE_RAM=0` on 2026-08-25 it fails identically —
-  `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second —
-  so the draft head is **not adopted at 49,152**, and 32,768 remains the context it is
-  adopted at. Both rows peak 1.05 GB *above* the 21.33 GiB Metal ceiling, which the earlier
-  screen could not see because it assumed 24.
-- **Attended, any profile**: undecided, and deliberately not guessed. Every screen here ran
-  `unattended`, so 0014's desktop verdict — which the attended half of the rule requires —
-  has not been taken against this config. It peaks at 22.10 GB where the desktop died at
-  22.29, so the margin is 0.19 GB and the answer is not obvious.
+- **Editor, 49,152**: **admissible above the derived cap, and the cap is what refused it.**
+  At the 21,845 MiB Metal derives, the allocator fails on the first prefill batch —
+  `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second, and
+  identically at `CACHE_RAM=0`, so the host prompt cache was never why. Raised to 24,576 MiB
+  by [`scripts/gpuraise.sh`](../scripts/gpuraise.sh), the same config loads in 6–16 s and
+  answers 200 to the same 44,236-token prompt, peaking at 23.269 GiB with 0.731 GiB to spare
+  and a swap delta of 0.0. One thing moved, and it was the one nothing had moved.
+- **Attended, 49,152 at 24,576 MiB**: **taken, and it passes.** WindowServer sustained
+  0.155–0.275 cores against its own 0.114 baseline, swap delta 0.0. So the head is adoptable
+  at the editor context on a machine somebody is using — with an editor and no browser, which
+  is what a 23.269 GiB peak leaves room for. It cost three runs: one swapped and voided, one
+  scored `fail_stalled` on a desktop nobody was driving, and the rule cannot tell that apart
+  from a compositor that died.
+- **Attended at the derived cap, 32,768**: still undecided, and still not guessed. That config
+  peaks at 22.10 GB where the desktop died at 22.29, and no screen has been driven against it.
 - **Driver, 32,768 served**: adopt for work whose calls are cheap, and not by default.
   Measured on a whole chain, which is what the trade is between — but the chain was a
   generated fixture, and on real source the ceiling it leaves ends every session. The driver
@@ -837,7 +841,9 @@ is still sized at the context the target serves, so its cost grows with `--ctx-s
 Measured: 32,768 and 36,864 serve, 38,912 serves a 35,020-token prompt at **22.28 GB**, and
 40,960 refuses on the first prefill batch. That ceiling sits below the editor profile's
 49,152 and above the grind profile's 32,768, so the fast config is available to the scorer
-and not to the editor.
+and not to the editor. **Every figure in this paragraph is at the derived cap**, which is now
+known to be what refuses the head at 49,152; whether a raise moves the 38,912 ceiling with it
+is untested, because nothing re-walked it.
 
 `--n-gpu-layers auto` does not move it. Every refusal logs `common_fit_params: failed to fit
 params to free device memory: n_gpu_layers already set by user to 999, abort`, so this
@@ -1575,6 +1581,10 @@ Each of these has already caused a wrong number in this repo.
   working set by [`scripts/gpulimit.sh`](../scripts/gpulimit.sh). The sysctl answers `0`,
   which means the kernel derived a limit and will not print it, not that there is none. The symptom is a glitching desktop, not a slow model —
   and the model reports success throughout, because it is the process that got the memory.
+  **That it binds is measured rather than asserted**: the config that fails the allocator at
+  21,845 MiB serves a 44,236-token prompt at 24,576, which
+  [`scripts/gpuraise.sh`](../scripts/gpuraise.sh) applies and undoes in one command. A raise is
+  a sysctl, so a reboot is the way back out of one.
 - **A pass criterion that only asks about the model is blind to the machine.** 0003's
   ladder marked 64k `ok` while that context made the desktop unusable. Any measurement
   meant to protect the machine has to take its verdict from outside the model process.
