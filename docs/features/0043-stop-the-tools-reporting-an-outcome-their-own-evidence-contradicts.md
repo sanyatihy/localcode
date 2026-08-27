@@ -1,9 +1,9 @@
 ---
 id: 0043
 title: Stop the tools reporting an outcome their own evidence contradicts
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-27
 needs:
 ---
 
