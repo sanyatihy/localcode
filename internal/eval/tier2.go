@@ -322,18 +322,74 @@ func stageTest(t Tier2Task, work string) error {
 //
 // CommandContext so cancellation reaches the process: a hand-rolled timer kills it and
 // leaves the reader goroutine blocked until the pipe closes.
+//
+// This compiles and runs code the model wrote, in a repository that refuses to run an
+// agent at all when the sandbox is missing. `GOPROXY=off` is the half that holds
+// everywhere: an import the model invented then fails against the module cache instead of
+// fetching, which is also the right answer for a fixture that needs no dependency.
+// denyNetwork is the other half, and it is macOS's — the machine VISION fixes.
 func goTest(ctx context.Context, dir string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "go", "test", "./...")
+	name, args, done := denyNetwork("go", []string{"test", "./..."})
+	defer done()
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local", "GOPROXY=off")
 	return cmd.CombinedOutput()
+}
+
+// sandboxExec is macOS's own, and a var so a test can point at something else.
+var sandboxExec = "/usr/bin/sandbox-exec"
+
+// denyNetwork wraps the grader so the answer it runs reaches nothing, and returns the
+// command unchanged where it cannot.
+//
+// The profile is generated rather than read from harness/offline.sb: that file is the
+// offline condition 0010 *scores*, addressed by a path from the checkout, and the grader
+// has no handle on a checkout. Loopback stays open because the model is served on it,
+// which is the same line offline.sb draws.
+//
+// It is written outside the module on purpose. Tier 2 hands that same directory to the
+// harness as its checkout, and a file the fixture does not describe is something the
+// model can read.
+//
+// Absent — CI is Linux — `GOPROXY=off` stands alone. Not refused the way the agent's
+// sandbox is: that boundary stands between a model and a developer's filesystem, and this
+// one stands between a fixture's answer and a network it has no reason to want.
+func denyNetwork(name string, args []string) (string, []string, func()) {
+	nothing := func() {}
+	if _, err := os.Stat(sandboxExec); err != nil {
+		return name, args, nothing
+	}
+	f, err := os.CreateTemp("", "localcode-grade-*.sb")
+	if err != nil {
+		return name, args, nothing
+	}
+	const policy = "(version 1)\n(allow default)\n(deny network*)\n" +
+		"(allow network* (local ip) (remote ip \"localhost:*\"))\n"
+	if _, err := f.WriteString(policy); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return name, args, nothing
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(f.Name())
+		return name, args, nothing
+	}
+	return sandboxExec, append([]string{"-f", f.Name(), name}, args...),
+		func() { _ = os.Remove(f.Name()) }
 }
 
 // isBuildFailure separates "wrote invalid Go" from "wrote Go that fails the test". go
 // reports build errors before any test runs, and these are the shapes it reports them in.
+//
+// The module markers are what `GOPROXY=off` turns an invented import into. Fetched, it
+// would have been a resolution failure somewhere on the network; refused locally it is
+// what it always was — a package that does not exist, which is invalid Go and not Go that
+// is wrong.
 func isBuildFailure(out []byte) bool {
 	text := string(out)
-	for _, marker := range []string{"[build failed]", "syntax error", "undefined:", "cannot use"} {
+	for _, marker := range []string{"[build failed]", "syntax error", "undefined:", "cannot use",
+		"finding module for package", "no required module provides package"} {
 		if strings.Contains(text, marker) {
 			return true
 		}
