@@ -154,10 +154,11 @@ func setEnv(env []string, name, value string) []string {
 // The gate is this binary run as a hook rather than a fourth script. It reads a transcript
 // and counts against a budget, which is the half of the repository `make check` covers.
 //
-// Stop is installed only for a session answering one instruction. It fires whenever the
+// Stop is installed for every session and refuses only some of them. It fires whenever the
 // agent finishes responding, which in an interactive session is every time it hands the
-// keyboard back — refusing there would refuse the conversation itself.
-func (c *claudeCodeAgent) Prepare(chainDir string, oneShot bool) error {
+// keyboard back; the hook reads the spec and stands aside there. Installed unconditionally
+// so that one thing decides this rather than each adapter remembering to.
+func (c *claudeCodeAgent) Prepare(chainDir string) error {
 	script := func(name string) any {
 		return hookEntry(filepath.Join(c.root, "harness", "claude-code", "hooks", name))
 	}
@@ -170,9 +171,7 @@ func (c *claudeCodeAgent) Prepare(chainDir string, oneShot bool) error {
 		"PreCompact":   script("pre-compact.sh"),
 		"SessionEnd":   script("session-end.sh"),
 		"PreToolUse":   hookEntry(shellQuote(self) + " hook gate"),
-	}
-	if oneShot {
-		hooks["Stop"] = hookEntry(shellQuote(self) + " hook stop")
+		"Stop":         hookEntry(shellQuote(self) + " hook stop"),
 	}
 	body, err := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
 	if err != nil {

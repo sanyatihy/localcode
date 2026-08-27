@@ -91,7 +91,7 @@ func (p *piAgent) Window(served int) (int, int, error) {
 // unless told otherwise, which is the machine's rather than the checkout's — and what this
 // file carries is a compaction reserve of 0, because a chain hands off rather than
 // compacting.
-func (p *piAgent) Prepare(chainDir string, oneShot bool) error {
+func (p *piAgent) Prepare(chainDir string) error {
 	body, err := os.ReadFile(filepath.Join(p.root, "harness", "pi", "settings.json.reference"))
 	if err != nil {
 		return fmt.Errorf("pi settings not readable: %w", err)
