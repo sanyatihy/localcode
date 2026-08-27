@@ -53,8 +53,10 @@ the head clears there, the walk stops there.
 **A second candidate is refused by the same cap and costs one more load.** 0017 screened
 MTPLX — the MLX runtime with native MTP — and recorded `loads, then out of memory under a
 real prompt`. Its shipped `Optimized-Speed` checkpoint is documented to peak at 23.6 GB,
-which is 22,504 MiB against the 21,845 MiB Metal derives here: **659 MiB short**, and the
-rung above clears it by 2.1 GB. Memory was the only thing standing between it and a verdict,
+which read as 659 MiB short of the 21,845 MiB Metal derives here and so as something the
+rung above would clear. **Measured, it is not**: filled at 49,152 it peaks at 26,089 and
+26,302 MiB across two runs, 1.5 GiB *above* the rung rather than 0.6 GiB below it, so the
+documented figure understates what a real prompt costs this runtime. Memory was the only thing standing between it and a verdict,
 and that verdict is worth more than a second reading of the cap — per 0017's own non-goals
 MTPLX serves the Anthropic `/v1/messages` 0008 needs and reports acceptance and cache state,
 which are two of the three reasons 0006 stayed on llama.cpp. Screening it here does not
@@ -77,7 +79,7 @@ draft head at 49,152 is closed for a reason this project has finally established
       value in force so every row taken under it says which cap it was taken at
 - [x] `config/mtp-49k.env` screens admissible or not at 24,576 MiB, unattended, against the
       same 44,236-token filled prompt 0017 and 0041 used
-- [ ] MTPLX screens admissible or not at the same 24,576 MiB, unattended, against a prompt
+- [x] MTPLX screens admissible or not at the same 24,576 MiB, unattended, against a prompt
       sized to the context it is served, and its row records which checkpoint
 - [x] the desktop verdict at the raised cap is taken attended with the head serving, or the
       box is dropped because the `config/mtp-49k.env` screen said the cap is not what binds
@@ -123,3 +125,13 @@ draft head at 49,152 is closed for a reason this project has finally established
   for the INBOX question 0017 already opened about whether this rule can see the state it is
   for, and because the next person to take an attended verdict needs to know it is an
   eleven-minute commitment rather than a command.
+
+- 2026-08-27 — **the Design's MTPLX arithmetic was wrong and is corrected above.** It rested
+  on the checkpoint's documented 23.6 GB peak, which made the candidate 659 MiB short of the
+  derived cap and so something this feature's rung would clear. Filled at 49,152 it peaks at
+  26,089 and 26,302 MiB — reproducible within 213 MiB across two runs, and 1.5 GiB above the
+  rung. The screen still answers the box, in the other direction: the raise clears llama.cpp's
+  draft head and does not clear MTPLX. Admitting it would need a cap above 26,302 MiB, which
+  leaves the system under 6.3 GiB and `scripts/gpuraise.sh` refuses — so what excludes MTPLX
+  on this machine is the reserve, not the cap, and that is a different exclusion from the one
+  TECH.md and VISION.md currently record.
