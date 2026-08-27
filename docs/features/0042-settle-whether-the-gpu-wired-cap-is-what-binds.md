@@ -79,7 +79,7 @@ draft head at 49,152 is closed for a reason this project has finally established
       same 44,236-token filled prompt 0017 and 0041 used
 - [ ] MTPLX screens admissible or not at the same 24,576 MiB, unattended, against a prompt
       sized to the context it is served, and its row records which checkpoint
-- [ ] the desktop verdict at the raised cap is taken attended with the head serving, or the
+- [x] the desktop verdict at the raised cap is taken attended with the head serving, or the
       box is dropped because the `config/mtp-49k.env` screen said the cap is not what binds
 - [ ] `docs/TECH.md` says what refused the draft head at 49,152, and `config/machine.json`
       carries the cap this machine is held to or is explicitly left alone
@@ -112,3 +112,14 @@ draft head at 49,152 is closed for a reason this project has finally established
   then says "MTPLX has no route left", and VISION inherits that as a permanent exclusion.
   MTPLX is 659 MiB short of the derived cap, so the route is the one this feature already
   walks. Scope tension recorded as an open question rather than settled here.
+
+- 2026-08-27 — **the attended verdict cost three runs, and two of them failed the instrument
+  rather than the machine.** The first swapped 601.9 MB with apps at 11.7 GiB and voided; the
+  second came in clean on swap at 6.9 GiB but scored `fail_stalled` on a desktop nobody was
+  driving. Only the third satisfied both at once. The rule reads sustained WindowServer load
+  over a 30 s window, so an operator who stops interacting scores identically to a compositor
+  that has died — the second run reported `fail_stalled` at a *lower* wired peak than the run
+  it passed, which is backwards if the cap is the cause. Recorded here because it is evidence
+  for the INBOX question 0017 already opened about whether this rule can see the state it is
+  for, and because the next person to take an attended verdict needs to know it is an
+  eleven-minute commitment rather than a command.
