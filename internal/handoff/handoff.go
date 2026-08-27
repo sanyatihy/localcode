@@ -120,6 +120,12 @@ func ReadSession(transcript string) (Session, error) {
 
 // Refusals counts one session's refused compactions. A count, not a flag: a refused
 // session keeps running and is asked again next turn. No log means none were ever asked.
+//
+// At the same buffer as the two readers above, and for the reason they were raised: a line
+// here can carry whatever the hook recorded, and the default 64 KB would end the count at
+// the first big one without saying so. A scan that failed answers zero rather than a
+// partial count — an undercount reads as a session that was refused less often than it
+// was, which is the wrong direction for a number that measures a bound holding.
 func Refusals(log, session string) int {
 	f, err := os.Open(log)
 	if err != nil {
@@ -129,6 +135,7 @@ func Refusals(log, session string) int {
 
 	n := 0
 	scan := bufio.NewScanner(f)
+	scan.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for scan.Scan() {
 		var row struct {
 			SessionID string `json:"session_id"`
@@ -136,6 +143,9 @@ func Refusals(log, session string) int {
 		if err := json.Unmarshal(scan.Bytes(), &row); err == nil && row.SessionID == session {
 			n++
 		}
+	}
+	if scan.Err() != nil {
+		return 0
 	}
 	return n
 }
