@@ -55,7 +55,7 @@ cheaper than a fourth record type nothing else reads.
       from was modified
 - [x] Every row that reaches a results file names the build that produced it, or records
       that it could not be known
-- [ ] A subcommand this binary does not have is refused with the list of the ones it does,
+- [x] A subcommand this binary does not have is refused with the list of the ones it does,
       and `hook` without a name is one of them
 
 ## Log

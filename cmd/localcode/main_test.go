@@ -1057,3 +1057,55 @@ func TestAnUnknownHarnessIsRefusedAndNamesTheOnesThereAre(t *testing.T) {
 		}
 	}
 }
+
+// `localcode hook` with no name fell through the dispatch and became the instruction
+// "hook": a server started, a model loaded, and a chain did whatever it made of the word.
+// A mistyped subcommand did the same.
+func TestAWordThatIsNotACommandIsRefusedRatherThanRun(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		args       []string
+	}{
+		{name: "a subcommand given nothing", args: []string{"hook"}, want: "hook needs a name"},
+		{name: "a mistyped subcommand", args: []string{"statu"}, want: "is not a command"},
+		{name: "another", args: []string{"sesions"}, want: "is not a command"},
+		{name: "a single word nobody meant as work", args: []string{"asdf"}, want: "is not a command"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !refusable(tc.args) {
+				t.Fatalf("%v was taken as work for the model", tc.args)
+			}
+			if err := notACommand(tc.args); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("refusal %v does not say %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// The other half: a real instruction must still reach the model, and a real subcommand must
+// still reach its own path.
+func TestWorkAndCommandsBothStillGetThrough(t *testing.T) {
+	for _, args := range [][]string{
+		{"fix", "the", "median", "bug"},
+		{"Do the topmost unticked box in docs/features/0049.md"},
+		{"status"}, {"sessions"}, {"account"}, {"serve"}, {"stop"},
+		{"hook", "gate"}, {"account", "20260828-101010"},
+	} {
+		if refusable(args) {
+			t.Fatalf("%v was refused", args)
+		}
+	}
+}
+
+// The refusal names the hooks, so it has to name the ones that exist.
+func TestTheHooksNamedInTheRefusalAreTheOnesThatRun(t *testing.T) {
+	dir := t.TempDir()
+	if err := chain.WriteSpec(dir, chain.Spec{Handoff: filepath.Join(dir, chain.HandoffName)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range hookNames {
+		if _, err := chain.Hook(name, strings.NewReader(`{"session_id":"s"}`), dir); err != nil {
+			t.Fatalf("the refusal names %q, which internal/chain does not run: %v", name, err)
+		}
+	}
+}

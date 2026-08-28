@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -114,6 +115,8 @@ func main() {
 		err  error
 	)
 	switch {
+	case refusable(args):
+		code, err = 2, notACommand(args)
 	case len(args) > 0 && args[0] == "status":
 		code, err = status(*endpoint)
 	case len(args) > 0 && args[0] == "serve":
@@ -287,6 +290,44 @@ func run(o opts) (int, error) {
 			filepath.Join(dir, chain.HandoffName))
 	}
 	return r.Exit, nil
+}
+
+// subcommands are the words this binary answers to itself. Named once, because the dispatch
+// and the refusal have to agree about what a subcommand is.
+var subcommands = []string{"account", "hook", "serve", "sessions", "status", "stop"}
+
+// hookNames are the hooks `hook` will run. Kept beside the refusal that names them; a test
+// holds them to what internal/chain actually accepts.
+var hookNames = []string{"gate", "stop"}
+
+// refusable reports whether what was typed is neither a command this binary has nor work
+// for the model. Two shapes are, and both are cheap to be sure about: a subcommand given
+// nothing to act on, and a single bare word that is not a subcommand.
+//
+// A list, because there is no other signal — `localcode fix the median bug` and `localcode
+// statu` differ only in that one word is a subcommand this binary nearly has. The cost
+// decides where the line falls: refusing a one-word instruction costs a retype, and running
+// a typo costs twenty seconds of model load and a chain doing something nobody asked for.
+func refusable(args []string) bool {
+	if len(args) != 1 {
+		return false // more than one word is a sentence, and no words is a session
+	}
+	if args[0] == "hook" {
+		return true // names a subcommand and gives it nothing
+	}
+	return !slices.Contains(subcommands, args[0]) && !strings.Contains(args[0], " ")
+}
+
+// notACommand says what was refused and what this binary does have. It never guesses what
+// was meant: an instruction is free text, and a driver that corrects one word of one will
+// eventually rewrite a real one.
+func notACommand(args []string) error {
+	if args[0] == "hook" {
+		return fmt.Errorf("hook needs a name: %s", strings.Join(hookNames, " or "))
+	}
+	return fmt.Errorf("%q is not a command, and one word is not an instruction: "+
+		"the commands are %s, and anything longer is work for the model",
+		args[0], strings.Join(subcommands, ", "))
 }
 
 // sessionsHere lists what this repository has been asked to do. Keyed by the repository,
