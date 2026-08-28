@@ -1,9 +1,9 @@
 ---
 id: 0047
 title: Stop a chain leaving more bookkeeping than work
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
@@ -50,10 +50,10 @@ outlived its turn. Only the scaffolding goes.
 
 ## Tasks
 
-- [ ] One turn's bound is held without a file per turn, and the batch counter a session
+- [x] One turn's bound is held without a file per turn, and the batch counter a session
       leaves is bounded by its sessions rather than by its turns
-- [ ] Two turns that report the same context reading each get their own bound
-- [ ] A chain that has already run keeps working, and its old counters do not change what
+- [x] Two turns that report the same context reading each get their own bound
+- [x] A chain that has already run keeps working, and its old counters do not change what
       a new session may spend
 
 ## Open questions
@@ -65,3 +65,10 @@ outlived its turn. Only the scaffolding goes.
   on a timer is the wrong default for a project whose output is measurements.
 
 ## Log
+- 2026-08-28 — The counter is appended to rather than rewritten. A header naming the peak
+  is rewritten at exactly the moment the rewrite is contended: the first call of a turn is
+  one of the calls the harness issues together, so every hook finds no header and every one
+  writes it — measured, 32 concurrent calls of one turn were counted as one. The file
+  instead carries a line per call naming the reading it counted against, and a turn is the
+  run of lines that agree; it is the same atomic append, and the store is one file a
+  session either way.

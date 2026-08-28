@@ -58,10 +58,77 @@ func CallsFile(session string) string    { return "calls-" + safe(session) }
 func HandoffsFile(session string) string { return "handoffs-" + safe(session) }
 func StopFile(session string) string     { return "stops-" + safe(session) }
 
-// BatchFile counts one turn's calls. Keyed by the context the gate measured, because that
-// is what does not change while a turn's calls run: a new reading means a new turn.
-func BatchFile(session string, peak int) string {
-	return fmt.Sprintf("batch-%s-%d", safe(session), peak)
+// BatchName names the one file a session's turn counter lives in. One file rather than one
+// per turn: each call writes the reading it counted against, so a turn that reports another
+// is a line the file did not carry before. Keyed by the reading, the name was a
+// cache-buster and the store grew with every turn a chain ever took.
+func BatchName(session string) string { return "batch-" + safe(session) }
+
+// BumpBatch counts a call against the turn that reported this peak, and returns this
+// caller's place in that turn the way Bump returns its place in a session's queue.
+//
+// The record is appended and nothing is rewritten. A header would be, and the rewrite is
+// contended exactly where it must not be: the first call of a turn is the one the harness
+// issues alongside the rest, so every hook finds no header and every one writes it —
+// measured, 32 concurrent calls of one turn were counted as one.
+func BumpBatch(dir, session string, r Reading) int {
+	path := filepath.Join(dir, BatchName(session))
+	rec := batchRecord(r)
+	at := int64(0)
+	if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+		defer func() { _ = f.Close() }()
+		if _, err := f.Write([]byte(rec)); err == nil {
+			// The offset after the write, for Bump's reason: between the write and a read
+			// of the size another hook appends, and two callers read the same number back.
+			if off, err := f.Seek(0, io.SeekCurrent); err == nil {
+				at = off
+			}
+		}
+	}
+	return batchSpent(path, rec, at)
+}
+
+// Reading is what a turn's calls are counted against: the context the gate measured, and
+// which turn of the transcript reported it. The turn is what tells two turns at one context
+// apart — without it the second shares the first's counter and is refused every call it
+// makes. It is 0 for a harness that reports its own context, which has no transcript here
+// to count turns in.
+type Reading struct {
+	Peak int
+	Turn int
+}
+
+// batchRecord is what one call writes: the reading it was decided against, on a line of
+// its own.
+func batchRecord(r Reading) string { return fmt.Sprintf("%d %d\n", r.Peak, r.Turn) }
+
+// batchSpent counts the calls this turn has taken, up to the caller's own record and no
+// further. A record past it belongs to a hook deciding at the same moment, and the file
+// before it cannot change — so each of a turn's concurrent callers reads a different
+// number and the count is nobody's read-modify-write.
+//
+// A turn is the run of records that end the prefix and match, because the reading is what
+// does not move while a turn's calls run. `at` is 0 when the write did not land, and then
+// the whole file is what the caller knows.
+func batchSpent(path, rec string, at int64) int {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	if at > 0 && at < int64(len(body)) {
+		body = body[:at]
+	}
+	n := 0
+	for len(body) >= len(rec) && string(body[len(body)-len(rec):]) == rec {
+		rest := body[:len(body)-len(rec)]
+		// A record ends the line it is on, so anything else before it is a longer reading
+		// this one is the tail of: `15100 2` must not be read as a call at `5100 2`.
+		if len(rest) > 0 && rest[len(rest)-1] != '\n' {
+			break
+		}
+		body, n = rest, n+1
+	}
+	return n
 }
 
 // safe keeps a session id from naming a file outside the state directory. The id comes

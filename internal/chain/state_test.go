@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -98,5 +99,23 @@ func TestChainsOrderTheDisambiguatingSuffixAsANumber(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("newest first:\n got %v\nwant %v", got, want)
+	}
+}
+
+// The session id is read out of the directory a chain filled, and a chain that ran before
+// this filled it with counters: 1,247 of them on one run. None of them is that name.
+func TestSessionIDIsReadFromADirectoryFullOfOldCounters(t *testing.T) {
+	dir := t.TempDir()
+	for i := range 200 {
+		name := fmt.Sprintf("batch-s1-%d", 6000+i)
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("."), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, CallsFile("s1")), []byte("."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := SessionIDIn(dir); got != "s1" {
+		t.Fatalf("session id: got %q want s1", got)
 	}
 }
