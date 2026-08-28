@@ -64,7 +64,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	rows, err := prefix.Requests(f, *config, *session)
+	rows, impossible, err := prefix.Requests(f, *config, *session)
 	if err != nil {
 		return err
 	}
@@ -96,6 +96,13 @@ func run(args []string, stdout, stderr *os.File) error {
 	}
 	_, _ = fmt.Fprintf(stdout, "%d requests: %d prompt tokens, %d ingested, %d reused (%.1f%%), %d ingested from zero\n",
 		len(rows), prompt, ingested, cached, 100*float64(cached)/float64(max(prompt, 1)), cold)
+	// Named rather than folded into the count above: a log this could not account for is a
+	// fact about the log, and a total that quietly covers fewer requests than the file holds
+	// is the failure the derived figure makes possible.
+	if impossible > 0 {
+		_, _ = fmt.Fprintf(stdout, "%d request(s) dropped: their account could not have "+
+			"happened, so they are in no total above\n", impossible)
+	}
 
 	if *check == "" {
 		return nil

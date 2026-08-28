@@ -55,12 +55,26 @@ type LogRow struct {
 // wrong, and Check is what catches it.
 const Offset = 1
 
-// Requests reads a llama-server log and returns one row per request that completed.
+// possible reports whether a row's account could have come from a request the server
+// served. The prompt figure is derived rather than printed — `n_tokens` at release, plus
+// Offset, less what was generated — so a log whose lines do not pair produces arithmetic
+// instead of a measurement: `n_tokens = 0` against 7 generated yields a prompt of -6, and a
+// cache figure of -6 behind it.
+func (r LogRow) possible() bool {
+	return r.PromptTokens > 0 && r.IngestedTokens >= 0 &&
+		r.CachedTokens >= 0 && r.GeneratedTokens >= 0
+}
+
+// Requests reads a llama-server log and returns one row per request that completed, and how
+// many it read that could not have happened.
 //
 // A request that the log does not carry to completion is dropped rather than reported with
 // zeros: a log is usually read while the server is still running, so the last request is
-// routinely half-written, and a truncated one is not a request that cost nothing.
-func Requests(r io.Reader, config, session string) ([]LogRow, error) {
+// routinely half-written, and a truncated one is not a request that cost nothing. That drop
+// is expected and is not counted — the count is for rows the arithmetic refuses, which is a
+// fact about the log rather than about the reading, and reporting fewer requests than a log
+// holds without saying so is how an instrument lies quietly.
+func Requests(r io.Reader, config, session string) (rows []LogRow, impossible int, err error) {
 	open := map[int]*LogRow{}
 	var out []LogRow
 	pending := ""
@@ -109,18 +123,23 @@ func Requests(r io.Reader, config, session string) ([]LogRow, error) {
 			}
 			row.PromptTokens = total + Offset - row.GeneratedTokens
 			row.CachedTokens = row.PromptTokens - row.IngestedTokens
-			if row.PromptTokens > 0 {
-				row.HitShare = float64(row.CachedTokens) / float64(row.PromptTokens)
+			delete(open, row.TaskID)
+			// Dropped rather than clamped: a zero here would put a row in the file saying
+			// a request ingested nothing, which is the finding this instrument exists to
+			// report. The reading has to be absent rather than wrong.
+			if !row.possible() {
+				impossible++
+				continue
 			}
+			row.HitShare = float64(row.CachedTokens) / float64(row.PromptTokens)
 			row.Index = len(out) + 1
 			out = append(out, *row)
-			delete(open, row.TaskID)
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("read log: %w", err)
+		return nil, 0, fmt.Errorf("read log: %w", err)
 	}
-	return out, nil
+	return out, impossible, nil
 }
 
 func openRow(open map[int]*LogRow, line string) *LogRow {
