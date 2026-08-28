@@ -20,7 +20,7 @@ const oneRequest = `
 `
 
 func TestRequestsReadsOneRequest(t *testing.T) {
-	rows, err := Requests(strings.NewReader(oneRequest), "agent", "probe")
+	rows, _, err := Requests(strings.NewReader(oneRequest), "agent", "probe")
 	if err != nil {
 		t.Fatalf("requests: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestRequestsDropsAnUnfinishedRequest(t *testing.T) {
 0.51.165.285 I slot launch_slot_: id  0 | task 16 | processing task, is_child = 0
 0.57.657.599 I slot print_timing: id  0 | task 16 | prompt eval time =    6246.51 ms /   630 tokens (    9.92 ms per token,   100.86 tokens per second)
 `
-	rows, err := Requests(strings.NewReader(log), "agent", "probe")
+	rows, _, err := Requests(strings.NewReader(log), "agent", "probe")
 	if err != nil {
 		t.Fatalf("requests: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRequestsRecordsHowTheSlotWasChosen(t *testing.T) {
 	log := strings.Replace(oneRequest,
 		"selected slot by LCP similarity, f_sim_best = 0.702 (> 0.100 thold), f_keep = 0.998",
 		"selected slot by LRU, t_last = 116510351110", 1)
-	rows, err := Requests(strings.NewReader(log), "agent", "probe")
+	rows, _, err := Requests(strings.NewReader(log), "agent", "probe")
 	if err != nil {
 		t.Fatalf("requests: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCheckNoticesADifferentCount(t *testing.T) {
 func TestRequestsReadsTheCacheBudgetFromTheBanner(t *testing.T) {
 	banner := "serving config/driver-mtp-32k.env: ctx=32768 kv=q8_0/q8_0 cache-ram=%s on 127.0.0.1:8081 via llama-server\n"
 	for _, want := range []string{"default", "0", "8192"} {
-		rows, err := Requests(strings.NewReader(fmt.Sprintf(banner, want)+oneRequest), "driver", "chain")
+		rows, _, err := Requests(strings.NewReader(fmt.Sprintf(banner, want)+oneRequest), "driver", "chain")
 		if err != nil {
 			t.Fatalf("requests: %v", err)
 		}
@@ -131,11 +131,51 @@ func TestRequestsReadsTheCacheBudgetFromTheBanner(t *testing.T) {
 // guessed a budget there would be inventing the number this whole feature exists because
 // nobody recorded.
 func TestRequestsLeavesTheCacheBudgetEmptyWithoutABanner(t *testing.T) {
-	rows, err := Requests(strings.NewReader(oneRequest), "agent", "probe")
+	rows, _, err := Requests(strings.NewReader(oneRequest), "agent", "probe")
 	if err != nil {
 		t.Fatalf("requests: %v", err)
 	}
 	if rows[0].CacheRAM != "" {
 		t.Errorf("cache_ram %q, want empty", rows[0].CacheRAM)
+	}
+}
+
+// The prompt figure is derived, so a log whose lines do not pair produces arithmetic rather
+// than a measurement. This is the shape a fuzz target reduced it to: a release line saying
+// nothing was in the slot, against an eval line saying seven tokens came out of it.
+func TestARequestWhoseAccountCouldNotHaveHappenedIsDroppedAndCounted(t *testing.T) {
+	const log = "task 8processing task\n" +
+		"task 8eval timems /7\n" +
+		"task 8stop processingn_tokens =0\n"
+	rows, impossible, err := Requests(strings.NewReader(log), "cfg", "sess")
+	if err != nil {
+		t.Fatalf("requests: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("an impossible account reached the rows: %+v", rows)
+	}
+	if impossible != 1 {
+		t.Fatalf("dropped %d, want 1 — a drop nobody is told about is the same as a wrong row",
+			impossible)
+	}
+}
+
+// Every count a row carries has a floor, and the derived one is the only one that can go
+// under it. A reading that survives must be one a request could have produced.
+func TestEveryRowThatSurvivesCouldHaveHappened(t *testing.T) {
+	rows, _, err := Requests(strings.NewReader(oneRequest), "cfg", "sess")
+	if err != nil {
+		t.Fatalf("requests: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("the fixture must produce a row")
+	}
+	for _, r := range rows {
+		if !r.possible() {
+			t.Fatalf("an impossible row survived: %+v", r)
+		}
+		if r.HitShare < 0 || r.HitShare > 1 {
+			t.Fatalf("hit share %v outside [0,1]: %+v", r.HitShare, r)
+		}
 	}
 }
