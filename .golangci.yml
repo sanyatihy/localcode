@@ -5,6 +5,25 @@ version: "2"
 
 linters:
   default: standard   # errcheck, govet, ineffassign, staticcheck, unused
+  # Adopted because they found nothing: each was run over the whole tree and reported zero
+  # issues, so they cost no cleanup and hold properties this code already has — errors
+  # compared with errors.Is rather than ==, response bodies closed, a nil error never
+  # returned beside a non-nil result.
+  enable:
+    - errorlint
+    - bodyclose
+    - nilerr
+    - unconvert
+    - wastedassign
+    - misspell
+    - copyloopvar
+    - durationcheck
+    - makezero
+  # gosec is deliberately absent. Run over this tree it reports 18 findings and every one is
+  # a property of what this tool is: a seeded RNG that must be deterministic for a prompt to
+  # be reproducible (G404), subprocesses that are the job (G204), transcript paths it is
+  # given to read (G304), and 0644 state files on a machine VISION says is single-user
+  # (G301/G302/G306). A linter that is wrong 18 times out of 18 teaches the reader to skim.
   settings:
     errcheck:
       # Writes to stdout/stderr in a CLI are deliberately unchecked at the call
