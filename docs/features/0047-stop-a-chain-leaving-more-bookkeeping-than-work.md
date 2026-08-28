@@ -1,9 +1,9 @@
 ---
 id: 0047
 title: Stop a chain leaving more bookkeeping than work
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
