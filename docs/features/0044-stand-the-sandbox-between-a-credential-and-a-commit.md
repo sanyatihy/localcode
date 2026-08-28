@@ -1,9 +1,9 @@
 ---
 id: 0044
 title: Stand the sandbox between a credential and a commit
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
