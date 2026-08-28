@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/build"
 	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/harness"
 )
@@ -71,6 +72,7 @@ flags:
   -resume id         carry on the chain with this id
   -fork id           start a chain from what that chain knew
   -jsonl file        append the account subcommand's report to this results file too
+  -version           print which build this is
 `
 
 func main() {
@@ -94,8 +96,16 @@ func main() {
 	resume := fs.String("resume", "", "carry on the chain with this id")
 	fork := fs.String("fork", "", "start a chain from what the chain with this id knew")
 	jsonl := fs.String("jsonl", "", "append what account reports to this results file as well")
+	version := fs.Bool("version", false, "print which build this is, and exit")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
+	}
+
+	// Before the checkout, the server and the sandbox: a build that cannot say what it is
+	// has nothing to say about a repository either.
+	if *version {
+		fmt.Println(build.Version("localcode"))
+		os.Exit(0)
 	}
 
 	args := fs.Args()

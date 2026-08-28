@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/build"
 	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/harness"
 )
@@ -80,6 +81,7 @@ type config struct {
 
 func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("tier2", flag.ContinueOnError)
+	version := fs.Bool("version", false, "print which build this is, and exit")
 	fs.SetOutput(stderr)
 	var (
 		drivers  = fs.String("drivers", "pi,opencode", "comma-separated: pi, opencode, hermes, claude-code")
@@ -104,6 +106,12 @@ func run(args []string, stdout, stderr *os.File) error {
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// Before anything else is read: a build that cannot say what it is has nothing
+	// to say about a machine either.
+	if *version {
+		_, _ = fmt.Fprintln(stdout, build.Version("tier2"))
+		return nil
 	}
 	// The machine is read before anything else: it declares both the headroom floor and
 	// the ceilings the profiles cap a run at, and neither can be defaulted.

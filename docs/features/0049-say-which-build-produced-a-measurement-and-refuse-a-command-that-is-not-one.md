@@ -51,7 +51,7 @@ cheaper than a fourth record type nothing else reads.
 
 ## Tasks
 
-- [ ] Every binary answers `-version` with its commit and whether the tree it was built
+- [x] Every binary answers `-version` with its commit and whether the tree it was built
       from was modified
 - [ ] Every row that reaches a results file names the build that produced it, or records
       that it could not be known

@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/sanyatihy/localcode/internal/build"
 	"github.com/sanyatihy/localcode/internal/eval"
 )
 
@@ -53,12 +54,19 @@ func main() {
 
 func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	version := fs.Bool("version", false, "print which build this is, and exit")
 	fs.SetOutput(stderr)
 	path := fs.String("results", "results/tier1.jsonl", "results file to summarise")
 	only := fs.String("config", "", "summarise only this config label")
 	baseline := fs.String("baseline", "", "harness to report the others against, e.g. claude-code")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// Before anything else is read: a build that cannot say what it is has nothing
+	// to say about a machine either.
+	if *version {
+		_, _ = fmt.Fprintln(stdout, build.Version("report"))
+		return nil
 	}
 
 	f, err := os.Open(*path)
