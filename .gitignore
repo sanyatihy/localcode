@@ -16,3 +16,8 @@ HANDOFF.md
 # scripts/ladder.sh and scripts/screen.sh import deskverdict.py, so any real run writes
 # bytecode beside it.
 __pycache__/
+
+# Binaries built by `make eval` and by the scripts that write results rows. Built rather
+# than `go run` so a row can name the revision behind it; not committed, because the commit
+# is what the row names.
+.bin/

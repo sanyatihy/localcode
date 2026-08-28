@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/build"
 	"github.com/sanyatihy/localcode/internal/eval"
 )
 
@@ -143,6 +144,12 @@ type Row struct {
 
 	ServedNCtx  int    `json:"served_n_ctx"`
 	ServedModel string `json:"served_model"`
+
+	// Driver is the build of this repository that wrote the row: a short revision, with
+	// `+modified` when the tree it was built from was not clean, and `unknown` when the
+	// build recorded none. A row is evidence only if somebody can get back to the code that
+	// produced it, and the driver's own arithmetic has moved under rows before.
+	Driver string `json:"driver"`
 }
 
 // Options are what a run needs beyond the conversation itself. Props travels with the
@@ -224,6 +231,7 @@ func send(ctx context.Context, c *eval.Client, msgs []eval.Message, conv Convers
 	cached := resp.Usage.PromptTokensDetails.CachedTokens
 	return Row{
 		RunAt:          eval.Now().Format(time.RFC3339),
+		Driver:         build.Revision(),
 		Config:         opt.Config,
 		Condition:      condition,
 		Kind:           kind,

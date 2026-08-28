@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/sanyatihy/localcode/internal/build"
 )
 
 // Row is one (config, task, repeat) observation. JSON Lines: appending is atomic
@@ -94,6 +96,12 @@ type Row struct {
 	// would otherwise read as a divergence: a hash means nothing apart from its questions.
 	FidelityProbes string `json:"fidelity_probes,omitempty"`
 
+	// Driver is the build of this repository that wrote the row: a short revision, with
+	// `+modified` when the tree it was built from was not clean, and `unknown` when the
+	// build recorded none. A row is evidence only if somebody can get back to the code that
+	// produced it, and the driver's own arithmetic has moved under rows before.
+	Driver string `json:"driver"`
+
 	// Session pairs a candidate with the baseline it is to be read against. An unpaired
 	// before-and-after measures host drift as well as the change; rows sharing a session
 	// were measured on one machine state, back to back, and only those may be divided.
@@ -126,6 +134,7 @@ var Now = func() time.Time { return time.Now().UTC() }
 func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props ServerProps, kind string, res Result) Row {
 	return Row{
 		RunAt:            Now().Format(time.RFC3339),
+		Driver:           build.Revision(),
 		Config:           cfg,
 		Repeat:           repeat,
 		Thinking:         thinking,
