@@ -58,7 +58,7 @@ cleanup and they hold properties this code already has — wrapped errors compar
 
 - [x] `make lint` and CI run one pinned golangci-lint named in one place, with no skip
       path on either side and no change to the module graph
-- [ ] `govulncheck` runs in the gate, and the linter set is the nine that were clean with
+- [x] `govulncheck` runs in the gate, and the linter set is the nine that were clean with
       the refusal of `gosec` recorded where the next reader will look
 
 ## Open questions
@@ -78,3 +78,8 @@ cleanup and they hold properties this code already has — wrapped errors compar
   and `go run <pkg>@<version>` is what it turns out to be. It also lets CI drop
   `golangci-lint-action`, which is one of the three third-party actions the backlog holds
   an entry about.
+- 2026-08-28 — `govulncheck`'s first run was not a formality: it reported five standard
+  library advisories reachable from this code — `net/url`, `crypto/tls` twice,
+  `encoding/asn1` and `net/http` — all fixed in go1.26.6 against the go1.26.4 `go.mod`
+  pinned. The toolchain is bumped in the same commit, which is the whole of the fix and is
+  the argument for the step.
