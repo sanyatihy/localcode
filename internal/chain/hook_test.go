@@ -133,3 +133,34 @@ func TestAPayloadCarryingItsOwnContextIsGatedOnIt(t *testing.T) {
 		t.Errorf("the refusal does not name the ceiling it enforced: %q", v.Reason)
 	}
 }
+
+// A turn's counter is one file rewritten, not a file per turn. Keyed by the reading in its
+// name, one chain left 1,247 of them and nothing ever closed one.
+func TestATurnsBoundLeavesOneCounterPerSession(t *testing.T) {
+	dir, spec := budgeted(t, 100)
+	payload := func(peak int) string {
+		return fmt.Sprintf(`{"session_id":"s1","tool_name":"Bash","peak_tokens":%d,`+
+			`"tool_input":{"command":"go test ./..."}}`, peak)
+	}
+	// Three turns, each reporting a context the one before it did not.
+	for turn := 1; turn <= 3; turn++ {
+		peak := 5000 + turn*100
+		for i := range spec.Limits.Batch {
+			v, err := Hook("gate", strings.NewReader(payload(peak)), dir)
+			if err != nil || v.Deny {
+				t.Fatalf("turn %d call %d must be permitted: %+v %v", turn, i, v, err)
+			}
+		}
+		v, err := Hook("gate", strings.NewReader(payload(peak)), dir)
+		if err != nil || !v.Deny {
+			t.Fatalf("turn %d must be held to its bound: %+v %v", turn, v, err)
+		}
+	}
+	names, err := filepath.Glob(filepath.Join(dir, "batch-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 {
+		t.Fatalf("3 turns left %d counters: %v", len(names), names)
+	}
+}
