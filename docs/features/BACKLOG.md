@@ -95,3 +95,31 @@ trigger nobody watches is not an idea, it is a hedge.
   disk is inside it, where a path deny cannot reach without breaking the case where fixing
   that file is the task. Promote when: a session is seen reading one it had no reason to,
   or the sandbox gains a rule that can express "read once, never write onward".
+- **Split `cmd/localcode/main.go`** — 787 lines carrying flag parsing, subcommand dispatch,
+  the server lifecycle, seatbelt profile generation, the state-directory layout and the hook
+  entry point. Examined and left: the split is a pure move with no behaviour change, it
+  costs every `git blame` on the file, and no feature so far has had to edit three of those
+  concerns at once. Promote when: one does, or the file grows a seventh concern.
+- **Structured logging, which this project should not adopt** — the Go checklist asks for
+  `log/slog` with key-value pairs and this repo uses `fmt.Fprintf` to stderr throughout.
+  That is correct here and the checklist's own CLI section says why: stdout is data, stderr
+  is diagnostics, and the diagnostics are sentences a person reads while a chain runs.
+  Recorded so it is not "fixed" later. Promote when: something other than a person consumes
+  the driver's stderr.
+- **A coverage floor in the gate** — `cmd/eval` and `cmd/tier2` sit at 26% and 24% against
+  70-91% elsewhere. Both are flag wiring around a loop that needs a live server and a model,
+  so a floor would buy tests written to satisfy a number. Promote when: a bug is found in
+  the part of either that is not covered, which is the signal a floor is standing in for.
+- **Pin the workflow's actions to commit SHAs** — `actions/checkout@v5`, `setup-go@v6` and
+  `golangci-lint-action@v9` are the only third-party code this repo runs, and a major-version
+  tag can be moved under it. Left out of 0050 on blast radius rather than on principle: the
+  job grants `contents: read`, carries no secret and publishes nothing, so a moved tag reaches
+  a public checkout and a lint run. Promote when: the workflow gains a secret, a write
+  permission, or a publishing step — any one of those turns this from tidy into necessary.
+- **Retire `runtimes/mtplx`** — 165 lines and three configs for a runtime VISION calls
+  permanently excluded by measurement, its filled peak 1.5 GiB above what this machine can
+  cap at. Its two shell scripts are gated by shellcheck on every `make check`, so it is not
+  free. Against cutting it: the same reasoning that keeps the harness adapters — the numbers
+  behind a published exclusion should stay re-takeable, and `harness/README.md` freezes
+  versions for exactly that reason. Unresolved, and the developer's call. Promote when: the
+  exclusion is questioned, or a Python dependency in it stops resolving.
