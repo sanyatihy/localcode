@@ -1,9 +1,9 @@
 ---
 id: 0049
 title: Say which build produced a measurement, and refuse a command that is not one
-status: Draft
+status: Shipped
 created: 2026-08-28
-shipped:
+shipped: 2026-08-28
 needs: 0048
 ---
 
