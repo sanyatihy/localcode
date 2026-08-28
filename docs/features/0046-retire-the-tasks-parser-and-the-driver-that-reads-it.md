@@ -51,10 +51,12 @@ because a rename before the cut moves lines that are about to be deleted.
       them
 - [x] Every doc that pointed at them points at `localcode` instead, and the `BACKLOG.md`
       entry that waited on 0026 is retired with its reason
-- [ ] What is left of `internal/handoff` is named for what it reads, and nothing else
+- [x] What is left of `internal/handoff` is named for what it reads, and nothing else
       changes with it
 
 ## Log
 - 2026-08-28 — the `BACKLOG.md` entry that waited on 0026 was already gone: the plan round
   that wrote this doc (b0c16d8) retired it as promoted to 0046, which is the reason this box
   would have recorded. What box 2 changed is the three docs that still named `cmd/handoff`.
+- 2026-08-28 — the survivor is `internal/transcript`. The name shadows the parameter three
+  callers gave a transcript path, so those three are `path` now; nothing else moved.

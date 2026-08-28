@@ -191,7 +191,7 @@ searched for.
 
 ```
 cmd/        the five commands, each with its exit codes documented in its package comment
-internal/   the packages behind them: eval (scoring), harness (adapters), prefix, handoff
+internal/   the packages behind them: eval (scoring), harness (adapters), prefix, transcript
 config/     one .env per serving config, plus machine.json — every limit this laptop imposes
 scripts/    the shell around a measurement: serve, ladder, screen, pair, probe
 tasks/      the fixtures the model is scored on; tasks/depth/ is the deep floor check

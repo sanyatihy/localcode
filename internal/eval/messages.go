@@ -176,7 +176,7 @@ func (r *messagesResponse) toResponse(wall time.Duration) *Response {
 	// All three, because a token written to the cache was read from the prompt as much as
 	// one served out of it. `cache_creation_input_tokens` was decoded here and added to
 	// nothing, so whenever the server reported a cache write this path read short against
-	// the chat path it exists to be compared with. internal/handoff sums the same three
+	// the chat path it exists to be compared with. internal/transcript sums the same three
 	// off a transcript.
 	out.Usage.PromptTokens = r.Usage.InputTokens + r.Usage.CacheReadInputTokens +
 		r.Usage.CacheWriteInputTokens
