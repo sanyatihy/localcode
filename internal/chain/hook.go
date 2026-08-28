@@ -143,7 +143,8 @@ func Hook(name string, payload io.Reader, dir string) (Verdict, error) {
 // session's own bounds every attempt is charged, which is what keeps a session that answers
 // a refusal with another call from being refused forever.
 func gate(p Payload, spec Spec, dir string) Verdict {
-	s := State{Peak: peakOf(p)}
+	r := readingOf(p)
+	s := State{Peak: r.Peak}
 	// Every counter is bumped before it is decided on, never after. The harness runs a
 	// turn's calls concurrently, so several of these are deciding at once, and taking a
 	// number first is what gives each of them a different one to decide against.
@@ -153,7 +154,7 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 	}
 	// The turn's bound is asked first, and what it refuses is not charged to the session:
 	// a call held back to be measured again is not a call the session chose to spend.
-	spent := Bump(dir, BatchFile(p.SessionID, s.Peak)) - 1
+	spent := BumpBatch(dir, p.SessionID, r) - 1
 	if v := Turn(spec.Limits, spent); v.Deny {
 		return v
 	}
@@ -171,15 +172,17 @@ func gate(p Payload, spec Spec, dir string) Verdict {
 	return v
 }
 
-// peakOf is the context the gate decides on: what the payload carries, or what the
-// transcript says. One or the other, because two readers of one number are two answers to
-// one question — and the harness that reports its own is the harness whose transcript this
-// package cannot read.
-func peakOf(p Payload) int {
+// readingOf is what the gate decides on: the context the session has reached, and the turn
+// that reported it. What the payload carries or what the transcript says, one or the other,
+// because two readers of one number are two answers to one question — and the harness that
+// reports its own is the harness whose transcript this package cannot read, so it reports
+// no turn either.
+func readingOf(p Payload) Reading {
 	if p.PeakTokens > 0 {
-		return p.PeakTokens
+		return Reading{Peak: p.PeakTokens}
 	}
-	return Peak(p.TranscriptPath)
+	peak, turns := Cost(p.TranscriptPath)
+	return Reading{Peak: peak, Turn: turns}
 }
 
 // stop counts its refusals rather than reading the harness's stop_hook_active, because the

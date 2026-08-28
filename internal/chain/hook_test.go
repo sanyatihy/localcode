@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -131,5 +132,129 @@ func TestAPayloadCarryingItsOwnContextIsGatedOnIt(t *testing.T) {
 	}
 	if !strings.Contains(v.Reason, fmt.Sprint(spec.Limits.Ceiling)) {
 		t.Errorf("the refusal does not name the ceiling it enforced: %q", v.Reason)
+	}
+}
+
+// A turn's counter is one file rewritten, not a file per turn. Keyed by the reading in its
+// name, one chain left 1,247 of them and nothing ever closed one.
+func TestATurnsBoundLeavesOneCounterPerSession(t *testing.T) {
+	dir, spec := budgeted(t, 100)
+	payload := func(peak int) string {
+		return fmt.Sprintf(`{"session_id":"s1","tool_name":"Bash","peak_tokens":%d,`+
+			`"tool_input":{"command":"go test ./..."}}`, peak)
+	}
+	// Three turns, each reporting a context the one before it did not.
+	for turn := 1; turn <= 3; turn++ {
+		peak := 5000 + turn*100
+		for i := range spec.Limits.Batch {
+			v, err := Hook("gate", strings.NewReader(payload(peak)), dir)
+			if err != nil || v.Deny {
+				t.Fatalf("turn %d call %d must be permitted: %+v %v", turn, i, v, err)
+			}
+		}
+		v, err := Hook("gate", strings.NewReader(payload(peak)), dir)
+		if err != nil || !v.Deny {
+			t.Fatalf("turn %d must be held to its bound: %+v %v", turn, v, err)
+		}
+	}
+	names, err := filepath.Glob(filepath.Join(dir, "batch-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 {
+		t.Fatalf("3 turns left %d counters: %v", len(names), names)
+	}
+}
+
+// Two turns can report one context: the peak is a maximum, so a turn that grows nothing
+// repeats the reading before it. Counted against the reading alone, the second turn shares
+// the first's counter and is refused every call it makes.
+func TestTwoTurnsAtOneReadingEachGetTheirOwnBound(t *testing.T) {
+	dir, spec := budgeted(t, 100)
+	transcript := filepath.Join(dir, "transcript.jsonl")
+	payload := fmt.Sprintf(`{"session_id":"s1","tool_name":"Bash","transcript_path":%q,`+
+		`"tool_input":{"command":"go test ./..."}}`, transcript)
+	// One row a turn, each carrying the usage the turn before it carried.
+	row := `{"type":"assistant","message":{"usage":{"input_tokens":6000,` +
+		`"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}` + "\n"
+	for turn := 1; turn <= 2; turn++ {
+		f, err := os.OpenFile(transcript, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(row); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if got := Peak(transcript); got != 6000 {
+			t.Fatalf("turn %d must report the reading the turn before it did: got %d", turn, got)
+		}
+		for i := range spec.Limits.Batch {
+			v, err := Hook("gate", strings.NewReader(payload), dir)
+			if err != nil || v.Deny {
+				t.Fatalf("turn %d call %d must be permitted: %+v %v", turn, i, v, err)
+			}
+		}
+		v, err := Hook("gate", strings.NewReader(payload), dir)
+		if err != nil || !v.Deny {
+			t.Fatalf("turn %d must be held to its bound: %+v %v", turn, v, err)
+		}
+	}
+}
+
+// A chain that ran before this left a counter per turn, named after the reading it counted.
+// A session resumed into that directory must spend what its own counter says it has left,
+// and its turns must get their four calls whatever the old files hold.
+func TestOldCountersDoNotChangeWhatASessionMaySpend(t *testing.T) {
+	dir, spec := budgeted(t, 8)
+	seed := func(name string, n int) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat(".", n)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// What the old scheme left: a spent counter for each turn s1 took, at the readings it
+	// took them at, beside the 5 calls of its 8 the session itself is charged.
+	old := []string{"batch-s1-6000", "batch-s1-6200", "batch-s1-6400"}
+	for _, name := range old {
+		seed(name, spec.Limits.Batch)
+	}
+	seed(CallsFile("s1"), 5)
+
+	// A turn at a reading one of those counters is named after. Three calls, because the
+	// session has three of its eight left — the fourth is refused by the budget it spent
+	// before, and none of them by a turn that ended with the run that wrote those files.
+	payload := `{"session_id":"s1","tool_name":"Bash","peak_tokens":6000,` +
+		`"tool_input":{"command":"go test ./..."}}`
+	for i := range 3 {
+		if v, err := Hook("gate", strings.NewReader(payload), dir); err != nil || v.Deny {
+			t.Fatalf("call %d must be permitted: %+v %v", i, v, err)
+		}
+	}
+	v, err := Hook("gate", strings.NewReader(payload), dir)
+	if err != nil || !v.Deny {
+		t.Fatalf("the session's own budget must refuse: %+v %v", v, err)
+	}
+	if !strings.Contains(v.Reason, "this session has spent 8 of 8") {
+		t.Errorf("refused by something other than the budget it carried over: %q", v.Reason)
+	}
+	// The old counters are read by nothing and written by nothing.
+	for _, name := range old {
+		if got := Counter(dir, name); got != spec.Limits.Batch {
+			t.Errorf("%s: got %d want %d", name, got, spec.Limits.Batch)
+		}
+	}
+	// And the session that follows in that directory spends its own budget, not what it
+	// found there.
+	next := `{"session_id":"s2","tool_name":"Bash","peak_tokens":6000,` +
+		`"tool_input":{"command":"go test ./..."}}`
+	for i := range spec.Limits.Batch {
+		if v, err := Hook("gate", strings.NewReader(next), dir); err != nil || v.Deny {
+			t.Fatalf("a new session's call %d must be permitted: %+v %v", i, v, err)
+		}
+	}
+	if v, err := Hook("gate", strings.NewReader(next), dir); err != nil || !v.Deny {
+		t.Fatalf("a new session is still held to the turn's bound: %+v %v", v, err)
 	}
 }
