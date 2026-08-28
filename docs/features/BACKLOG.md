@@ -33,12 +33,12 @@ trigger nobody watches is not an idea, it is a hedge.
   `--tools` by another route. Untested, and cheap to test. Promote when: the editor flow is
   something somebody wants to use daily rather than prove works.
 - **`--tools` is variadic, so the instruction can be swallowed** — `internal/harness/claudecode.go`
-  and `cmd/handoff` both pass `--tools <list> --permission-mode <mode> <instruction>`, and both
-  work only because `--permission-mode` terminates the tool list. Drop that flag from either and
-  the instruction joins the tools, the run dies asking for input, and nothing says why. Promote
-  when: either is edited for any other reason — a `--` separator or the instruction on stdin
-  costs one line each. **Its real home is a comment at both call sites**, since that is where it
-  fires; it sits here until someone puts it there.
+  passes `--tools <list> --permission-mode <mode> <instruction>`, and works only because
+  `--permission-mode` terminates the tool list. Drop that flag and the instruction joins the
+  tools, the run dies asking for input, and nothing says why. Promote when: that call site is
+  edited for any other reason — a `--` separator or the instruction on stdin costs one line.
+  **Its real home is a comment at the call site**, since that is where it fires; it sits here
+  until someone puts it there.
 - **`serverUp`'s error text reaches nobody** — it composes a message naming the command that
   fixes a dead endpoint, and both callers in `cmd/localcode/main.go` test it with `== nil` and
   throw it away. What a user actually sees is `no server at <url>, and -no-serve was given`, or

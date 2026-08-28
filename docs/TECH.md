@@ -1001,9 +1001,10 @@ other harnesses, not here.
 A session in this checkout writes `HANDOFF.md`, untracked working state inside one task box.
 Three Claude Code hooks carry it: `SessionStart` prints it into the next session's context,
 `PreCompact` refuses every compaction, and `SessionEnd` extracts one from the transcript when
-the session wrote none. `cmd/handoff` runs a doc's topmost box across fresh sessions
-until it is ticked or a bound is reached, recording each session's peak context. The wiring
-is in [`harness/claude-code/`](../harness/claude-code/README.md) with the rest of the client
+the session wrote none. `localcode` is what runs the chain of sessions those hooks carry a
+handoff between. Nothing here reads a feature doc's `## Tasks` boxes: judging what a session
+delivered is `kit`'s side of the boundary. The wiring is in
+[`harness/claude-code/`](../harness/claude-code/README.md) with the rest of the client
 configuration.
 
 **A refused compaction does not end the session.** The turn completes and `PreCompact` fires
