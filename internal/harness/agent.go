@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sanyatihy/localcode/internal/handoff"
+	"github.com/sanyatihy/localcode/internal/transcript"
 )
 
 // Agent is one coding agent a chain can run its sessions in. Everything that differs
@@ -62,7 +62,7 @@ type Recorder interface {
 	// Requests is every call the session made to the model, in order. What one cost and
 	// how long it took is in the record and in nothing else, so a chain's rates are read
 	// from here.
-	Requests(transcript string) ([]handoff.Request, error)
+	Requests(transcript string) ([]transcript.Request, error)
 }
 
 // Session is one session's worth of what the driver knows. Paths rather than contents,

@@ -1,5 +1,6 @@
-// Package handoff reads what a finished session cost, out of the transcript it wrote.
-package handoff
+// Package transcript reads what a finished session cost, out of the file its harness
+// wrote about it.
+package transcript
 
 import (
 	"bufio"

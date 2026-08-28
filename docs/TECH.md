@@ -1037,7 +1037,7 @@ what one chain writes before its first session, the command for one session, whe
 agent files what that session cost, where it keeps its own state so the sandbox can let it,
 and how its event stream reads. `cmd/localcode` names no agent, and a test in
 `internal/harness` holds that: it parses every file of `cmd/localcode`, `internal/chain`
-and `internal/handoff` with the comments dropped and fails on a harness's name, its API,
+and `internal/transcript` with the comments dropped and fails on a harness's name, its API,
 its event shapes or its files. Comments are exempt on purpose — that is where a decision
 records which agent it was taken against.
 

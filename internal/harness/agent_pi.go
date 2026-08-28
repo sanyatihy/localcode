@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sanyatihy/localcode/internal/handoff"
+	"github.com/sanyatihy/localcode/internal/transcript"
 )
 
 // piAgent runs a chain's sessions in earendil-works/pi. Its configuration travels with the
@@ -208,14 +208,14 @@ func (r piRecorder) Cost(transcript string) (int, int) {
 // finished when it sent it. A session file records no first-token time, so prefill, decode
 // and whatever the harness spent between them arrive as one number — the same convention
 // the incumbent's reader uses, so the two are comparable.
-func (piRecorder) Requests(transcript string) ([]handoff.Request, error) {
-	f, err := os.Open(transcript)
+func (piRecorder) Requests(path string) ([]transcript.Request, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("session file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
-	var calls []handoff.Request
+	var calls []transcript.Request
 	var prev time.Time
 	scan := bufio.NewScanner(f)
 	// An entry holds a whole tool result. The default 64 KB would end the scan silently at
@@ -249,7 +249,7 @@ func (piRecorder) Requests(transcript string) ([]handoff.Request, error) {
 			continue
 		}
 		u := row.Message.Usage
-		call := handoff.Request{Ingest: u.Input + u.CacheWrite, Cached: u.CacheRead, Output: u.Output}
+		call := transcript.Request{Ingest: u.Input + u.CacheWrite, Cached: u.CacheRead, Output: u.Output}
 		if !prev.IsZero() {
 			call.Latency = at.Sub(prev)
 		}
@@ -257,7 +257,7 @@ func (piRecorder) Requests(transcript string) ([]handoff.Request, error) {
 		prev = at
 	}
 	if err := scan.Err(); err != nil {
-		return calls, fmt.Errorf("read %s: %w", transcript, err)
+		return calls, fmt.Errorf("read %s: %w", path, err)
 	}
 	return calls, nil
 }
