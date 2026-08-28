@@ -811,10 +811,18 @@ func sandboxBriefing(cwd string) string {
 	if err != nil {
 		cfg = "~/.config/localcode/writable"
 	}
+	// Named in the tilde form, which is shorter than five absolute paths in a context
+	// this small and is how a developer writes them back.
+	denied := make([]string, 0, len(credentialRoots))
+	for _, r := range credentialRoots {
+		denied = append(denied, "~/"+r)
+	}
 	return "You are running in a sandbox that confines writes to " + cwd +
-		", temp directories and cache roots. Reading anywhere is allowed. " +
+		", temp directories and cache roots. Reading is allowed everywhere except " +
+		strings.Join(denied, ", ") + ", which hold credentials this work does not need: " +
+		"a refusal there is final, so report it rather than routing around it. " +
 		worktreeBriefing(cwd) +
-		"If a command fails with `operation not permitted` on a path outside those, " +
+		"If a write fails with `operation not permitted` on a path outside those, " +
 		"do not work around it: report the path, and tell the user it is allowed by " +
 		"adding that path to " + cfg + "."
 }

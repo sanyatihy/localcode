@@ -1526,7 +1526,9 @@ all complete under it.
 this machine — a human pushes it — and a network the sandbox already closed is not the one
 that carries a key out. `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` and
 `~/Library/Keychains` answer `Operation not permitted`; a repository, a cache root and
-`go version` are untouched, which is what makes the list safe to deny.
+`go version` are untouched, which is what makes the list safe to deny. The appended
+briefing names the five roots and why, for the reason it names the writable ones: a
+refusal a session cannot explain becomes a session working around it.
 
 **The network is loopback-only**, so a repository's source cannot leave the machine and
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.

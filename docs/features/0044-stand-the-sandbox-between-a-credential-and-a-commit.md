@@ -56,7 +56,7 @@ than announced — otherwise the deny-list is advisory.
 
 - [x] A session cannot read the credential roots, and can still read a toolchain, a
       repository and its own caches
-- [ ] The session is told which roots are denied and why, in the briefing that already
+- [x] The session is told which roots are denied and why, in the briefing that already
       names what it may write
 - [ ] Widening the writable list prints what it opened, and a line that would re-open a
       denied root is refused rather than applied

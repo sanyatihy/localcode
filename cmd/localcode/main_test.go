@@ -917,6 +917,20 @@ func TestBriefingNamesWhereAWorktreeMayGo(t *testing.T) {
 	}
 }
 
+// A refusal a session cannot explain is a refusal it works around, so the briefing that
+// already names what may be written names what may not be read, and why.
+func TestBriefingNamesTheDeniedRootsAndWhy(t *testing.T) {
+	got := sandboxBriefing(t.TempDir())
+	for _, root := range credentialRoots {
+		if !strings.Contains(got, "~/"+root) {
+			t.Fatalf("a denied root the session is not told about is a puzzle: %s", got)
+		}
+	}
+	if !strings.Contains(got, "credentials") {
+		t.Fatalf("the reason is what stops the session working around it: %s", got)
+	}
+}
+
 // piCheckout adds what the pi adapter reads out of a checkout: the provider file it loads
 // and takes the model id and the output reservation from, the extension that holds a
 // session to its budget, and the settings a session is served.
