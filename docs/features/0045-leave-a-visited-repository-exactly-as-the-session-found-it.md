@@ -1,9 +1,9 @@
 ---
 id: 0045
 title: Leave a visited repository exactly as the session found it
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
@@ -43,7 +43,7 @@ It goes on the shared `git` helper, which is the one place all four pass through
 
 ## Tasks
 
-- [ ] The probe leaves `.git/index` untouched, asserted against a repository with a dirty
+- [x] The probe leaves `.git/index` untouched, asserted against a repository with a dirty
       working tree, and still reports movement and commits as it did
 
 ## Open questions
