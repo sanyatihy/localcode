@@ -165,8 +165,10 @@ the conversation that had just failed to fit.
 Writes reach the working directory — `.worktrees/` included — plus worktrees beside it named
 after it (`repo-0001` next to `repo`, which is what `git worktree add ../repo-0001` needs),
 temp and the cache roots; everything else the kernel refuses. The session is told which of
-the two places a worktree may go, since it cannot find out except by being refused. Reads are unrestricted, because an agent that cannot read a toolchain cannot use
-one. The network is loopback-only, so a repository's source cannot leave the machine —
+the two places a worktree may go, since it cannot find out except by being refused. Reads
+are open, because an agent that cannot read a toolchain cannot use one — apart from
+`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` and `~/Library/Keychains`, which hold
+credentials and answer `Operation not permitted`. The network is loopback-only, so a repository's source cannot leave the machine —
 `localcode -net` opens it for one session when something has to be installed. A refused
 write names the path and the line that allows it:
 
