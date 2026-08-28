@@ -582,22 +582,57 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestExtraWritableReadsTheConfigAndExpandsHome(t *testing.T) {
+// writableConfig writes the widening config for a home this test owns, and answers with
+// that home resolved — which is the form a path takes by the time it is compared to a
+// denied root or written into the profile.
+func writableConfig(t *testing.T, body string) string {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	dir := filepath.Join(home, ".config", "localcode")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "# what this machine's ecosystems need\n\n~/.cargo\n/opt/homebrew/var\n"
 	if err := os.WriteFile(filepath.Join(dir, "writable"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	resolved, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
+}
 
-	got := extraWritable()
+func TestExtraWritableReadsTheConfigAndExpandsHome(t *testing.T) {
+	home := writableConfig(t, "# what this machine's ecosystems need\n\n~/.cargo\n/opt/homebrew/var\n")
+
+	var said strings.Builder
+	got := extraWritable(&said)
 	want := []string{filepath.Join(home, ".cargo"), "/opt/homebrew/var"}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("got %v, want %v (comments and blanks dropped, ~ expanded)", got, want)
+	}
+	// A file that widens the policy in silence is the hole nobody is told about, and -net
+	// announces a smaller one.
+	for _, p := range want {
+		if !strings.Contains(said.String(), p) {
+			t.Fatalf("each path opened must be named: %q", said.String())
+		}
+	}
+}
+
+// The deny-list is only a boundary while the widening file cannot undo it: a session that
+// may write ~/.ssh can move the key out without ever reading it.
+func TestExtraWritableRefusesALineThatOpensACredentialRoot(t *testing.T) {
+	home := writableConfig(t, "~/.ssh\n~/\n/\n~/.cargo\n")
+
+	var said strings.Builder
+	got := extraWritable(&said)
+	if len(got) != 1 || got[0] != filepath.Join(home, ".cargo") {
+		t.Fatalf("only the line reaching no credential root may be applied: %v", got)
+	}
+	if strings.Count(said.String(), "refused") != 3 {
+		t.Fatalf("the root itself, its parent and / must each be refused:\n%s", said.String())
 	}
 }
 

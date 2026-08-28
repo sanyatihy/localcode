@@ -58,7 +58,7 @@ than announced — otherwise the deny-list is advisory.
       repository and its own caches
 - [x] The session is told which roots are denied and why, in the briefing that already
       names what it may write
-- [ ] Widening the writable list prints what it opened, and a line that would re-open a
+- [x] Widening the writable list prints what it opened, and a line that would re-open a
       denied root is refused rather than applied
 
 ## Open questions
