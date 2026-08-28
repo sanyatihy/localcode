@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/sanyatihy/localcode/internal/chain"
-	"github.com/sanyatihy/localcode/internal/handoff"
+	"github.com/sanyatihy/localcode/internal/transcript"
 )
 
 // chainOnDisk writes a chain the way a run leaves one: a session per directory with the
@@ -139,10 +139,10 @@ func TestAccountRefusesAChainThatIsNotHere(t *testing.T) {
 // the calls were built from.
 func TestFitRatesRecoversThePairTheCallsWereBuiltFrom(t *testing.T) {
 	const prefillRate, decodeRate = 100.0, 8.0
-	var calls []handoff.Request
+	var calls []transcript.Request
 	for _, c := range [][2]int{{4000, 80}, {500, 200}, {300, 40}, {1200, 150}} {
 		seconds := float64(c[0])/prefillRate + float64(c[1])/decodeRate
-		calls = append(calls, handoff.Request{
+		calls = append(calls, transcript.Request{
 			Ingest: c[0], Output: c[1],
 			Latency: time.Duration(seconds * float64(time.Second)),
 		})
@@ -162,9 +162,9 @@ func TestFitRatesRecoversThePairTheCallsWereBuiltFrom(t *testing.T) {
 // Calls whose prompts and replies grew together fit any pair of rates that sums right, so
 // the honest answer is that these calls do not decide it.
 func TestFitRatesRefusesCallsThatCannotSeparateThem(t *testing.T) {
-	var calls []handoff.Request
+	var calls []transcript.Request
 	for _, n := range []int{1, 2, 3, 4} {
-		calls = append(calls, handoff.Request{
+		calls = append(calls, transcript.Request{
 			Ingest: 100 * n, Output: 10 * n, Latency: time.Duration(n) * 2 * time.Second,
 		})
 	}

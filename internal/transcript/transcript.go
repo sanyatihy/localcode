@@ -1,6 +1,6 @@
-// Package handoff reads what a driver needs to run one task box across several sessions:
-// which box a doc is on, and what a finished session cost.
-package handoff
+// Package transcript reads what a finished session cost, out of the file its harness
+// wrote about it.
+package transcript
 
 import (
 	"bufio"
@@ -11,56 +11,6 @@ import (
 	"strings"
 	"time"
 )
-
-// Box is one entry of a feature doc's `## Tasks` list, in list order.
-type Box struct {
-	Text   string
-	Ticked bool
-}
-
-// Boxes reads the `## Tasks` section only: a checkbox elsewhere is prose about something
-// else.
-func Boxes(doc []byte) []Box {
-	var boxes []Box
-	inTasks := false
-	for _, line := range strings.Split(string(doc), "\n") {
-		if strings.HasPrefix(line, "## ") {
-			inTasks = strings.TrimSpace(line) == "## Tasks"
-			continue
-		}
-		if !inTasks {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(line, "- [ ] "):
-			boxes = append(boxes, Box{Text: strings.TrimSpace(line[6:])})
-		case strings.HasPrefix(line, "- [x] "):
-			boxes = append(boxes, Box{Text: strings.TrimSpace(line[6:]), Ticked: true})
-		}
-	}
-	return boxes
-}
-
-// Topmost returns the first unticked box, or false when every box is ticked.
-func Topmost(boxes []Box) (Box, bool) {
-	for _, b := range boxes {
-		if !b.Ticked {
-			return b, true
-		}
-	}
-	return Box{}, false
-}
-
-// Ticked reports whether one named box is ticked. The driver asks about the box it sent
-// the session to do, not the topmost one.
-func Ticked(boxes []Box, text string) bool {
-	for _, b := range boxes {
-		if b.Text == text {
-			return b.Ticked
-		}
-	}
-	return false
-}
 
 // Session is what a transcript records about the session that wrote it.
 type Session struct {
@@ -116,38 +66,6 @@ func ReadSession(transcript string) (Session, error) {
 		return s, fmt.Errorf("read %s: %w", transcript, err)
 	}
 	return s, nil
-}
-
-// Refusals counts one session's refused compactions. A count, not a flag: a refused
-// session keeps running and is asked again next turn. No log means none were ever asked.
-//
-// At the same buffer as the two readers above, and for the reason they were raised: a line
-// here can carry whatever the hook recorded, and the default 64 KB would end the count at
-// the first big one without saying so. A scan that failed answers zero rather than a
-// partial count — an undercount reads as a session that was refused less often than it
-// was, which is the wrong direction for a number that measures a bound holding.
-func Refusals(log, session string) int {
-	f, err := os.Open(log)
-	if err != nil {
-		return 0
-	}
-	defer func() { _ = f.Close() }()
-
-	n := 0
-	scan := bufio.NewScanner(f)
-	scan.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for scan.Scan() {
-		var row struct {
-			SessionID string `json:"session_id"`
-		}
-		if err := json.Unmarshal(scan.Bytes(), &row); err == nil && row.SessionID == session {
-			n++
-		}
-	}
-	if scan.Err() != nil {
-		return 0
-	}
-	return n
 }
 
 // Request is one call a session made to the model, as its own transcript records it.

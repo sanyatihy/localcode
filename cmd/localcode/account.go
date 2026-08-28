@@ -11,8 +11,8 @@ import (
 
 	"github.com/sanyatihy/localcode/internal/chain"
 	"github.com/sanyatihy/localcode/internal/eval"
-	"github.com/sanyatihy/localcode/internal/handoff"
 	"github.com/sanyatihy/localcode/internal/harness"
+	"github.com/sanyatihy/localcode/internal/transcript"
 )
 
 // account is what one session cost, read off the files it left behind. The supervisor's
@@ -25,7 +25,7 @@ type account struct {
 	seconds int    // the supervisor's clock for the whole session, and zero while it runs
 	running bool   // no row in `sessions.jsonl` yet, so the session has not ended
 	limits  chain.Limits
-	calls   []handoff.Request
+	calls   []transcript.Request
 }
 
 // peak is the largest context any call reached, which is the number a ceiling exists to
@@ -175,7 +175,7 @@ func recordedSeconds(dir string) (map[int]row, error) {
 func printChain(w io.Writer, id string, accounts []account) {
 	var seconds, preamble, ingested, cached, generated int
 	var model float64
-	var calls []handoff.Request
+	var calls []transcript.Request
 	for _, a := range accounts {
 		i, c, g, s := a.totals()
 		seconds, preamble = seconds+a.seconds, preamble+a.preamble()
@@ -251,7 +251,7 @@ func printSessions(w io.Writer, accounts []account) {
 //
 // Not ok when the calls cannot decide it — one call, or a chain whose prompts and replies
 // grew together, where every pair of rates that sums right fits as well as any other.
-func fitRates(calls []handoff.Request) (prefill, decode float64, ok bool) {
+func fitRates(calls []transcript.Request) (prefill, decode float64, ok bool) {
 	var pp, pg, gg, pl, gl float64
 	used := 0
 	for _, c := range calls {
@@ -308,7 +308,7 @@ type dataRow struct {
 // that truncated would lose the chain it was compared against.
 func writeRows(path, id string, accounts []account) error {
 	chainRow := dataRow{Record: "chain", Chain: id, Sessions: len(accounts)}
-	var calls []handoff.Request
+	var calls []transcript.Request
 	rows := []dataRow{{}}
 	for _, a := range accounts {
 		ingested, cached, generated, seconds := a.totals()
@@ -346,7 +346,7 @@ func writeRows(path, id string, accounts []account) error {
 
 // fittedRates is fitRates rounded to what the fit can claim. Two decimals on a decode rate
 // and one on a prompt rate, which is the precision the published figures here carry.
-func fittedRates(calls []handoff.Request) (prompt, decode float64, ok bool) {
+func fittedRates(calls []transcript.Request) (prompt, decode float64, ok bool) {
 	p, d, ok := fitRates(calls)
 	if !ok {
 		return 0, 0, false

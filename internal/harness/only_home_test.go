@@ -23,7 +23,7 @@ import (
 var chainPackages = []string{
 	filepath.Join("cmd", "localcode"),
 	filepath.Join("internal", "chain"),
-	filepath.Join("internal", "handoff"),
+	filepath.Join("internal", "transcript"),
 }
 
 // Words that belong to one harness and to nothing else: what each binary is called, the
