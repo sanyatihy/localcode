@@ -1,9 +1,9 @@
 ---
 id: 0045
 title: Leave a visited repository exactly as the session found it
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
