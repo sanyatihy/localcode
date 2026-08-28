@@ -1,9 +1,9 @@
 ---
 id: 0050
 title: Make the gate the same on a laptop and in CI, and pin what it runs
-status: Draft
+status: Shipped
 created: 2026-08-28
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
