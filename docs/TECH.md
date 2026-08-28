@@ -1528,7 +1528,9 @@ that carries a key out. `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` and
 `~/Library/Keychains` answer `Operation not permitted`; a repository, a cache root and
 `go version` are untouched, which is what makes the list safe to deny. The appended
 briefing names the five roots and why, for the reason it names the writable ones: a
-refusal a session cannot explain becomes a session working around it.
+refusal a session cannot explain becomes a session working around it. A session therefore
+cannot authenticate over ssh even under `-net`, which is the point of the list rather than
+a cost of it: a key it can read is a key it can copy into the working tree.
 
 **The network is loopback-only**, so a repository's source cannot leave the machine and
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
