@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/sanyatihy/localcode/internal/build"
 )
 
 // This file reads what the server says about itself, because a real session's traffic is
@@ -47,6 +49,12 @@ type LogRow struct {
 
 	PromptSeconds float64 `json:"prompt_seconds"`
 	GenSeconds    float64 `json:"gen_seconds"`
+
+	// Driver is the build of this repository that wrote the row: a short revision, with
+	// `+modified` when the tree it was built from was not clean, and `unknown` when the
+	// build recorded none. A row is evidence only if somebody can get back to the code that
+	// produced it, and the driver's own arithmetic has moved under rows before.
+	Driver string `json:"driver"`
 }
 
 // Offset corrects the one derived quantity. The slot's total at release runs one token
@@ -98,7 +106,8 @@ func Requests(r io.Reader, config, session string) (rows []LogRow, impossible in
 			if !ok {
 				continue
 			}
-			open[id] = &LogRow{Config: config, Session: session, TaskID: id, SlotSelection: pending, CacheRAM: cacheRAM}
+			open[id] = &LogRow{Config: config, Session: session, TaskID: id,
+				SlotSelection: pending, CacheRAM: cacheRAM, Driver: build.Revision()}
 			pending = ""
 		case strings.Contains(line, "prompt eval time"):
 			if row := openRow(open, line); row != nil {

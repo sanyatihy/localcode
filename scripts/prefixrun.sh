@@ -43,7 +43,7 @@ for condition in $CONDITIONS; do
     *) echo "unknown condition: $condition" >&2; exit 2 ;;
   esac
   # shellcheck disable=SC2086
-  go run ./cmd/prefixprobe -endpoint "$ENDPOINT" -config "$LABEL" -results "$OUT" $flag $PROBE_ARGS
+  "$(built prefixprobe)" -endpoint "$ENDPOINT" -config "$LABEL" -results "$OUT" $flag $PROBE_ARGS
 done
 stop_server
 echo "=== rows in $OUT ===" >&2

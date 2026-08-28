@@ -53,16 +53,14 @@ cheaper than a fourth record type nothing else reads.
 
 - [x] Every binary answers `-version` with its commit and whether the tree it was built
       from was modified
-- [ ] Every row that reaches a results file names the build that produced it, or records
+- [x] Every row that reaches a results file names the build that produced it, or records
       that it could not be known
 - [ ] A subcommand this binary does not have is refused with the list of the ones it does,
       and `hook` without a name is one of them
 
-## Open questions
-
-- **Whether `make eval` should build rather than `go run`.** Building costs a second and
-  makes every row attributable; `go run` is what the target has always done and what the
-  recorded numbers were taken with. Leaning: build, and say in the target why — the sweeps
-  are hours and the second is not the cost being managed.
-
 ## Log
+- 2026-08-28 — the open question is settled the way it leaned: everything that writes a row
+  builds first. It was not only `make eval` — `scripts/pair.sh`, `scripts/batchfidelity.sh`
+  and `scripts/prefixrun.sh` all ran the scorer from source too, so all four would have
+  written `unknown` into every row. The build goes to an ignored `.bin/`, and `built` in
+  `scripts/lib.sh` is the one helper the scripts share.

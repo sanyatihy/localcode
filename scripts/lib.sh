@@ -103,3 +103,12 @@ batch_config() { # base ubatch out
     printf 'BATCH_SIZE="%s"\nUBATCH_SIZE="%s"\n' "$batch" "$ubatch"
   } > "$out"
 }
+
+# built echoes the path to a freshly built command, and builds it. Rows carry the revision
+# the binary was built from, and `go run` records none — so anything that writes a results
+# file goes through this rather than running from source.
+built() { # cmd
+  local out=".bin/$1"
+  go build -o "$out" "./cmd/$1" >&2 || return 1
+  printf '%s' "$out"
+}
