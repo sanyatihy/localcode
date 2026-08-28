@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -162,5 +163,43 @@ func TestATurnsBoundLeavesOneCounterPerSession(t *testing.T) {
 	}
 	if len(names) != 1 {
 		t.Fatalf("3 turns left %d counters: %v", len(names), names)
+	}
+}
+
+// Two turns can report one context: the peak is a maximum, so a turn that grows nothing
+// repeats the reading before it. Counted against the reading alone, the second turn shares
+// the first's counter and is refused every call it makes.
+func TestTwoTurnsAtOneReadingEachGetTheirOwnBound(t *testing.T) {
+	dir, spec := budgeted(t, 100)
+	transcript := filepath.Join(dir, "transcript.jsonl")
+	payload := fmt.Sprintf(`{"session_id":"s1","tool_name":"Bash","transcript_path":%q,`+
+		`"tool_input":{"command":"go test ./..."}}`, transcript)
+	// One row a turn, each carrying the usage the turn before it carried.
+	row := `{"type":"assistant","message":{"usage":{"input_tokens":6000,` +
+		`"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}` + "\n"
+	for turn := 1; turn <= 2; turn++ {
+		f, err := os.OpenFile(transcript, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(row); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if got := Peak(transcript); got != 6000 {
+			t.Fatalf("turn %d must report the reading the turn before it did: got %d", turn, got)
+		}
+		for i := range spec.Limits.Batch {
+			v, err := Hook("gate", strings.NewReader(payload), dir)
+			if err != nil || v.Deny {
+				t.Fatalf("turn %d call %d must be permitted: %+v %v", turn, i, v, err)
+			}
+		}
+		v, err := Hook("gate", strings.NewReader(payload), dir)
+		if err != nil || !v.Deny {
+			t.Fatalf("turn %d must be held to its bound: %+v %v", turn, v, err)
+		}
 	}
 }

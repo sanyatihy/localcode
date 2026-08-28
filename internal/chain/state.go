@@ -71,9 +71,9 @@ func BatchName(session string) string { return "batch-" + safe(session) }
 // contended exactly where it must not be: the first call of a turn is the one the harness
 // issues alongside the rest, so every hook finds no header and every one writes it —
 // measured, 32 concurrent calls of one turn were counted as one.
-func BumpBatch(dir, session string, peak int) int {
+func BumpBatch(dir, session string, r Reading) int {
 	path := filepath.Join(dir, BatchName(session))
-	rec := batchRecord(peak)
+	rec := batchRecord(r)
 	at := int64(0)
 	if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 		defer func() { _ = f.Close() }()
@@ -88,9 +88,19 @@ func BumpBatch(dir, session string, peak int) int {
 	return batchSpent(path, rec, at)
 }
 
+// Reading is what a turn's calls are counted against: the context the gate measured, and
+// which turn of the transcript reported it. The turn is what tells two turns at one context
+// apart — without it the second shares the first's counter and is refused every call it
+// makes. It is 0 for a harness that reports its own context, which has no transcript here
+// to count turns in.
+type Reading struct {
+	Peak int
+	Turn int
+}
+
 // batchRecord is what one call writes: the reading it was decided against, on a line of
 // its own.
-func batchRecord(peak int) string { return fmt.Sprintf("%d\n", peak) }
+func batchRecord(r Reading) string { return fmt.Sprintf("%d %d\n", r.Peak, r.Turn) }
 
 // batchSpent counts the calls this turn has taken, up to the caller's own record and no
 // further. A record past it belongs to a hook deciding at the same moment, and the file
@@ -112,7 +122,7 @@ func batchSpent(path, rec string, at int64) int {
 	for len(body) >= len(rec) && string(body[len(body)-len(rec):]) == rec {
 		rest := body[:len(body)-len(rec)]
 		// A record ends the line it is on, so anything else before it is a longer reading
-		// this one is the tail of: `15100` must not be read as a call at `5100`.
+		// this one is the tail of: `15100 2` must not be read as a call at `5100 2`.
 		if len(rest) > 0 && rest[len(rest)-1] != '\n' {
 			break
 		}
