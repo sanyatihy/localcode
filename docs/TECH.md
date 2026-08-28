@@ -1365,6 +1365,12 @@ was converging. The field is absent rather than
 `false` outside version control, because a chain with no repository to read has not been
 measured.
 
+**Every git the probe runs carries `--no-optional-locks`, so observing a repository does not
+write to it.** `git status --porcelain` refreshes the index stat cache, which rewrote
+`.git/index` twice a session per worktree; the flag sits on the shared helper, so the
+`status`, `count-objects`, `rev-list` and `worktree list` reads alike take no index lock and
+none can block on one another process holds.
+
 **A commit is recorded apart from movement, because they answer different questions.** The
 row also carries `repo_committed`, which is what `git rev-list --all --count` says either
 side of the session: a commit made on any branch counts, and a branch made at one that was

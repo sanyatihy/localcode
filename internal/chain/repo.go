@@ -160,10 +160,16 @@ var gitTimeout = 10 * time.Second
 // The context is the function's own rather than a parameter. The caller is a snapshot
 // taken either side of a session and has nothing to cancel it for, and threading one
 // through `Repo` and `Snapshot` would be ceremony over a call nobody waits on.
+//
+// `--no-optional-locks` here rather than at one call site, because every one of the four is
+// a read: the flag stops `status` refreshing the index stat cache, so observing a session
+// no longer writes to the repository it observes, and no read can lose the index lock to
+// whatever else holds the checkout.
 func git(dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(ctx, "git",
+		append([]string{"--no-optional-locks", "-C", dir}, args...)...)
 	out, err := cmd.Output()
 	return string(out), err
 }

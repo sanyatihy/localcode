@@ -43,7 +43,7 @@ It goes on the shared `git` helper, which is the one place all four pass through
 
 ## Tasks
 
-- [ ] The probe leaves `.git/index` untouched, asserted against a repository with a dirty
+- [x] The probe leaves `.git/index` untouched, asserted against a repository with a dirty
       working tree, and still reports movement and commits as it did
 
 ## Open questions
