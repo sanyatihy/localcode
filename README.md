@@ -176,6 +176,9 @@ write names the path and the line that allows it:
 echo ~/.cargo >> ~/.config/localcode/writable
 ```
 
+Each path that file opens is printed at startup, and a line that would open a credential
+root is refused rather than applied.
+
 **Never `tuned.env`:** Claude Code sends no sampling, no thinking toggle and no
 chat-template override, so a config that does not serve all three serves something nobody
 chose. `localcode` starts [`config/agent.env`](config/agent.env) by

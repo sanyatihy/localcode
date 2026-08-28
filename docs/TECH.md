@@ -1540,6 +1540,13 @@ is the one that never learns the write was refused. The sandbox is described in 
 appended system prompt instead, and `~/.config/localcode/writable` is where a developer
 names the paths their ecosystems need — the tool learns no language.
 
+**A widening says what it opened, and cannot undo a denial.**
+`~/.config/localcode/writable` was read and applied in silence, so a line reading `/` opened
+the whole filesystem while `-net` announced a smaller hole; each path it opens is now named
+on stderr. A line covering a credential root is refused instead of announced, because
+denying the read while allowing the write leaves the list advisory — moving `~/.ssh/id_rsa`
+into the working tree needs no read at all.
+
 **Session state stays out of the repository being visited**, under
 `~/.local/state/localcode/repos/<slug>/`, keyed by the repository's path. 0016's hooks take
 `LOCALCODE_HANDOFF_DIR` and still default to the checkout, so working on localcode itself is

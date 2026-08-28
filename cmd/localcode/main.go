@@ -25,6 +25,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -656,7 +657,7 @@ func writeSandboxProfile(state, cwd string, net bool, agentState []string) (stri
 	writable = append(writable, agentState...)
 	// Whatever this developer's ecosystems need, named once by them rather than guessed
 	// once by us.
-	writable = append(writable, extraWritable()...)
+	writable = append(writable, extraWritable(os.Stderr)...)
 
 	var b strings.Builder
 	b.WriteString("(version 1)\n(allow default)\n")
@@ -763,15 +764,31 @@ func writableConfigPath() (string, error) {
 	return filepath.Join(home, ".config", "localcode", "writable"), nil
 }
 
-func extraWritable() []string {
+// extraWritable reads that config and says what it opened. A line reading `/` widens the
+// policy further than -net does and -net is the one that announces itself, so each path
+// this file opens is named on the way past.
+//
+// A line covering a credential root is refused instead. Denying the read while allowing
+// the write leaves the deny-list advisory: moving ~/.ssh/id_rsa into the repository needs
+// no read at all.
+func extraWritable(w io.Writer) []string {
 	path, err := writableConfigPath()
 	if err != nil {
 		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	// Resolved, so a `~/.ssh` here and the denied root compare as the same path.
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return nil // absent is the normal case
 	}
+	denied := deniedRead(home)
 	var out []string
 	for _, line := range strings.Split(string(body), "\n") {
 		line = strings.TrimSpace(line)
@@ -779,13 +796,43 @@ func extraWritable() []string {
 			continue
 		}
 		if strings.HasPrefix(line, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				line = filepath.Join(home, line[2:])
-			}
+			line = filepath.Join(home, line[2:])
+		}
+		line = filepath.Clean(line)
+		if root := coversDeniedRoot(line, denied); root != "" {
+			_, _ = fmt.Fprintf(w, "writable: refused %s — it opens %s, which holds credentials\n", line, root)
+			continue
 		}
 		out = append(out, line)
 	}
+	if len(out) > 0 {
+		_, _ = fmt.Fprintf(w, "writable: %s opened %s\n", path, strings.Join(out, ", "))
+	}
 	return out
+}
+
+// coversDeniedRoot names the credential root a writable path would reach, and "" when it
+// reaches none. Either direction counts: a path inside a root and a path above one both
+// hand the session the files the deny-list took away.
+//
+// Symlinks are resolved first where the path exists, because a link into a credential root
+// is the same widening spelled differently.
+func coversDeniedRoot(path string, denied []string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	for _, root := range denied {
+		if within(path, root) || within(root, path) {
+			return root
+		}
+	}
+	return ""
+}
+
+// within reports whether child is parent or sits under it.
+func within(child, parent string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // worktreeBriefing names where a git worktree may go, because the session cannot find out
