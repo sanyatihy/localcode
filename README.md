@@ -195,8 +195,8 @@ searched for.
 ## How the repo is laid out
 
 ```
-cmd/        the six commands, each with its exit codes documented in its package comment
-internal/   the packages behind them: eval (scoring), harness (adapters), prefix, handoff
+cmd/        the five commands, each with its exit codes documented in its package comment
+internal/   the packages behind them: eval (scoring), harness (adapters), prefix, transcript
 config/     one .env per serving config, plus machine.json — every limit this laptop imposes
 scripts/    the shell around a measurement: serve, ladder, screen, pair, probe
 tasks/      the fixtures the model is scored on; tasks/depth/ is the deep floor check
@@ -213,7 +213,6 @@ results/    live scratch, gitignored; snapshots land in docs/data/ when a featur
 | [`cmd/eval`](cmd/eval) | tier 1 — one request per fixture, scored deterministically |
 | [`cmd/report`](cmd/report) | summarise a results file; `-baseline` reports the rest against one |
 | [`cmd/tier2`](cmd/tier2) | tier 2 — drive a whole agent loop through a fixture in a scratch checkout |
-| [`cmd/handoff`](cmd/handoff) | run one task box across fresh sessions instead of compacting |
 | [`cmd/prefixprobe`](cmd/prefixprobe) | replay a fixed conversation and record what each turn was charged |
 | [`cmd/prefixlog`](cmd/prefixlog) | the same accounting for traffic nobody scripted, off the server's log |
 

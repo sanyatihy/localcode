@@ -109,22 +109,20 @@ extension, which reads only that. The command is written against `$CLAUDE_PROJEC
 which is the checkout — a feature is always worked in a worktree of its own, so an absolute
 path would run in only one of them.
 
-`cmd/handoff` is what runs the box across those sessions:
+`localcode` is what runs a box across those sessions, in this checkout as in any other:
 
-    go run ./cmd/handoff -doc docs/features/0016-hand-off-between-sessions-instead-of-compacting.md \
-      -sessions 5 -budget 30m -results results/handoff.jsonl
+    localcode "Do the topmost unticked box in docs/features/0016-hand-off-between-sessions-instead-of-compacting.md, and only that one."
 
-It reads the doc's topmost unticked box, starts a session, and asks the doc again — the box
-is the record, not what the session says about itself. It stops when that box is ticked
-(exit 0) or when the bound is reached (exit 1), and clears `HANDOFF.md` on the tick, since
-working state inside a finished box is a stale instruction to the next one.
+The instruction is re-issued to every fresh session word for word, and the chain ends on a
+handoff saying the work is done, on a repeated plan, on a session timeout or on the session
+bound — see [the README](../../README.md#one-instruction-run-until-it-is-done) for the exit
+codes. Whether the box is ticked is `kit`'s question, not the driver's.
 
 Each session gets a `CLAUDE_CONFIG_DIR` of its own, so nothing one learned reaches the next
 except through the handoff, and its transcript is the only one in that directory. That is
 also where the credential would have been: a session started this way has the one
-`claude-code.env` sets and no other. Every row carries the session's peak context — the
-largest single turn, since a session refused a compaction keeps growing — its turns, its
-wall clock, and how many compactions were refused during it.
+`claude-code.env` sets and no other. Each session's peak context is read back from that
+transcript — the largest single turn, since a session refused a compaction keeps growing.
 
 Verified in both readers at 2.1.233: a marker written into `HANDOFF.md` came back out of a
 fresh `claude -p` session, through `--settings` and through the project-scoped file.

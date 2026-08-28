@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sanyatihy/localcode/internal/handoff"
+	"github.com/sanyatihy/localcode/internal/transcript"
 )
 
 // Counter reads one of a session's counters, which is the size of a file the hooks append
@@ -145,13 +145,13 @@ func safe(session string) string {
 // and how many turns there were. Peak is -1 when there is no transcript to read, which is
 // the case for the first call of a session, before the file exists.
 //
-// It reads through internal/handoff so a session's cost has one definition: what a
+// It reads through internal/transcript so a session's cost has one definition: what a
 // supervisor reports and what the gate enforces cannot drift apart if they are one count.
-func Cost(transcript string) (peak, turns int) {
-	if transcript == "" {
+func Cost(path string) (peak, turns int) {
+	if path == "" {
 		return -1, 0
 	}
-	s, err := handoff.ReadSession(transcript)
+	s, err := transcript.ReadSession(path)
 	if err != nil {
 		return -1, 0
 	}

@@ -1,71 +1,13 @@
-package handoff
+package transcript
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
-
-const doc = `---
-id: 0016
----
-
-## Design
-
-A table with a checkbox in it, - [ ] like this, is prose about something else.
-
-## Tasks
-
-- [x] The first box, done
-- [ ] The second box, which is the work
-- [ ] The third box
-
-## Open questions
-
-- [ ] Not a task box either
-`
-
-func TestBoxesAreReadFromTheTasksSectionAlone(t *testing.T) {
-	boxes := Boxes([]byte(doc))
-	if len(boxes) != 3 {
-		t.Fatalf("read %d boxes, want the 3 under ## Tasks: %+v", len(boxes), boxes)
-	}
-	if !boxes[0].Ticked || boxes[1].Ticked {
-		t.Errorf("ticks were not read: %+v", boxes)
-	}
-	if boxes[1].Text != "The second box, which is the work" {
-		t.Errorf("box text is %q", boxes[1].Text)
-	}
-}
-
-// A doc with every box ticked is the only way a driver finishes.
-func TestTopmostIsTheFirstUntickedBox(t *testing.T) {
-	box, ok := Topmost(Boxes([]byte(doc)))
-	if !ok || box.Text != "The second box, which is the work" {
-		t.Errorf("topmost is %+v, %v", box, ok)
-	}
-	if _, ok := Topmost([]Box{{Text: "a", Ticked: true}}); ok {
-		t.Error("a doc with every box ticked still offered work")
-	}
-}
-
-// A session that ticked some other box has not done what it was asked.
-func TestTickedAsksAboutOneNamedBox(t *testing.T) {
-	boxes := Boxes([]byte(doc))
-	if !Ticked(boxes, "The first box, done") {
-		t.Error("a ticked box read as unticked")
-	}
-	if Ticked(boxes, "The third box") {
-		t.Error("an unticked box read as ticked")
-	}
-	if Ticked(boxes, "a box nobody wrote") {
-		t.Error("a box that is not in the doc read as ticked")
-	}
-}
 
 func writeTranscript(t *testing.T, rows ...string) string {
 	t.Helper()
@@ -123,25 +65,6 @@ func TestReadSessionSurvivesATranscriptLineLargerThanAScannerBuffer(t *testing.T
 	}
 	if s.Turns != 2 || s.Peak != 101 {
 		t.Errorf("read %d turns and a peak of %d after a 200 KB line", s.Turns, s.Peak)
-	}
-}
-
-// One log file, every session in the checkout appending to it.
-func TestRefusalsCountThisSessionsOnly(t *testing.T) {
-	log := filepath.Join(t.TempDir(), "precompact.jsonl")
-	body := ""
-	for _, id := range []string{"mine", "other", "mine"} {
-		body += fmt.Sprintf("{\"session_id\":%q,\"trigger\":\"auto\"}\n", id)
-	}
-	if err := os.WriteFile(log, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if n := Refusals(log, "mine"); n != 2 {
-		t.Errorf("counted %d refusals, want 2", n)
-	}
-	// No log means no session here has ever been asked to compact, which is not an error.
-	if n := Refusals(filepath.Join(t.TempDir(), "absent.jsonl"), "mine"); n != 0 {
-		t.Errorf("a missing log counted %d refusals", n)
 	}
 }
 
