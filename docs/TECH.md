@@ -1215,7 +1215,10 @@ harness would not send past about 31,200, so every session was budgeted against 
 decides a whole turn's calls, because the harness issues them together and nothing changes
 while they run. The count is one file a session carrying a line per call — the reading that
 call was decided against — and a turn is the run of lines that agree, because a counter
-named after the reading is a file per turn and one chain left 1,247 of them.
+named after the reading is a file per turn and one chain left 1,247 of them. The reading is
+the peak and the transcript's assistant rows together, so two turns that report one context
+get a bound each; a harness that keeps its own context reports no rows, and there the peak
+is the whole of it.
 
 **Measured end to end.** Eight independent Go bugs, one per file, at a 16,384 wall — a
 12,288 prompt budget and a 7,168 ceiling. Three sessions, 1,115 s, 20,565 tokens ingested,

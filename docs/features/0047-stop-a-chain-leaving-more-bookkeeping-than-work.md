@@ -52,7 +52,7 @@ outlived its turn. Only the scaffolding goes.
 
 - [x] One turn's bound is held without a file per turn, and the batch counter a session
       leaves is bounded by its sessions rather than by its turns
-- [ ] Two turns that report the same context reading each get their own bound
+- [x] Two turns that report the same context reading each get their own bound
 - [ ] A chain that has already run keeps working, and its old counters do not change what
       a new session may spend
 
