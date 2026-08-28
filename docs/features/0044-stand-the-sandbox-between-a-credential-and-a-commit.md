@@ -1,9 +1,9 @@
 ---
 id: 0044
 title: Stand the sandbox between a credential and a commit
-status: Draft
+status: Shipped
 created: 2026-08-27
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
@@ -54,11 +54,11 @@ than announced — otherwise the deny-list is advisory.
 
 ## Tasks
 
-- [ ] A session cannot read the credential roots, and can still read a toolchain, a
+- [x] A session cannot read the credential roots, and can still read a toolchain, a
       repository and its own caches
-- [ ] The session is told which roots are denied and why, in the briefing that already
+- [x] The session is told which roots are denied and why, in the briefing that already
       names what it may write
-- [ ] Widening the writable list prints what it opened, and a line that would re-open a
+- [x] Widening the writable list prints what it opened, and a line that would re-open a
       denied root is refused rather than applied
 
 ## Open questions

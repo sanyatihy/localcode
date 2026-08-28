@@ -1518,8 +1518,19 @@ wrong one as soon as there are two — which is the normal state here.
 command allowlist cannot be generic across ecosystems and a denylist of dangerous strings
 is defeated by `sh -c`, so neither is a boundary. `sandbox-exec` needs to know nothing about
 the language in the repository. Writes reach the working directory, temp, the two cache
-roots and the agent's own state; reads are unrestricted, because an agent that cannot read
-a toolchain cannot use one. Go, Python, Node, `make` and `git` all complete under it.
+roots and the agent's own state; reads are open apart from the credential roots, because
+an agent that cannot read a toolchain cannot use one. Go, Python, Node, `make` and `git`
+all complete under it.
+
+**The credential roots are denied for reading**, because the working tree is a channel off
+this machine — a human pushes it — and a network the sandbox already closed is not the one
+that carries a key out. `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` and
+`~/Library/Keychains` answer `Operation not permitted`; a repository, a cache root and
+`go version` are untouched, which is what makes the list safe to deny. The appended
+briefing names the five roots and why, for the reason it names the writable ones: a
+refusal a session cannot explain becomes a session working around it. A session therefore
+cannot authenticate over ssh even under `-net`, which is the point of the list rather than
+a cost of it: a key it can read is a key it can copy into the working tree.
 
 **The network is loopback-only**, so a repository's source cannot leave the machine and
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
@@ -1530,6 +1541,13 @@ stderr to the model rather than passing it through, so the process that could pr
 is the one that never learns the write was refused. The sandbox is described in the
 appended system prompt instead, and `~/.config/localcode/writable` is where a developer
 names the paths their ecosystems need — the tool learns no language.
+
+**A widening says what it opened, and cannot undo a denial.**
+`~/.config/localcode/writable` was read and applied in silence, so a line reading `/` opened
+the whole filesystem while `-net` announced a smaller hole; each path it opens is now named
+on stderr. A line covering a credential root is refused instead of announced, because
+denying the read while allowing the write leaves the list advisory — moving `~/.ssh/id_rsa`
+into the working tree needs no read at all.
 
 **Session state stays out of the repository being visited**, under
 `~/.local/state/localcode/repos/<slug>/`, keyed by the repository's path. 0016's hooks take

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -612,9 +613,29 @@ func handoffBriefing(l chain.Limits, path string) string {
 // even though the boundary itself can only be exercised on the machine VISION fixes.
 var sandboxExec = "/usr/bin/sandbox-exec"
 
-// writeSandboxProfile renders the policy: writes confined, reads open. Reads stay open
-// because an agent that cannot read a toolchain cannot use one, and the risk that matters
-// here is a mistaken write rather than a curious read.
+// credentialRoots are the directories a session may not read, relative to the home
+// directory. Each holds credentials and nothing else, which is what makes denying it safe:
+// a directory a build also reads configuration from is not a candidate.
+var credentialRoots = []string{".ssh", ".aws", ".gnupg", ".config/gh", "Library/Keychains"}
+
+// deniedRead resolves the credential roots against home. Home is resolved once and the
+// roots built from it, rather than each root resolved in turn: a root this machine has not
+// created yet still has to be denied for the day it is.
+func deniedRead(home string) []string {
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
+	}
+	out := make([]string, 0, len(credentialRoots))
+	for _, r := range credentialRoots {
+		out = append(out, filepath.Join(home, filepath.FromSlash(r)))
+	}
+	return out
+}
+
+// writeSandboxProfile renders the policy: writes confined, reads open but for the
+// credential roots. Reads stay open because an agent that cannot read a toolchain cannot
+// use one; the roots are the exception, because the working tree is a channel off this
+// machine — a human pushes it — and reading a key is the first half of sending it.
 //
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
@@ -636,10 +657,17 @@ func writeSandboxProfile(state, cwd string, net bool, agentState []string) (stri
 	writable = append(writable, agentState...)
 	// Whatever this developer's ecosystems need, named once by them rather than guessed
 	// once by us.
-	writable = append(writable, extraWritable()...)
+	writable = append(writable, extraWritable(os.Stderr)...)
 
 	var b strings.Builder
-	b.WriteString("(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n")
+	b.WriteString("(version 1)\n(allow default)\n")
+	// After the allow, because the last matching rule is the one seatbelt applies.
+	b.WriteString("(deny file-read*\n")
+	for _, p := range deniedRead(home) {
+		fmt.Fprintf(&b, "  (subpath %s)\n", sbplString(p))
+	}
+	b.WriteString(")\n")
+	b.WriteString("(deny file-write*)\n(allow file-write*\n")
 	for _, p := range writable {
 		resolved, err := filepath.EvalSymlinks(p)
 		if err != nil {
@@ -736,15 +764,31 @@ func writableConfigPath() (string, error) {
 	return filepath.Join(home, ".config", "localcode", "writable"), nil
 }
 
-func extraWritable() []string {
+// extraWritable reads that config and says what it opened. A line reading `/` widens the
+// policy further than -net does and -net is the one that announces itself, so each path
+// this file opens is named on the way past.
+//
+// A line covering a credential root is refused instead. Denying the read while allowing
+// the write leaves the deny-list advisory: moving ~/.ssh/id_rsa into the repository needs
+// no read at all.
+func extraWritable(w io.Writer) []string {
 	path, err := writableConfigPath()
 	if err != nil {
 		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	// Resolved, so a `~/.ssh` here and the denied root compare as the same path.
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return nil // absent is the normal case
 	}
+	denied := deniedRead(home)
 	var out []string
 	for _, line := range strings.Split(string(body), "\n") {
 		line = strings.TrimSpace(line)
@@ -752,13 +796,43 @@ func extraWritable() []string {
 			continue
 		}
 		if strings.HasPrefix(line, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				line = filepath.Join(home, line[2:])
-			}
+			line = filepath.Join(home, line[2:])
+		}
+		line = filepath.Clean(line)
+		if root := coversDeniedRoot(line, denied); root != "" {
+			_, _ = fmt.Fprintf(w, "writable: refused %s — it opens %s, which holds credentials\n", line, root)
+			continue
 		}
 		out = append(out, line)
 	}
+	if len(out) > 0 {
+		_, _ = fmt.Fprintf(w, "writable: %s opened %s\n", path, strings.Join(out, ", "))
+	}
 	return out
+}
+
+// coversDeniedRoot names the credential root a writable path would reach, and "" when it
+// reaches none. Either direction counts: a path inside a root and a path above one both
+// hand the session the files the deny-list took away.
+//
+// Symlinks are resolved first where the path exists, because a link into a credential root
+// is the same widening spelled differently.
+func coversDeniedRoot(path string, denied []string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	for _, root := range denied {
+		if within(path, root) || within(root, path) {
+			return root
+		}
+	}
+	return ""
+}
+
+// within reports whether child is parent or sits under it.
+func within(child, parent string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // worktreeBriefing names where a git worktree may go, because the session cannot find out
@@ -784,10 +858,18 @@ func sandboxBriefing(cwd string) string {
 	if err != nil {
 		cfg = "~/.config/localcode/writable"
 	}
+	// Named in the tilde form, which is shorter than five absolute paths in a context
+	// this small and is how a developer writes them back.
+	denied := make([]string, 0, len(credentialRoots))
+	for _, r := range credentialRoots {
+		denied = append(denied, "~/"+r)
+	}
 	return "You are running in a sandbox that confines writes to " + cwd +
-		", temp directories and cache roots. Reading anywhere is allowed. " +
+		", temp directories and cache roots. Reading is allowed everywhere except " +
+		strings.Join(denied, ", ") + ", which hold credentials this work does not need: " +
+		"a refusal there is final, so report it rather than routing around it. " +
 		worktreeBriefing(cwd) +
-		"If a command fails with `operation not permitted` on a path outside those, " +
+		"If a write fails with `operation not permitted` on a path outside those, " +
 		"do not work around it: report the path, and tell the user it is allowed by " +
 		"adding that path to " + cfg + "."
 }
