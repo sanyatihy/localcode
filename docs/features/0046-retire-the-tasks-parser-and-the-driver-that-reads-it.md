@@ -47,7 +47,7 @@ because a rename before the cut moves lines that are about to be deleted.
 
 ## Tasks
 
-- [ ] `cmd/handoff` and the `## Tasks` parser are gone, and `make check` passes without
+- [x] `cmd/handoff` and the `## Tasks` parser are gone, and `make check` passes without
       them
 - [ ] Every doc that pointed at them points at `localcode` instead, and the `BACKLOG.md`
       entry that waited on 0026 is retired with its reason
