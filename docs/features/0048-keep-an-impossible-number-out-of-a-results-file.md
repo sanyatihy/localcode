@@ -1,9 +1,9 @@
 ---
 id: 0048
 title: Keep an impossible number out of a results file
-status: Draft
+status: Shipped
 created: 2026-08-28
-shipped:
+shipped: 2026-08-28
 needs:
 ---
 
