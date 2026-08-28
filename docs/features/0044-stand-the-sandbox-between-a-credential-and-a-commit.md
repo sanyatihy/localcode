@@ -54,7 +54,7 @@ than announced — otherwise the deny-list is advisory.
 
 ## Tasks
 
-- [ ] A session cannot read the credential roots, and can still read a toolchain, a
+- [x] A session cannot read the credential roots, and can still read a toolchain, a
       repository and its own caches
 - [ ] The session is told which roots are denied and why, in the briefing that already
       names what it may write

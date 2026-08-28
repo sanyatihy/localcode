@@ -612,9 +612,29 @@ func handoffBriefing(l chain.Limits, path string) string {
 // even though the boundary itself can only be exercised on the machine VISION fixes.
 var sandboxExec = "/usr/bin/sandbox-exec"
 
-// writeSandboxProfile renders the policy: writes confined, reads open. Reads stay open
-// because an agent that cannot read a toolchain cannot use one, and the risk that matters
-// here is a mistaken write rather than a curious read.
+// credentialRoots are the directories a session may not read, relative to the home
+// directory. Each holds credentials and nothing else, which is what makes denying it safe:
+// a directory a build also reads configuration from is not a candidate.
+var credentialRoots = []string{".ssh", ".aws", ".gnupg", ".config/gh", "Library/Keychains"}
+
+// deniedRead resolves the credential roots against home. Home is resolved once and the
+// roots built from it, rather than each root resolved in turn: a root this machine has not
+// created yet still has to be denied for the day it is.
+func deniedRead(home string) []string {
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		home = resolved
+	}
+	out := make([]string, 0, len(credentialRoots))
+	for _, r := range credentialRoots {
+		out = append(out, filepath.Join(home, filepath.FromSlash(r)))
+	}
+	return out
+}
+
+// writeSandboxProfile renders the policy: writes confined, reads open but for the
+// credential roots. Reads stay open because an agent that cannot read a toolchain cannot
+// use one; the roots are the exception, because the working tree is a channel off this
+// machine — a human pushes it — and reading a key is the first half of sending it.
 //
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
@@ -639,7 +659,14 @@ func writeSandboxProfile(state, cwd string, net bool, agentState []string) (stri
 	writable = append(writable, extraWritable()...)
 
 	var b strings.Builder
-	b.WriteString("(version 1)\n(allow default)\n(deny file-write*)\n(allow file-write*\n")
+	b.WriteString("(version 1)\n(allow default)\n")
+	// After the allow, because the last matching rule is the one seatbelt applies.
+	b.WriteString("(deny file-read*\n")
+	for _, p := range deniedRead(home) {
+		fmt.Fprintf(&b, "  (subpath %s)\n", sbplString(p))
+	}
+	b.WriteString(")\n")
+	b.WriteString("(deny file-write*)\n(allow file-write*\n")
 	for _, p := range writable {
 		resolved, err := filepath.EvalSymlinks(p)
 		if err != nil {
