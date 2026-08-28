@@ -1518,8 +1518,15 @@ wrong one as soon as there are two — which is the normal state here.
 command allowlist cannot be generic across ecosystems and a denylist of dangerous strings
 is defeated by `sh -c`, so neither is a boundary. `sandbox-exec` needs to know nothing about
 the language in the repository. Writes reach the working directory, temp, the two cache
-roots and the agent's own state; reads are unrestricted, because an agent that cannot read
-a toolchain cannot use one. Go, Python, Node, `make` and `git` all complete under it.
+roots and the agent's own state; reads are open apart from the credential roots, because
+an agent that cannot read a toolchain cannot use one. Go, Python, Node, `make` and `git`
+all complete under it.
+
+**The credential roots are denied for reading**, because the working tree is a channel off
+this machine — a human pushes it — and a network the sandbox already closed is not the one
+that carries a key out. `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` and
+`~/Library/Keychains` answer `Operation not permitted`; a repository, a cache root and
+`go version` are untouched, which is what makes the list safe to deny.
 
 **The network is loopback-only**, so a repository's source cannot leave the machine and
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.

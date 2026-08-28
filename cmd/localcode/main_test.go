@@ -396,7 +396,7 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 	}
 }
 
-func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
+func TestSandboxProfileConfinesWritesAndLeavesOrdinaryReadsAlone(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
 	path, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
@@ -411,10 +411,10 @@ func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	if !strings.Contains(got, "(deny file-write*)") {
 		t.Fatalf("writes must be denied by default:\n%s", got)
 	}
-	// Reads are deliberately not restricted: an agent that cannot read a toolchain
-	// cannot use one.
-	if strings.Contains(got, "(deny file-read") {
-		t.Fatalf("reads must stay open:\n%s", got)
+	// Reads are restricted to the credential roots and nowhere else: an agent that
+	// cannot read a toolchain cannot use one.
+	if strings.Contains(got, "(deny file-read*)") {
+		t.Fatalf("reads must stay open outside the credential roots:\n%s", got)
 	}
 	resolved, err := filepath.EvalSymlinks(cwd)
 	if err != nil {
@@ -439,6 +439,97 @@ func TestSandboxProfileConfinesWritesAndLeavesReadsAlone(t *testing.T) {
 	}
 	if resolvedTmp != tmp && strings.Contains(got, sbplString(tmp)) {
 		t.Fatalf("an unresolved path denies what it appears to allow:\n%s", got)
+	}
+}
+
+// The credential roots reach the profile denied, resolved, and after the allow — the
+// order is the policy, because seatbelt applies the last rule that matches.
+func TestSandboxProfileDeniesReadingTheCredentialRoots(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	resolvedHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := writeSandboxProfile(t.TempDir(), t.TempDir(), false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	for _, root := range credentialRoots {
+		want := sbplString(filepath.Join(resolvedHome, filepath.FromSlash(root)))
+		if !strings.Contains(got, want) {
+			t.Fatalf("%s must be denied, resolved:\n%s", want, got)
+		}
+	}
+	if strings.Index(got, "(deny file-read*") < strings.Index(got, "(allow default)") {
+		t.Fatalf("a deny before the allow is overridden by it:\n%s", got)
+	}
+}
+
+// The boundary itself, on the machine that has one. HOME is a directory this test made, so
+// the credential root probed holds a string this test wrote and nothing of anyone's.
+func TestSandboxRefusesToReadACredentialRoot(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip("no seatbelt on this platform")
+	}
+	home, cwd := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(home, ".ssh", "id_rsa")
+	if err := os.WriteFile(secret, []byte("stand-in, not a key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cache := filepath.Join(home, ".cache", "probe")
+	if err := os.MkdirAll(filepath.Dir(cache), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cache, []byte("cached"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ordinary := filepath.Join(cwd, "source.txt")
+	if err := os.WriteFile(ordinary, []byte("source"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(path string) (string, error) {
+		out, err := exec.Command("/usr/bin/sandbox-exec", "-f", profile,
+			"/bin/cat", path).CombinedOutput()
+		return string(out), err
+	}
+
+	out, err := read(secret)
+	if err == nil {
+		t.Fatalf("the credential root was readable: %s", out)
+	}
+	if !strings.Contains(out, "Operation not permitted") {
+		t.Fatalf("the refusal must be the sandbox's, got %q", out)
+	}
+	if strings.Contains(out, "stand-in") {
+		t.Fatalf("the contents reached the session: %s", out)
+	}
+	// The repository and the caches are the reads the work is made of.
+	for _, path := range []string{ordinary, cache} {
+		if out, err := read(path); err != nil {
+			t.Fatalf("reading %s must still work: %v: %s", path, err, out)
+		}
+	}
+	// And a toolchain, which is the reason reads are open at all.
+	if _, err := exec.LookPath("go"); err == nil {
+		if out, err := exec.Command("/usr/bin/sandbox-exec", "-f", profile,
+			"go", "version").CombinedOutput(); err != nil {
+			t.Fatalf("a toolchain must still run: %v: %s", err, out)
+		}
 	}
 }
 
