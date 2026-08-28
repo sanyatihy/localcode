@@ -37,15 +37,19 @@ fmt:
 vet:
 	@go vet ./...
 
-## lint: golangci-lint, pinned by .golangci.yml; skipped loudly when absent
-# An `if`, never `command -v ... && run || echo`: in that form a lint *failure* also
-# takes the `||` branch, so findings print as "SKIPPED" and the gate exits 0.
+# The linter's version, and the only place it is written. Run through `go run <pkg>@<ver>`
+# rather than adopted with a `tool` directive: that would add 212 require lines and 926
+# go.sum entries to a module that has neither, and zero dependencies is worth more than the
+# convenience. Cold it costs about twelve seconds; after that the build cache has it.
+GOLANGCI_VERSION ?= v2.12.2
+GOLANGCI = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
+## lint: golangci-lint at the pinned version, configured by .golangci.yml
+# No skip path on either side. The old target ran whatever was on PATH and printed SKIPPED
+# when there was nothing, so a laptop could pass a gate CI failed — which is the one thing a
+# gate must not do.
 lint:
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo "lint: golangci-lint not installed, SKIPPED (CI will still run it)"; \
-	fi
+	@$(GOLANGCI) run ./...
 
 ## shell: shellcheck every tracked script, pinned by .shellcheckrc
 # Same `if` as lint, and for the same reason: written as `cmd && run || echo` a real finding

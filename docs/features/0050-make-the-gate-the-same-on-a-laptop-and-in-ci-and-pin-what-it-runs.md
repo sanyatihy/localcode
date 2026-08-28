@@ -56,7 +56,7 @@ cleanup and they hold properties this code already has — wrapped errors compar
 
 ## Tasks
 
-- [ ] `make lint` and CI run one pinned golangci-lint named in one place, with no skip
+- [x] `make lint` and CI run one pinned golangci-lint named in one place, with no skip
       path on either side and no change to the module graph
 - [ ] `govulncheck` runs in the gate, and the linter set is the nine that were clean with
       the refusal of `gosec` recorded where the next reader will look
