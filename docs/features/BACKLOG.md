@@ -39,25 +39,6 @@ trigger nobody watches is not an idea, it is a hedge.
   when: either is edited for any other reason — a `--` separator or the instruction on stdin
   costs one line each. **Its real home is a comment at both call sites**, since that is where it
   fires; it sits here until someone puts it there.
-- **Retire the `## Tasks` parser, which is the one place this repo re-implements `kit`** —
-  `internal/handoff` reads kit's doc format and `cmd/handoff` drives "the topmost unticked
-  box" from it, which is what `kit next --json` already publishes. VISION now says this is
-  the wrong side of the boundary. Two things have to land before it can go, and both are
-  cheaper than reconciling the parser: 0026 gives a chain an external success test that is a
-  command and an exit code rather than a ticked box, and a real chain has already shown the
-  model driving `kit next`, `kit claim` and `kit ship` itself, unaided, better than the
-  parser did. Promote when: 0026 ships, or the parser drifts from kit's format — whichever
-  comes first. The unresolved part is whether `cmd/handoff` survives at all once its only
-  unique property, checking the doc rather than the model's word, is general.
-- **Pi under `localcode`** — measured against Claude Code on one profiling task at a 12,288
-  wall: Pi compacted five times and finished; Claude Code died. At a 32,768 window Pi
-  finished without compacting at all, on 22,845 ingested tokens against Claude Code's
-  25,582. It also ships the session model 0023 is building — `--continue`, `--resume`,
-  `--fork` — and caps tool output at 50 KB or 2,000 lines. The sandbox and server lifecycle
-  in `localcode` are harness-agnostic, so driving Pi is a wiring question rather than a
-  rewrite. Against it: 0010 measured 12/15 against 14/15 over five fixtures at three passes,
-  and one task does not overturn that. Promote when: 0023 ships and the handoff chain is
-  still dearer than Pi's compaction, or when a second harness is wanted for any other reason.
 - **`serverUp`'s error text reaches nobody** — it composes a message naming the command that
   fixes a dead endpoint, and both callers in `cmd/localcode/main.go` test it with `== nil` and
   throw it away. What a user actually sees is `no server at <url>, and -no-serve was given`, or
@@ -72,19 +53,6 @@ trigger nobody watches is not an idea, it is a hedge.
   the same starting commit — scored by what landed rather than by wall clock, since the two
   are within 3% per tool call. Promote when: the default is questioned again, or a repository
   and an instruction worth spending two full chains on are in hand.
-- **The output reservation is subtracted twice** — `declaredFromServer` sets
-  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to what is served less the reservation, and `NewLimits`
-  then takes the reservation off that again to get the window. The second is Claude Code's
-  own behaviour, measured; the first applies the same reasoning a second time, so about
-  4,096 tokens of every served context go unused. At 49,152 that costs 3,072 of ceiling and
-  nine tool calls — 22,528 and 51 against 25,600 and 60. It is not obviously wrong: the
-  server may account for template or BOS tokens the arithmetic here cannot see, and getting
-  it wrong means sessions dying on `Prompt is too long` after a cold ingest, which is the
-  failure the whole reservation chain exists to prevent. Settle it the way the 4,096 floor
-  was settled — pad a prompt to an exact token count against a 49,152 server with
-  `CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to the full 49,152, and bisect where the refusal
-  lands. Promote when: the ceiling is the binding constraint on a chain worth the
-  measurement, which it now is for every session on real source.
 - **Spill a tool result to a file instead of dropping it** — Pi caps tool output at 50 KB or
   2,000 lines; `localcode` sets `BASH_MAX_OUTPUT_LENGTH` and the excess is simply gone, so a
   session that needed it re-runs the command through a filter and pays a turn plus the
@@ -99,3 +67,31 @@ trigger nobody watches is not an idea, it is a hedge.
   slow commands and on the session knowing what it lost, not on tokens. Promote when: a
   chain is measured losing work to a truncated result, or `go test` output at a real
   repository's size is shown to exceed the cap that a session then cannot recover.
+
+- **Flip the chain's default harness to Pi** — 0040 measured Pi cheaper than the incumbent
+  on every per-session column across four chains, and TECH says to drive a chain with
+  `-harness pi`, but `harness.DefaultAgent` is still `claude-code`. Promote when: more
+  chains agree, or a reading exists of what the default costs one-shot patch work, which
+  0010 says is the job the incumbent wins.
+- **Move `AppendJSON` out of the scoring package** — `cmd/localcode` imports `internal/eval`
+  for a durable JSONL append and nothing else, so the session supervisor depends on the
+  scorer to write a line. Promote when: a third caller needs it, or something else forces
+  the import graph open. Behaviour-neutral either way.
+- **Declare `Agent` in the package that consumes it** — the interface sits in
+  `internal/harness` beside its implementations; its only consumer is `cmd/localcode`.
+  `Driver` gets this right, declared in `internal/eval`. The registry behind `NewAgent` is a
+  real reason to keep the constructor where it is, and none to keep the interface there.
+  Promote when: a second consumer appears, or the registry moves anyway.
+- **Fold the two harness adapter families into one** — every harness is written twice:
+  `ClaudeCode`/`claudeCodeAgent`, `Pi`/`piAgent`, once behind `Driver` for `cmd/tier2` and
+  once behind `Agent` for `cmd/localcode`, 863 lines across six files. Looked at as debt it
+  is obvious and it was examined and left: the two lifecycles genuinely differ — tier 2 runs
+  a harness to completion in a scratch checkout, `localcode` runs a budgeted session with
+  hooks — and tier 2 is the instrument VISION requires to keep reproducing its numbers, so
+  the merge risks a published comparison for a gain that is aesthetic. Promote when: a third
+  harness has to be written twice, or a bug is found in one copy and not the other.
+- **Deny a read of a `.env` inside the repository being worked on** — 0044 denies the
+  credential roots outside the working tree, and the commonest real secret on a developer's
+  disk is inside it, where a path deny cannot reach without breaking the case where fixing
+  that file is the task. Promote when: a session is seen reading one it had no reason to,
+  or the sandbox gains a rule that can express "read once, never write onward".
