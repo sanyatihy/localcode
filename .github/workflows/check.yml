@@ -36,14 +36,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: golangci/golangci-lint-action@v9
-        with:
-          # Pinned to match .golangci.yml and the version used locally. "latest"
-          # would let a newly-added lint fail a push that was green when written.
-          version: v2.12.2
-
       # CI is where the gate is absolute: `make check` skips shellcheck loudly when it is
-      # absent, and here it never is.
+      # absent, and here it never is. The linter is not installed here at all — `make lint`
+      # fetches it at the version the Makefile names, which is the one place that names it,
+      # so this workflow and a laptop cannot run different versions.
       - run: sudo apt-get install -y --no-install-recommends shellcheck
 
       - run: make check
