@@ -41,7 +41,7 @@ hash_cell() { # ubatch label -> prints the hash
   wait_healthy 600 || { echo "  LOAD FAILED — see /tmp/fidelity-$label.log" >&2; return 2; }
   # -fidelity on its own: no fixture is scored here, the probes are the whole run. The
   # config label carries the batch size, so a row says which cell produced the hash.
-  go run ./cmd/eval -fidelity -fidelity-probes prefill \
+  "$(built eval)" -fidelity -fidelity-probes prefill \
     -config "$label" -session "$profile-fidelity" -results "$RESULTS" >"/tmp/fidelity-$label.out" 2>&1 || {
       echo "  PROBE FAILED — see /tmp/fidelity-$label.out" >&2; return 2; }
   awk '/^fidelity /{print $3}' "/tmp/fidelity-$label.out"
