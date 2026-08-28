@@ -203,3 +203,58 @@ func TestTwoTurnsAtOneReadingEachGetTheirOwnBound(t *testing.T) {
 		}
 	}
 }
+
+// A chain that ran before this left a counter per turn, named after the reading it counted.
+// A session resumed into that directory must spend what its own counter says it has left,
+// and its turns must get their four calls whatever the old files hold.
+func TestOldCountersDoNotChangeWhatASessionMaySpend(t *testing.T) {
+	dir, spec := budgeted(t, 8)
+	seed := func(name string, n int) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat(".", n)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// What the old scheme left: a spent counter for each turn s1 took, at the readings it
+	// took them at, beside the 5 calls of its 8 the session itself is charged.
+	old := []string{"batch-s1-6000", "batch-s1-6200", "batch-s1-6400"}
+	for _, name := range old {
+		seed(name, spec.Limits.Batch)
+	}
+	seed(CallsFile("s1"), 5)
+
+	// A turn at a reading one of those counters is named after. Three calls, because the
+	// session has three of its eight left — the fourth is refused by the budget it spent
+	// before, and none of them by a turn that ended with the run that wrote those files.
+	payload := `{"session_id":"s1","tool_name":"Bash","peak_tokens":6000,` +
+		`"tool_input":{"command":"go test ./..."}}`
+	for i := range 3 {
+		if v, err := Hook("gate", strings.NewReader(payload), dir); err != nil || v.Deny {
+			t.Fatalf("call %d must be permitted: %+v %v", i, v, err)
+		}
+	}
+	v, err := Hook("gate", strings.NewReader(payload), dir)
+	if err != nil || !v.Deny {
+		t.Fatalf("the session's own budget must refuse: %+v %v", v, err)
+	}
+	if !strings.Contains(v.Reason, "this session has spent 8 of 8") {
+		t.Errorf("refused by something other than the budget it carried over: %q", v.Reason)
+	}
+	// The old counters are read by nothing and written by nothing.
+	for _, name := range old {
+		if got := Counter(dir, name); got != spec.Limits.Batch {
+			t.Errorf("%s: got %d want %d", name, got, spec.Limits.Batch)
+		}
+	}
+	// And the session that follows in that directory spends its own budget, not what it
+	// found there.
+	next := `{"session_id":"s2","tool_name":"Bash","peak_tokens":6000,` +
+		`"tool_input":{"command":"go test ./..."}}`
+	for i := range spec.Limits.Batch {
+		if v, err := Hook("gate", strings.NewReader(next), dir); err != nil || v.Deny {
+			t.Fatalf("a new session's call %d must be permitted: %+v %v", i, v, err)
+		}
+	}
+	if v, err := Hook("gate", strings.NewReader(next), dir); err != nil || !v.Deny {
+		t.Fatalf("a new session is still held to the turn's bound: %+v %v", v, err)
+	}
+}
