@@ -15,7 +15,7 @@ N        ?= 1
 THINKING ?=
 SAMPLING ?=
 
-.PHONY: help build check fmt vet lint shell docs test smoke verify serve stop install eval report
+.PHONY: help build check fmt vet lint shell docs vuln test smoke verify serve stop install eval report
 
 ## help: list these targets
 help:
@@ -25,11 +25,11 @@ help:
 build:
 	@go build ./...
 
-## check: the offline gate — gofmt, vet, lint, shellcheck, doc links, race tests
+## check: the offline gate — gofmt, vet, lint, shellcheck, doc links, vulnerabilities, race tests
 # What CI runs, so it must need no server and no model weights. Go is half this repo by
 # line count; `shell` and `docs` cover most of the rest, because a bug in either does not
 # crash — it produces a wrong measurement, or points a reader at a file that moved.
-check: fmt vet lint shell docs test
+check: fmt vet lint shell docs vuln test
 
 fmt:
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || { echo "gofmt: files need formatting"; exit 1; }
@@ -72,6 +72,14 @@ shell:
 			echo "$$f: sourced, so its shell options would leak into the caller"; fail=1; \
 		fi; \
 	done; exit $$fail
+
+## vuln: govulncheck over the standard library and the toolchain
+# There are no dependencies to scan, which is why this is cheap and not why it is pointless:
+# what it checks is the toolchain go.mod pins, and it reports only advisories on paths the
+# code actually reaches — so a finding is a finding rather than a version comparison.
+GOVULNCHECK_VERSION ?= v1.1.4
+vuln:
+	@go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 ## docs: every relative link and heading anchor in tracked markdown resolves
 # Offline by construction — external URLs are not fetched. See scripts/doclinks.py.
