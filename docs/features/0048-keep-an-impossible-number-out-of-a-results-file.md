@@ -53,7 +53,7 @@ buys robustness and invariants; the semantic bugs still need a person.
 
 - [x] A request whose derived account is impossible is dropped and counted, and the count is
       reported rather than left in the totals
-- [ ] The parsers that turn somebody else's bytes into a number have fuzz targets stating
+- [x] The parsers that turn somebody else's bytes into a number have fuzz targets stating
       what must hold, and the case behind this finding is in the committed corpus
 
 ## Log
