@@ -228,3 +228,34 @@ func TestARepoReadingThatNeverAnswersIsAbandonedRatherThanWaitedOut(t *testing.T
 		t.Fatal("the reading was waited out rather than bounded")
 	}
 }
+
+// The promise `cmd/localcode` makes: a visited repository ends a session with exactly the
+// files the work changed. A dirty working tree is what makes the index stat cache stale, so
+// it is the case where an unguarded `git status` rewrites `.git/index` — twice a session,
+// per worktree, by the instrument that exists to observe whether the session changed
+// anything. The mtime is set back first, so the assertion does not rest on the clock's
+// resolution.
+func TestAReadingLeavesTheIndexUntouched(t *testing.T) {
+	dir := repoWithACommit(t)
+	if err := os.WriteFile(filepath.Join(dir, "kept.go"), []byte("package kept // dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	index := filepath.Join(dir, ".git", "index")
+	was := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(index, was, was); err != nil {
+		t.Fatal(err)
+	}
+
+	if s := Repo(dir); !s.Known {
+		t.Fatal("the reading must still answer for the repository")
+	}
+
+	info, err := os.Stat(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(was) {
+		t.Fatalf("reading the repository rewrote .git/index: mtime %v, was %v",
+			info.ModTime(), was)
+	}
+}
