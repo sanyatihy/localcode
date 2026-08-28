@@ -116,13 +116,21 @@ install:
 stop:
 	@scripts/stop.sh
 
+# Anything that writes a row is built rather than `go run`. `go run` records no VCS stamp,
+# so every row it wrote said its driver was `unknown` — and a row that cannot name the build
+# behind it is the thing VISION calls not evidence. The second this costs is not the cost
+# being managed when a sweep is hours.
+BIN ?= .bin
+
 ## eval: run the tier-1 suite N times under LABEL, then summarise
 eval:
-	@go run ./cmd/eval -tasks $(TASKS) -n $(N) -config "$(LABEL)" \
+	@go build -o $(BIN)/eval ./cmd/eval
+	@$(BIN)/eval -tasks $(TASKS) -n $(N) -config "$(LABEL)" \
 		-results $(RESULTS) $(if $(THINKING),-thinking $(THINKING),) \
 		$(if $(SAMPLING),-sampling-profile $(SAMPLING),) $(EVALFLAGS) || true
 	@$(MAKE) --no-print-directory report
 
 ## report: summarise the results file
 report:
-	@go run ./cmd/report -results $(RESULTS)
+	@go build -o $(BIN)/report ./cmd/report
+	@$(BIN)/report -results $(RESULTS)

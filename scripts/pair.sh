@@ -44,9 +44,9 @@ for side in "$BASELINE" "$CANDIDATE"; do
     exit 2
   fi
   if [ -n "$TASK" ]; then set -- -task "$TASK"; else set -- -tasks "$TASKS"; fi
-  go run ./cmd/eval "$@" -n "$REPEATS" -config "$label" -session "$SESSION" \
+  "$(built eval)" "$@" -n "$REPEATS" -config "$label" -session "$SESSION" \
     -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
 done
 stop_server
 
-go run ./cmd/report -results "$RESULTS" -baseline "$(basename "$BASELINE" .env)"
+"$(built report)" -results "$RESULTS" -baseline "$(basename "$BASELINE" .env)"

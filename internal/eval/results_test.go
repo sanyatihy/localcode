@@ -1,6 +1,10 @@
 package eval
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sanyatihy/localcode/internal/build"
+)
 
 // Tool-call validity is a derived metric, and the derivation is the whole point:
 // a parseable call to the wrong tool is a reasoning failure, an unparseable one is
@@ -28,5 +32,21 @@ func TestToolCallValid(t *testing.T) {
 			t.Errorf("%s/%s: got (valid=%v, applicable=%v), want (%v, %v)",
 				tc.kind, tc.outcome, valid, applies, tc.valid, tc.applies)
 		}
+	}
+}
+
+// A row is evidence only if somebody can get back to the code that wrote it, and the
+// driver's own arithmetic has moved under rows before — 0043 changed what every session is
+// budgeted, and rows either side were otherwise indistinguishable.
+func TestEveryRowNamesTheBuildThatWroteIt(t *testing.T) {
+	r := NewRow("cfg", 0, "off", "", Sampling{}, ServerProps{}, "toolcall",
+		Result{TaskID: "t", Outcome: Pass})
+	if r.Driver == "" {
+		t.Fatal("a row with no driver cannot be attributed to a build")
+	}
+	// Under `go test` the binary carries no VCS stamp, so what must never happen is a blank
+	// that reads as a revision.
+	if r.Driver != build.Revision() {
+		t.Fatalf("driver = %q, want the build's own answer %q", r.Driver, build.Revision())
 	}
 }

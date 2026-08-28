@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sanyatihy/localcode/internal/build"
 	"github.com/sanyatihy/localcode/internal/eval"
 	"github.com/sanyatihy/localcode/internal/prefix"
 )
@@ -36,6 +37,7 @@ func main() {
 
 func run(args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("prefixprobe", flag.ContinueOnError)
+	version := fs.Bool("version", false, "print which build this is, and exit")
 	fs.SetOutput(stderr)
 	var (
 		endpoint = fs.String("endpoint", "http://127.0.0.1:8081", "endpoint the conversation is replayed against")
@@ -57,6 +59,12 @@ func run(args []string, stdout, stderr *os.File) error {
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// Before anything else is read: a build that cannot say what it is has nothing
+	// to say about a machine either.
+	if *version {
+		_, _ = fmt.Fprintln(stdout, build.Version("prefixprobe"))
+		return nil
 	}
 	if *turns < 1 {
 		return fmt.Errorf("-turns %d: a conversation is at least one turn", *turns)
