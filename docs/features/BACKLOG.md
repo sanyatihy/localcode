@@ -123,3 +123,20 @@ trigger nobody watches is not an idea, it is a hedge.
   behind a published exclusion should stay re-takeable, and `harness/README.md` freezes
   versions for exactly that reason. Unresolved, and the developer's call. Promote when: the
   exclusion is questioned, or a Python dependency in it stops resolving.
+
+- **Community chat templates against this repo's own patch** — `config/templates/qwen3.8-system-anywhere.jinja`
+  fixes the shipped template's `System message must be at the beginning` exception and nothing else.
+  Maintained forks of the same fix (froggeric v21.x, Moore2877 v20 for llama.cpp) also stop reasoning
+  rendering twice from history, stop tool arguments that are neither mapping nor string being dropped,
+  and add loop detection, tool-failure classification and argument grounding. That last group aims at
+  the one deficit 150 tool-call runs left standing: zero unparseable, zero schema-invalid, the whole
+  remainder a right-shaped call addressed to the wrong tool. Against it: third-party text injected into
+  every system prompt, and a template change re-bases every tier-1 number. Promote when: the wrong-tool
+  failures are worth a run, or the editor flow needs a template fix this one does not carry.
+- **`vllm-mlx`, which serves `/v1/messages` where `mlx_lm` does not** — 0006 stayed on llama.cpp for
+  three reasons, and two have since expired somewhere other than `mlx_lm`: `vllm-mlx` serves a native
+  Anthropic Messages endpoint, reports request and token counters, and bounds the Metal buffer cache
+  that made MLX stall rather than degrade on 32 GB. MLX still wins the column that binds — 18.02 GB
+  wired against 20.89, zero swapping runs against seven. Native MTP in `mlx_lm` is still absent
+  (ml-explore/mlx-lm#872 open, no PR), so the other reversal condition is unmet. Promote when: the
+  llama.cpp verdict is questioned, or a chain stops needing Anthropic Messages from its server.
