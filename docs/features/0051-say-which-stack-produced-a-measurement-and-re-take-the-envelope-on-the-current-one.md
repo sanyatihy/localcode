@@ -88,9 +88,9 @@ The stamp ships before the runs below it, so every number this feature takes nam
       the fork checkout on loaded tensors, greedy hash and acceptance
 - [x] The MTP draft depth is swept at 2, 3 and 4 at the depth where the ratio fell to 1.26x,
       and the long-prompt verdict is re-stated on the result
-- [ ] The ingest ladder is re-walked on the current build, and `docs/TECH.md` says whether
+- [x] The ingest ladder is re-walked on the current build, and `docs/TECH.md` says whether
       10450's rungs survived the upgrade
-- [ ] Sparse flash attention is measured against that same ladder with the backend switched
+- [x] Sparse flash attention is measured against that same ladder with the backend switched
       between ggml 0.22.0 and 0.23.0, and `docs/TECH.md` records what it did to ingest
 
 ## Open questions
@@ -115,3 +115,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
   several ggml backends and the first match was not the one running the model. Fixed under
   the same box, and the pair re-run, since a mislabelled row is what this feature exists to
   prevent.
+- 2026-09-07 — the sparse-attention box was answered short of its own premise: both backends
+  refuse 65,536 on build 10809, which is the depth #28098 measured its gain at. The arms that
+  ran agree to within 1-2%, and the cell that would decide it is a cap question rather than a
+  kernel one. Recorded in TECH and raised in INBOX rather than settled by raising the cap.
