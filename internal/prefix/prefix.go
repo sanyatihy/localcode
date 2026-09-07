@@ -145,6 +145,11 @@ type Row struct {
 	ServedNCtx  int    `json:"served_n_ctx"`
 	ServedModel string `json:"served_model"`
 
+	// The stack that served the row: llama.cpp's build string, and the ggml library it
+	// opened for the kernels. Both `unknown` when the server could not be asked.
+	ServedBuild   string `json:"served_build"`
+	ServedBackend string `json:"served_backend"`
+
 	// Driver is the build of this repository that wrote the row: a short revision, with
 	// `+modified` when the tree it was built from was not clean, and `unknown` when the
 	// build recorded none. A row is evidence only if somebody can get back to the code that
@@ -243,6 +248,8 @@ func send(ctx context.Context, c *eval.Client, msgs []eval.Message, conv Convers
 		HitShare:       float64(cached) / float64(resp.Usage.PromptTokens),
 		WallSeconds:    resp.Wall.Seconds(),
 		ServedNCtx:     opt.Props.NCtx,
+		ServedBuild:    opt.Props.BuildOrUnknown(),
+		ServedBackend:  opt.Props.BackendOrUnknown(),
 		ServedModel:    filepath.Base(opt.Props.ModelPath),
 	}, nil
 }
