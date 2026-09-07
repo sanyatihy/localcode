@@ -109,9 +109,9 @@ that detectable. There is no automatic check for this.
 
 ## Dependencies
 
-`llama.cpp` from Homebrew, build **10450**. It must support the `qwen35`
-architecture, which is what `Qwen/Qwen3.8-27B` reports
-(`Qwen3_5ForConditionalGeneration`).
+`llama.cpp` from Homebrew, build **10809** (`5266f24da`, formula 0.4.0); every measurement
+before 2026-09-07 was taken on build **10450**. It must support the `qwen35` architecture,
+which is what `Qwen/Qwen3.8-27B` reports (`Qwen3_5ForConditionalGeneration`).
 
 **Re-check after every `brew upgrade`** — this is the dependency that breaks the
 model silently rather than loudly:
@@ -119,6 +119,13 @@ model silently rather than loudly:
 ```sh
 strings /opt/homebrew/lib/libllama.dylib | grep -c '^qwen35$'   # expect 1
 ```
+
+**The Metal kernels are not llama.cpp's.** They ship in the separately versioned `ggml`
+formula, which the server opens at load from `libexec/libggml-metal.so`, and
+`GGML_BACKEND_PATH` chooses between the versions installed. Sparse flash attention is the
+case that makes this matter: `flash_attn_ext_vec_idx` is in ggml 0.23.0 and absent from
+0.22.0, while llama.cpp's own version moved for unrelated reasons. A build number alone
+therefore does not say which kernels ran.
 
 That build also serves the **Anthropic Messages API** at `/v1/messages` and
 `/v1/messages/count_tokens`, converting to chat-completions internally, and both
@@ -435,6 +442,26 @@ on every request and every field of the ceiling run.
 
 `cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
 into `docs/data/`.
+
+### The stack a row names
+
+Every row carries the two versions that decode it — `served_build`, llama.cpp's own string
+from `/props`, and `served_backend`, the ggml library the server process has open — with
+`served_snapshot`, the revision `-hf` resolved to, and `served_template`, a twelve-character
+hash of the template `/props` reports. The last two are read from the server rather than from
+the config: a file name survives a re-upload, and a config that failed to take renders a
+template no path records. `unknown` is a reading and not a gap; it says the server could not
+be asked, which is every MLX row.
+
+Log rows carry `served_build` and `backend_path` from `scripts/serve.sh`'s banner instead.
+That is the backend *directory* in force, `default` when nothing chose one, because a banner
+is written before the server is exec'd and the library it then opens is not yet knowable.
+
+**Rows written before 2026-09-07 carry none of these fields.** They were taken on llama.cpp
+build 10450 with ggml 0.20.0 — whose Cellar directory dates from 2026-08-17, the day the
+first ladder ran — and the MTP rows among them on the fork checkout `5ecbe1ac`. That pairing
+is an inference from install dates rather than a reading, which is the defect these fields
+close.
 
 - **Client-measured wall time is the only speed metric that crosses backends.** It is
   recorded on every row, including a run that failed or exceeded its budget. Server-reported

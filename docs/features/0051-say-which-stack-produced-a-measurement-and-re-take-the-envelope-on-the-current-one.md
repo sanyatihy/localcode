@@ -82,7 +82,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
       either could not be read
 - [x] Every row names the weights by resolved snapshot and the chat template by the content
       hash of what `/props` reports, with unknown recorded as unknown rather than as a blank
-- [ ] `docs/TECH.md` says what a row written before this feature does not carry, and which
+- [x] `docs/TECH.md` says what a row written before this feature does not carry, and which
       stack those rows were taken on
 - [ ] The serving configs name a binary whose MTP support is demonstrated: stock 10809 against
       the fork checkout on loaded tensors, greedy hash and acceptance
