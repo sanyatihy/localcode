@@ -86,7 +86,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
       stack those rows were taken on
 - [x] The serving configs name a binary whose MTP support is demonstrated: stock 10809 against
       the fork checkout on loaded tensors, greedy hash and acceptance
-- [ ] The MTP draft depth is swept at 2, 3 and 4 at the depth where the ratio fell to 1.26x,
+- [x] The MTP draft depth is swept at 2, 3 and 4 at the depth where the ratio fell to 1.26x,
       and the long-prompt verdict is re-stated on the result
 - [ ] The ingest ladder is re-walked on the current build, and `docs/TECH.md` says whether
       10450's rungs survived the upgrade
