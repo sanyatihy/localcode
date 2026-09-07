@@ -150,6 +150,11 @@ type Row struct {
 	ServedBuild   string `json:"served_build"`
 	ServedBackend string `json:"served_backend"`
 
+	// The weights' resolved revision and a hash of the template the server holds, both
+	// `unknown` when the server could not be asked.
+	ServedSnapshot string `json:"served_snapshot"`
+	ServedTemplate string `json:"served_template"`
+
 	// Driver is the build of this repository that wrote the row: a short revision, with
 	// `+modified` when the tree it was built from was not clean, and `unknown` when the
 	// build recorded none. A row is evidence only if somebody can get back to the code that
@@ -250,6 +255,8 @@ func send(ctx context.Context, c *eval.Client, msgs []eval.Message, conv Convers
 		ServedNCtx:     opt.Props.NCtx,
 		ServedBuild:    opt.Props.BuildOrUnknown(),
 		ServedBackend:  opt.Props.BackendOrUnknown(),
+		ServedSnapshot: opt.Props.SnapshotOrUnknown(),
+		ServedTemplate: opt.Props.TemplateOrUnknown(),
 		ServedModel:    filepath.Base(opt.Props.ModelPath),
 	}, nil
 }

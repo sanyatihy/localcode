@@ -50,10 +50,11 @@ func TestPortOfReadsTheEndpointOrRefuses(t *testing.T) {
 
 // The kernels and the build are versioned apart, so a row carries both or it cannot say
 // what decoded it.
-func TestPropsCarriesTheBuildAndTheBackend(t *testing.T) {
+func TestPropsCarriesTheStackThatServedARow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model_path":                  "/models/Qwen3.8-27B-Q4_K_M.gguf",
+			"model_path":                  "/hub/models--bartowski--Qwen3.8-27B-GGUF/snapshots/f0eec4a4/Qwen3.8-27B-Q4_K_M.gguf",
+			"chat_template":               "{%- set x = 1 %}",
 			"build_info":                  "10809-5266f24da",
 			"default_generation_settings": map[string]any{"n_ctx": 32768},
 		})
@@ -75,14 +76,51 @@ func TestPropsCarriesTheBuildAndTheBackend(t *testing.T) {
 	if row.ServedBackend != "/opt/homebrew/Cellar/ggml/0.23.0/libexec/libggml-metal.so" {
 		t.Errorf("served_backend %q", row.ServedBackend)
 	}
+	if row.ServedSnapshot != "f0eec4a4" {
+		t.Errorf("served_snapshot %q", row.ServedSnapshot)
+	}
+	if row.ServedTemplate != hashTemplate("{%- set x = 1 %}") {
+		t.Errorf("served_template %q", row.ServedTemplate)
+	}
 }
 
 // An empty string would read as a row written before the field existed. A backend that
 // could not be asked is a different fact, and the rows that carry it say so.
 func TestRowSaysUnknownWhereTheStackCouldNotBeRead(t *testing.T) {
 	row := NewRow("cfg", 0, "off", "", Sampling{}, ServerProps{}, "toolcall", Result{TaskID: "t"})
-	if row.ServedBuild != build.Unknown || row.ServedBackend != build.Unknown {
-		t.Errorf("served_build %q, served_backend %q, want %q for both",
-			row.ServedBuild, row.ServedBackend, build.Unknown)
+	for name, got := range map[string]string{"served_build": row.ServedBuild,
+		"served_backend": row.ServedBackend, "served_snapshot": row.ServedSnapshot,
+		"served_template": row.ServedTemplate} {
+		if got != build.Unknown {
+			t.Errorf("%s %q, want %q", name, got, build.Unknown)
+		}
+	}
+}
+
+// `-hf` cannot pin a revision and a re-upload keeps the file name, so the snapshot in the
+// cache path is the only thing that tells two sets of weights apart.
+func TestSnapshotComesFromTheCachePath(t *testing.T) {
+	const cached = "/Users/x/.cache/huggingface/hub/models--bartowski--Qwen3.8-27B-GGUF/" +
+		"snapshots/f0eec4a4bb4975114a030d048952d83c0a53c034/Qwen3.8-27B-Q4_K_M.gguf"
+	if got, want := snapshotOf(cached), "f0eec4a4bb4975114a030d048952d83c0a53c034"; got != want {
+		t.Errorf("snapshot %q, want %q", got, want)
+	}
+	if got := snapshotOf("/models/local.gguf"); got != build.Unknown {
+		t.Errorf("snapshot %q, want %q for a path with no revision in it", got, build.Unknown)
+	}
+}
+
+// A config that names a template the server declined to load renders the model's own, and
+// a path would record the request rather than what was served.
+func TestTemplateIsHashedFromWhatTheServerHolds(t *testing.T) {
+	one, two := hashTemplate("{{ system }}"), hashTemplate("{{ system }} ")
+	if one == two {
+		t.Error("two templates hashed alike")
+	}
+	if len(one) != 12 {
+		t.Errorf("hash %q, want twelve characters", one)
+	}
+	if got := hashTemplate(""); got != build.Unknown {
+		t.Errorf("hash %q, want %q where the server reported no template", got, build.Unknown)
 	}
 }

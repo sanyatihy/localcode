@@ -51,6 +51,12 @@ type Row struct {
 	ServedBuild   string `json:"served_build"`
 	ServedBackend string `json:"served_backend"`
 
+	// ServedSnapshot is the weights' resolved revision and ServedTemplate a hash of the
+	// template the server holds. The file name survives a re-upload unchanged and a config
+	// that failed to take renders a template no path records.
+	ServedSnapshot string `json:"served_snapshot"`
+	ServedTemplate string `json:"served_template"`
+
 	// Forced is true when the preflight refused and the run was started anyway. Such a
 	// row measured a machine the check judged unable to carry it, so it is marked rather
 	// than averaged in with the rest.
@@ -151,6 +157,8 @@ func NewRow(cfg string, repeat int, thinking, effort string, s Sampling, props S
 		ServedModel:      filepath.Base(props.ModelPath),
 		ServedBuild:      props.BuildOrUnknown(),
 		ServedBackend:    props.BackendOrUnknown(),
+		ServedSnapshot:   props.SnapshotOrUnknown(),
+		ServedTemplate:   props.TemplateOrUnknown(),
 		TaskID:           res.TaskID,
 		Kind:             kind,
 		Outcome:          res.Outcome,
