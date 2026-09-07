@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sanyatihy/localcode/internal/build"
 )
 
 type Message struct {
@@ -311,10 +313,30 @@ type ServerProps struct {
 	NCtx      int    `json:"n_ctx"`
 	ModelPath string `json:"model_path"`
 
+	// BuildInfo is llama.cpp's own build string, and Backend the ggml library it opened
+	// for the kernels. Two versions, because /props reports only the first and the
+	// kernels ship in the second.
+	BuildInfo string `json:"build_info"`
+	Backend   string `json:"backend"`
+
 	// Available is false when the backend could not be asked. The scorer still runs —
 	// a backend that cannot introspect is scoreable, it just cannot have its served
 	// config checked against the label a human typed.
 	Available bool `json:"available"`
+}
+
+// BuildOrUnknown and BackendOrUnknown are the two stack versions as a row records them.
+// A backend that could not be asked answers `unknown` rather than empty, which would read
+// as a field nobody had added yet.
+func (p ServerProps) BuildOrUnknown() string { return orUnknown(p.BuildInfo) }
+
+func (p ServerProps) BackendOrUnknown() string { return orUnknown(p.Backend) }
+
+func orUnknown(v string) string {
+	if v == "" {
+		return build.Unknown
+	}
+	return v
 }
 
 // ServerMetrics is what the endpoint has counted since it started. Each harness accounts
@@ -497,6 +519,7 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 
 	var raw struct {
 		ModelPath string `json:"model_path"`
+		BuildInfo string `json:"build_info"`
 		Gen       struct {
 			NCtx int `json:"n_ctx"`
 		} `json:"default_generation_settings"`
@@ -504,5 +527,10 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return out, err
 	}
-	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, Available: true}, nil
+	buildInfo := raw.BuildInfo
+	if buildInfo == "" {
+		buildInfo = build.Unknown
+	}
+	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, BuildInfo: buildInfo,
+		Backend: Backend(c.Endpoint), Available: true}, nil
 }

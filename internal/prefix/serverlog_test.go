@@ -127,6 +127,24 @@ func TestRequestsReadsTheCacheBudgetFromTheBanner(t *testing.T) {
 	}
 }
 
+// The Metal kernels are ggml's and versioned apart from llama.cpp, so a log says which
+// build and which backend directory were in force. Neither is in llama-server's own output.
+func TestRequestsReadsTheStackFromTheBanner(t *testing.T) {
+	banner := "serving config/tuned.env: ctx=32768 kv=q8_0/q8_0 cache-ram=default " +
+		"build=10809-5266f24da backend=/opt/homebrew/Cellar/ggml/0.22.0/libexec " +
+		"on 127.0.0.1:8081 via llama-server\n"
+	rows, _, err := Requests(strings.NewReader(banner+oneRequest), "tuned", "chain")
+	if err != nil {
+		t.Fatalf("requests: %v", err)
+	}
+	if rows[0].ServedBuild != "10809-5266f24da" {
+		t.Errorf("served_build %q", rows[0].ServedBuild)
+	}
+	if rows[0].BackendPath != "/opt/homebrew/Cellar/ggml/0.22.0/libexec" {
+		t.Errorf("backend_path %q", rows[0].BackendPath)
+	}
+}
+
 // A log from a server nobody started through that script has no banner, and a row that
 // guessed a budget there would be inventing the number this whole feature exists because
 // nobody recorded.

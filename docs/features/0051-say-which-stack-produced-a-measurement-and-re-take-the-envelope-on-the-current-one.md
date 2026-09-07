@@ -78,7 +78,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
 
 ## Tasks
 
-- [ ] Every row names the llama.cpp build and the ggml backend that served it, or records that
+- [x] Every row names the llama.cpp build and the ggml backend that served it, or records that
       either could not be read
 - [ ] Every row names the weights by resolved snapshot and the chat template by the content
       hash of what `/props` reports, with unknown recorded as unknown rather than as a blank
