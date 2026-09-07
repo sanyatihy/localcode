@@ -1,9 +1,9 @@
 ---
 id: 0051
 title: Say which stack produced a measurement, and re-take the envelope on the current one
-status: Draft
+status: Submitted
+submitted: 2026-09-07
 created: 2026-09-04
-shipped:
 needs:
 ---
 
