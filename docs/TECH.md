@@ -779,14 +779,37 @@ The hash is what licenses reading the ratio: both binaries decode the same text.
 `config/driver-mtp-32k-stock.env` are the configs to use; the two that name the fork stay as
 the record of what 0017 and 0025 measured.
 
+**The draft depth was fixed at 3 and is now swept.** Three arms against `config/tuned.env`
+without the head, three repeats of `tasks/depth/decode-32000.json`, one session, on build
+10809 with ggml 0.23.0:
+
+| draft depth | decode | acceptance | ratio |
+|---|---|---|---|
+| none | 0.1591 s/tok over 9 | — | baseline |
+| 2 | 0.1199 | 2.98 | 1.33x |
+| 3 | 0.0954 | 3.97 | **1.67x** |
+| 4 | refused | — | `kIOGPUCommandBufferCallbackErrorOutOfMemory` on every request |
+
+Every arm hashes `0f4045cad664f4ac` on the greedy probes, so the ratios are of one decoder.
+Three is the setting: two commits a token less per step, and four is refused by the allocator
+at the derived cap — at 32,768, where 0017 saw that refusal only at 49,152. The cap was not
+raised for it, because the refusal is the measurement.
+
+**1.67x at depth supersedes the 1.26x that withheld adoption at long prompts.** 0017 measured
+1.26x at 32,000 tokens on build 10450 with the fork; the same depth and fixture now return
+1.67x, and the baseline moved with it — 0.1591 s/tok against 0.1700. Build and backend moved
+together, so which of them did it cannot be split by these arms.
+
 **The verdict, per profile.**
 
 - **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
   bar set before the runs, and it costs 0.43 GB of wired memory. Pass rate is 23/27 against
   25/27 on the two discriminating tasks, at sampling 0.7; the identical greedy hash rules that
   out as a distribution change.
-- **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
-  rule reserves for "measured, not taken", and an agent session's prompt is deep.
+- **Long prompts**: adopt, on the current stack. 1.67× at 32,000 tokens clears the 1.5× bar
+  the rule sets. The 1.26× that put this in "measured, not taken" was build 10450 with the
+  fork, and an agent session's prompt is deep, which is what makes the difference worth
+  taking.
 - **Editor, 49,152**: **admissible above the derived cap, and the cap is what refused it.**
   At the 21,845 MiB Metal derives, the allocator fails on the first prefill batch —
   `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second, and
