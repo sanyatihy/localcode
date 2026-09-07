@@ -79,7 +79,7 @@ command -v "$SERVER_BIN" >/dev/null 2>&1 || [ -x "$SERVER_BIN" ] || {
 # one; the library the process then opens is read from the process itself and recorded on
 # the scorer's rows, which is a reading this script cannot take before exec.
 BUILD_ID=$("$SERVER_BIN" --version 2>&1 |
-  sed -n 's/.*build \([0-9][0-9]*\), commit \([0-9a-f][0-9a-f]*\).*/\1-\2/p' | head -1)
+  sed -n 's/.*build \([0-9][0-9]*\), commit \([0-9a-f][0-9a-f]*\).*/b\1-\2/p' | head -1)
 
 # The banner is read back as well as printed: llama-server logs nothing about its prompt
 # cache, so a log is the only per-request record of a real session and this line is the only

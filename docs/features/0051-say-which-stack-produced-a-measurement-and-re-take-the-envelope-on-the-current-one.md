@@ -84,7 +84,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
       hash of what `/props` reports, with unknown recorded as unknown rather than as a blank
 - [x] `docs/TECH.md` says what a row written before this feature does not carry, and which
       stack those rows were taken on
-- [ ] The serving configs name a binary whose MTP support is demonstrated: stock 10809 against
+- [x] The serving configs name a binary whose MTP support is demonstrated: stock 10809 against
       the fork checkout on loaded tensors, greedy hash and acceptance
 - [ ] The MTP draft depth is swept at 2, 3 and 4 at the depth where the ratio fell to 1.26x,
       and the long-prompt verdict is re-stated on the result
@@ -111,3 +111,7 @@ The stamp ships before the runs below it, so every number this feature takes nam
   ggml 0.23.0, 0.22.0 is still installed, and `GGML_BACKEND_PATH` switches between them under
   one llama.cpp build; the source build survives as the fallback if that backend refuses to
   load. This deleted the open question about whether a source build becomes the served binary.
+- 2026-09-07 — the backend field named `libggml-blas` on its first rows: a server opens
+  several ggml backends and the first match was not the one running the model. Fixed under
+  the same box, and the pair re-run, since a mislabelled row is what this feature exists to
+  prevent.

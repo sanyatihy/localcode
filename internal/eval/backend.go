@@ -60,9 +60,13 @@ func portOf(endpoint string) string {
 	return port
 }
 
-// backendFrom picks the ggml backend out of `lsof -Fn` output. libggml-base is the shared
-// half every build loads and names no kernels, so it is not the answer.
+// backendFrom picks the ggml backend out of `lsof -Fn` output. A server opens several —
+// blas and metal both, and libggml-base, which is the shared half that names no kernels.
+// Metal is the answer where it is open: it is the one that runs the model, and the one
+// sparse flash attention arrived in. Otherwise the first backend that is not the shared
+// half, so a machine without Metal still records what it ran.
 func backendFrom(lsofOutput string) string {
+	fallback := ""
 	for _, line := range strings.Split(lsofOutput, "\n") {
 		if !strings.HasPrefix(line, "n/") {
 			continue
@@ -72,9 +76,18 @@ func backendFrom(lsofOutput string) string {
 		if !strings.HasPrefix(base, "libggml-") || strings.HasPrefix(base, "libggml-base") {
 			continue
 		}
-		if strings.HasSuffix(base, ".so") || strings.HasSuffix(base, ".dylib") {
+		if !strings.HasSuffix(base, ".so") && !strings.HasSuffix(base, ".dylib") {
+			continue
+		}
+		if strings.Contains(base, "metal") {
 			return path
 		}
+		if fallback == "" {
+			fallback = path
+		}
 	}
-	return build.Unknown
+	if fallback == "" {
+		return build.Unknown
+	}
+	return fallback
 }
