@@ -14,9 +14,12 @@ import (
 // library a row names has to be the one the server has open rather than the one on a
 // default path. libggml-base is loaded by every build and carries no kernels.
 func TestBackendNamesTheKernelLibraryAndNotTheSharedHalf(t *testing.T) {
+	// blas is opened first and is what a first-match rule picked, which is how the first
+	// rows of 0051 named a library that ran none of the model.
 	lsof := "p8123\n" +
 		"n/opt/homebrew/Cellar/llama.cpp/0.4.0/lib/libllama.0.4.0.dylib\n" +
 		"n/opt/homebrew/Cellar/ggml/0.23.0/lib/libggml-base.0.23.0.dylib\n" +
+		"n/opt/homebrew/Cellar/ggml/0.23.0/libexec/libggml-blas.so\n" +
 		"n/opt/homebrew/Cellar/ggml/0.23.0/libexec/libggml-metal.so\n"
 	if got, want := backendFrom(lsof), "/opt/homebrew/Cellar/ggml/0.23.0/libexec/libggml-metal.so"; got != want {
 		t.Errorf("backend %q, want %q", got, want)

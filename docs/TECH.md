@@ -761,6 +761,24 @@ not against long ones.
 the mechanism on and off. That is what licenses reading the speed number at all: a decoder
 that changed the answer would be measuring something else.
 
+**The fork build is retired, and stock drafts with the same head.** 0017 named a fork
+checkout because stock llama.cpp was reported to drop the MTP tensors. Stock 10809 logs
+`creating MTP draft context against the target model` exactly as the fork does, and a pair
+at 32,768 over three repeats of `tasks/depth/decode-8000.json` separates them only by speed:
+
+| | fork `5ecbe1ac` | stock 10809 |
+|---|---|---|
+| decode | 0.0870 s/tok | **0.0735 s/tok — 1.18x** |
+| acceptance | 3.96 | 3.96 |
+| greedy fidelity hash | `0f4045cad664` | `0f4045cad664` |
+| ggml backend | its own `libggml-metal.0.20.2.dylib` | `ggml 0.23.0` |
+
+The hash is what licenses reading the ratio: both binaries decode the same text. Part of the
+1.18x is the backend rather than llama.cpp — the fork carries ggml 0.20.2 where stock loads
+0.23.0 — and the rows say which, because they now carry both. `config/mtp-32k-stock.env` and
+`config/driver-mtp-32k-stock.env` are the configs to use; the two that name the fork stay as
+the record of what 0017 and 0025 measured.
+
 **The verdict, per profile.**
 
 - **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
