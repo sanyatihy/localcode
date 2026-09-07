@@ -185,6 +185,31 @@ is one file, which is what makes the numbers here a measurement rather than a co
 | 49 152 | q8_0 | 19.72 GB | 543 s | 81.5 | 0.0 MB |
 | 65 536 | q8_0 | 20.27 GB | 788 s | 75.0 | 0.0 MB |
 
+**Re-walked on build 10809, and the top rung no longer serves.** Same script, same config,
+both ggml backends, `condition` as recorded:
+
+| ctx | b10450 / ggml 0.20.0 | b10809 / ggml 0.23.0 | b10809 / ggml 0.22.0 |
+|---|---|---|---|
+| 8 192 | 68 s · 109.4 tok/s | 66 s · 112.0 | 67 s · 111.6 |
+| 16 384 | 149 s · 99.7 | 142 s · 103.9 | 138 s · 106.7 |
+| 32 768 | 326 s · 90.7 | 297 s · 99.4 | 296 s · 99.8 |
+| 65 536 | 788 s · 75.0 | **rejected** | **rejected** |
+
+At 65,536 the model now wires 21.82–22.08 GB against the 21.33 GB cap Metal derives, and the
+first prefill batch fails with `Compute error, ret = -3` at `n_batch = 2048` before a token is
+ingested. Nothing swapped; the cap refused it. Both backends refuse identically, so this is
+llama.cpp's allocation rather than the kernels — and `config/machine.json` still declares
+65,536 as the unattended ceiling, which no longer holds on this build at the derived cap.
+Whether the 24,576 MiB raise 0042 used admits it again is unmeasured, and raising a
+machine-level cap is not something a sweep decides.
+
+**Sparse flash attention is present and changes nothing measurable here.** ggml 0.23.0 carries
+`flash_attn_ext_vec_idx` and 0.22.0 does not; walked against each other the two arms sit within
+1–2% at every rung that serves. The 107 → 324 t/s that PR #28098 reports was measured at
+65,536 KV, which is the one cell this machine now refuses, so the depth where the gain was
+claimed is out of reach at the derived cap rather than tested and found wanting. The ~9% at
+32,768 against the old stack is build and backend together, since both new arms match.
+
 Nothing swapped at any rung, so **no ceiling exists that swap or resident size can see**.
 What grows is ingest: the prompt rate decays with depth, making a cold 32k context cost
 5.4 minutes and a cold 64k cost 13.1.
