@@ -140,3 +140,9 @@ trigger nobody watches is not an idea, it is a hedge.
   wired against 20.89, zero swapping runs against seven. Native MTP in `mlx_lm` is still absent
   (ml-explore/mlx-lm#872 open, no PR), so the other reversal condition is unmet. Promote when: the
   llama.cpp verdict is questioned, or a chain stops needing Anthropic Messages from its server.
+- **`config/README.md` says `localcode` serves a config it does not** — the table calls
+  `driver-mtp-32k.env` "what `localcode` serves", and `cmd/localcode` defaults `-config` to
+  `config/agent.env`. One of the two is wrong and the doc is the likelier one, since 0025
+  measured the chain at 32,768 by passing the flag. Whichever way it is settled, the default
+  now wants to be the stock config rather than the fork one. Promote when: a chain is started
+  without `-config` and the context it gets is questioned.

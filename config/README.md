@@ -14,7 +14,9 @@ A variant is a new file, never an edit to an existing one.
 | [`mtp-32k.env`](mtp-32k.env) | 32 768 | the target's own multi-token-prediction head. **Adopted for the grind profile** at 1.26–1.57× |
 | [`mtp-49k.env`](mtp-49k.env) | 49 152 | the same at the editor profile, **refused** — the allocator fails on the first prefill batch |
 | [`mtp-49k-nocache.env`](mtp-49k-nocache.env) | 49 152 | the same with `CACHE_RAM=0`, **refused identically** — the record that the 8 GiB host prompt cache was not what ruled the head out |
-| [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | **what `localcode` serves**: `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
+| [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
+| [`mtp-32k-stock.env`](mtp-32k-stock.env) | 32 768 | `mtp-32k.env` on the binary on PATH. **Use this one**: 0051 measured stock drafting with the same head, at 1.18x the fork's decode |
+| [`driver-mtp-32k-stock.env`](driver-mtp-32k-stock.env) | 32 768 | `driver-mtp-32k.env` on the binary on PATH, and the driver config to use for the same reason |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
 
