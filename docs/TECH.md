@@ -109,9 +109,9 @@ that detectable. There is no automatic check for this.
 
 ## Dependencies
 
-`llama.cpp` from Homebrew, build **10450**. It must support the `qwen35`
-architecture, which is what `Qwen/Qwen3.8-27B` reports
-(`Qwen3_5ForConditionalGeneration`).
+`llama.cpp` from Homebrew, build **10809** (`5266f24da`, formula 0.4.0); every measurement
+before 2026-09-07 was taken on build **10450**. It must support the `qwen35` architecture,
+which is what `Qwen/Qwen3.8-27B` reports (`Qwen3_5ForConditionalGeneration`).
 
 **Re-check after every `brew upgrade`** — this is the dependency that breaks the
 model silently rather than loudly:
@@ -119,6 +119,13 @@ model silently rather than loudly:
 ```sh
 strings /opt/homebrew/lib/libllama.dylib | grep -c '^qwen35$'   # expect 1
 ```
+
+**The Metal kernels are not llama.cpp's.** They ship in the separately versioned `ggml`
+formula, which the server opens at load from `libexec/libggml-metal.so`, and
+`GGML_BACKEND_PATH` chooses between the versions installed. Sparse flash attention is the
+case that makes this matter: `flash_attn_ext_vec_idx` is in ggml 0.23.0 and absent from
+0.22.0, while llama.cpp's own version moved for unrelated reasons. A build number alone
+therefore does not say which kernels ran.
 
 That build also serves the **Anthropic Messages API** at `/v1/messages` and
 `/v1/messages/count_tokens`, converting to chat-completions internally, and both
@@ -177,6 +184,31 @@ is one file, which is what makes the numbers here a measurement rather than a co
 | 32 768 | q8_0 | 19.13 GB | 326 s | 90.7 | 0.0 MB |
 | 49 152 | q8_0 | 19.72 GB | 543 s | 81.5 | 0.0 MB |
 | 65 536 | q8_0 | 20.27 GB | 788 s | 75.0 | 0.0 MB |
+
+**Re-walked on build 10809, and the top rung no longer serves.** Same script, same config,
+both ggml backends, `condition` as recorded:
+
+| ctx | b10450 / ggml 0.20.0 | b10809 / ggml 0.23.0 | b10809 / ggml 0.22.0 |
+|---|---|---|---|
+| 8 192 | 68 s · 109.4 tok/s | 66 s · 112.0 | 67 s · 111.6 |
+| 16 384 | 149 s · 99.7 | 142 s · 103.9 | 138 s · 106.7 |
+| 32 768 | 326 s · 90.7 | 297 s · 99.4 | 296 s · 99.8 |
+| 65 536 | 788 s · 75.0 | **rejected** | **rejected** |
+
+At 65,536 the model now wires 21.82–22.08 GB against the 21.33 GB cap Metal derives, and the
+first prefill batch fails with `Compute error, ret = -3` at `n_batch = 2048` before a token is
+ingested. Nothing swapped; the cap refused it. Both backends refuse identically, so this is
+llama.cpp's allocation rather than the kernels — and `config/machine.json` still declares
+65,536 as the unattended ceiling, which no longer holds on this build at the derived cap.
+Whether the 24,576 MiB raise 0042 used admits it again is unmeasured, and raising a
+machine-level cap is not something a sweep decides.
+
+**Sparse flash attention is present and changes nothing measurable here.** ggml 0.23.0 carries
+`flash_attn_ext_vec_idx` and 0.22.0 does not; walked against each other the two arms sit within
+1–2% at every rung that serves. The 107 → 324 t/s that PR #28098 reports was measured at
+65,536 KV, which is the one cell this machine now refuses, so the depth where the gain was
+claimed is out of reach at the derived cap rather than tested and found wanting. The ~9% at
+32,768 against the old stack is build and backend together, since both new arms match.
 
 Nothing swapped at any rung, so **no ceiling exists that swap or resident size can see**.
 What grows is ingest: the prompt rate decays with depth, making a cold 32k context cost
@@ -435,6 +467,26 @@ on every request and every field of the ceiling run.
 
 `cmd/eval` drives a fixed suite against a running server and writes one JSON row per run,
 into `docs/data/`.
+
+### The stack a row names
+
+Every row carries the two versions that decode it — `served_build`, llama.cpp's own string
+from `/props`, and `served_backend`, the ggml library the server process has open — with
+`served_snapshot`, the revision `-hf` resolved to, and `served_template`, a twelve-character
+hash of the template `/props` reports. The last two are read from the server rather than from
+the config: a file name survives a re-upload, and a config that failed to take renders a
+template no path records. `unknown` is a reading and not a gap; it says the server could not
+be asked, which is every MLX row.
+
+Log rows carry `served_build` and `backend_path` from `scripts/serve.sh`'s banner instead.
+That is the backend *directory* in force, `default` when nothing chose one, because a banner
+is written before the server is exec'd and the library it then opens is not yet knowable.
+
+**Rows written before 2026-09-07 carry none of these fields.** They were taken on llama.cpp
+build 10450 with ggml 0.20.0 — whose Cellar directory dates from 2026-08-17, the day the
+first ladder ran — and the MTP rows among them on the fork checkout `5ecbe1ac`. That pairing
+is an inference from install dates rather than a reading, which is the defect these fields
+close.
 
 - **Client-measured wall time is the only speed metric that crosses backends.** It is
   recorded on every row, including a run that failed or exceeded its budget. Server-reported
@@ -734,14 +786,55 @@ not against long ones.
 the mechanism on and off. That is what licenses reading the speed number at all: a decoder
 that changed the answer would be measuring something else.
 
+**The fork build is retired, and stock drafts with the same head.** 0017 named a fork
+checkout because stock llama.cpp was reported to drop the MTP tensors. Stock 10809 logs
+`creating MTP draft context against the target model` exactly as the fork does, and a pair
+at 32,768 over three repeats of `tasks/depth/decode-8000.json` separates them only by speed:
+
+| | fork `5ecbe1ac` | stock 10809 |
+|---|---|---|
+| decode | 0.0870 s/tok | **0.0735 s/tok — 1.18x** |
+| acceptance | 3.96 | 3.96 |
+| greedy fidelity hash | `0f4045cad664` | `0f4045cad664` |
+| ggml backend | its own `libggml-metal.0.20.2.dylib` | `ggml 0.23.0` |
+
+The hash is what licenses reading the ratio: both binaries decode the same text. Part of the
+1.18x is the backend rather than llama.cpp — the fork carries ggml 0.20.2 where stock loads
+0.23.0 — and the rows say which, because they now carry both. `config/mtp-32k-stock.env` and
+`config/driver-mtp-32k-stock.env` are the configs to use; the two that name the fork stay as
+the record of what 0017 and 0025 measured.
+
+**The draft depth was fixed at 3 and is now swept.** Three arms against `config/tuned.env`
+without the head, three repeats of `tasks/depth/decode-32000.json`, one session, on build
+10809 with ggml 0.23.0:
+
+| draft depth | decode | acceptance | ratio |
+|---|---|---|---|
+| none | 0.1591 s/tok over 9 | — | baseline |
+| 2 | 0.1199 | 2.98 | 1.33x |
+| 3 | 0.0954 | 3.97 | **1.67x** |
+| 4 | refused | — | `kIOGPUCommandBufferCallbackErrorOutOfMemory` on every request |
+
+Every arm hashes `0f4045cad664f4ac` on the greedy probes, so the ratios are of one decoder.
+Three is the setting: two commits a token less per step, and four is refused by the allocator
+at the derived cap — at 32,768, where 0017 saw that refusal only at 49,152. The cap was not
+raised for it, because the refusal is the measurement.
+
+**1.67x at depth supersedes the 1.26x that withheld adoption at long prompts.** 0017 measured
+1.26x at 32,000 tokens on build 10450 with the fork; the same depth and fixture now return
+1.67x, and the baseline moved with it — 0.1591 s/tok against 0.1700. Build and backend moved
+together, so which of them did it cannot be split by these arms.
+
 **The verdict, per profile.**
 
 - **Grind, unattended, 32,768 served**: adopt. 1.57× on the ranking suite clears the 1.5×
   bar set before the runs, and it costs 0.43 GB of wired memory. Pass rate is 23/27 against
   25/27 on the two discriminating tasks, at sampling 0.7; the identical greedy hash rules that
   out as a distribution change.
-- **Long prompts**: record, do not adopt. 1.26× at 32,000 tokens sits inside the band the
-  rule reserves for "measured, not taken", and an agent session's prompt is deep.
+- **Long prompts**: adopt, on the current stack. 1.67× at 32,000 tokens clears the 1.5× bar
+  the rule sets. The 1.26× that put this in "measured, not taken" was build 10450 with the
+  fork, and an agent session's prompt is deep, which is what makes the difference worth
+  taking.
 - **Editor, 49,152**: **admissible above the derived cap, and the cap is what refused it.**
   At the 21,845 MiB Metal derives, the allocator fails on the first prefill batch —
   `kIOGPUCommandBufferCallbackErrorOutOfMemory` at `n_batch = 2048`, 500 within a second, and

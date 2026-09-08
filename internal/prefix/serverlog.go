@@ -50,6 +50,14 @@ type LogRow struct {
 	PromptSeconds float64 `json:"prompt_seconds"`
 	GenSeconds    float64 `json:"gen_seconds"`
 
+	// The stack the log was served by, read from the same banner: llama.cpp's build, and
+	// the ggml backend directory in force. `default` means no GGML_BACKEND_PATH was set,
+	// and the library the process then opened is on the eval rows rather than here — a log
+	// can only carry what was known before the server was exec'd. Empty means the log did
+	// not start with a banner.
+	ServedBuild string `json:"served_build"`
+	BackendPath string `json:"backend_path"`
+
 	// Driver is the build of this repository that wrote the row: a short revision, with
 	// `+modified` when the tree it was built from was not clean, and `unknown` when the
 	// build recorded none. A row is evidence only if somebody can get back to the code that
@@ -87,6 +95,8 @@ func Requests(r io.Reader, config, session string) (rows []LogRow, impossible in
 	var out []LogRow
 	pending := ""
 	cacheRAM := ""
+	servedBuild := ""
+	backendPath := ""
 
 	sc := bufio.NewScanner(r)
 	// Server lines are short, but a log may carry a wrapped prompt dump; give the scanner
@@ -97,6 +107,8 @@ func Requests(r io.Reader, config, session string) (rows []LogRow, impossible in
 		switch {
 		case strings.HasPrefix(line, "serving "):
 			cacheRAM = fieldAfter(line, "cache-ram=")
+			servedBuild = fieldAfter(line, "build=")
+			backendPath = fieldAfter(line, "backend=")
 		case strings.Contains(line, "selected slot by LCP similarity"):
 			pending = SelectedByLCP
 		case strings.Contains(line, "selected slot by LRU"):
@@ -107,7 +119,8 @@ func Requests(r io.Reader, config, session string) (rows []LogRow, impossible in
 				continue
 			}
 			open[id] = &LogRow{Config: config, Session: session, TaskID: id,
-				SlotSelection: pending, CacheRAM: cacheRAM, Driver: build.Revision()}
+				SlotSelection: pending, CacheRAM: cacheRAM, ServedBuild: servedBuild,
+				BackendPath: backendPath, Driver: build.Revision()}
 			pending = ""
 		case strings.Contains(line, "prompt eval time"):
 			if row := openRow(open, line); row != nil {

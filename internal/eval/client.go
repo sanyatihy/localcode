@@ -8,6 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sanyatihy/localcode/internal/build"
 )
 
 type Message struct {
@@ -311,10 +315,64 @@ type ServerProps struct {
 	NCtx      int    `json:"n_ctx"`
 	ModelPath string `json:"model_path"`
 
+	// BuildInfo is llama.cpp's own build string, and Backend the ggml library it opened
+	// for the kernels. Two versions, because /props reports only the first and the
+	// kernels ship in the second.
+	BuildInfo string `json:"build_info"`
+	Backend   string `json:"backend"`
+
+	// ModelSnapshot is the revision the weights resolved to, read out of the cache path,
+	// and TemplateHash names the template the server holds rather than the file a config
+	// asked for. `-hf` cannot pin a revision and a config can fail to take.
+	ModelSnapshot string `json:"model_snapshot"`
+	TemplateHash  string `json:"template_hash"`
+
 	// Available is false when the backend could not be asked. The scorer still runs —
 	// a backend that cannot introspect is scoreable, it just cannot have its served
 	// config checked against the label a human typed.
 	Available bool `json:"available"`
+}
+
+// snapshotOf reads the revision out of a Hugging Face cache path, which is where `-hf`
+// puts the weights and the only place the resolved revision appears: the file name is the
+// same across a re-upload.
+func snapshotOf(modelPath string) string {
+	parts := strings.Split(modelPath, "/")
+	for i, p := range parts {
+		if p == "snapshots" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return build.Unknown
+}
+
+// hashTemplate names a chat template by its content, cut to twelve hex characters as
+// build.Revision cuts a commit. The path a config named says nothing about a template the
+// server declined to load.
+func hashTemplate(template string) string {
+	if template == "" {
+		return build.Unknown
+	}
+	sum := sha256.Sum256([]byte(template))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+// BuildOrUnknown and BackendOrUnknown are the two stack versions as a row records them.
+// A backend that could not be asked answers `unknown` rather than empty, which would read
+// as a field nobody had added yet.
+func (p ServerProps) BuildOrUnknown() string { return orUnknown(p.BuildInfo) }
+
+func (p ServerProps) BackendOrUnknown() string { return orUnknown(p.Backend) }
+
+func (p ServerProps) SnapshotOrUnknown() string { return orUnknown(p.ModelSnapshot) }
+
+func (p ServerProps) TemplateOrUnknown() string { return orUnknown(p.TemplateHash) }
+
+func orUnknown(v string) string {
+	if v == "" {
+		return build.Unknown
+	}
+	return v
 }
 
 // ServerMetrics is what the endpoint has counted since it started. Each harness accounts
@@ -496,13 +554,21 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	var raw struct {
-		ModelPath string `json:"model_path"`
-		Gen       struct {
+		ModelPath    string `json:"model_path"`
+		BuildInfo    string `json:"build_info"`
+		ChatTemplate string `json:"chat_template"`
+		Gen          struct {
 			NCtx int `json:"n_ctx"`
 		} `json:"default_generation_settings"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return out, err
 	}
-	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, Available: true}, nil
+	buildInfo := raw.BuildInfo
+	if buildInfo == "" {
+		buildInfo = build.Unknown
+	}
+	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, BuildInfo: buildInfo,
+		Backend: Backend(c.Endpoint), ModelSnapshot: snapshotOf(raw.ModelPath),
+		TemplateHash: hashTemplate(raw.ChatTemplate), Available: true}, nil
 }
