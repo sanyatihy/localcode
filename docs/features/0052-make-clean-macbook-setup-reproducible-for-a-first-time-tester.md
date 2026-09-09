@@ -30,7 +30,7 @@ versions, whose durable record remains in TECH.
 
 - [x] Make clean MacBook setup reproducible for a first-time tester
 
-- [ ] Shorten the full README while keeping a complete first-run path and consistent defaults
+- [x] Shorten the full README while keeping a complete first-run path and consistent defaults
 
 ## Log
 - 2026-09-09 — reopen to Draft: Review asks for a shorter setup and a consistent README throughout
