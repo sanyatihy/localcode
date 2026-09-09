@@ -33,34 +33,189 @@ somebody is using is 57,344.
 
 ## Getting started
 
-Needs a Mac with Apple Silicon, Go (version in [`go.mod`](go.mod)), Python 3 for the probe
-scripts, and `llama.cpp` from Homebrew — **build 10450**, the one every number here was
-taken on. It must support the `qwen35` architecture, and this is the dependency that
-breaks the model silently rather than loudly, so re-check after every `brew upgrade`:
+This is the path from a clean MacBook to a first coding task. Use **an Apple Silicon
+Mac with 32 GB or more unified memory** for this walkthrough; the measured machine is
+an M2 Max with 32 GB. Smaller-memory Macs and Intel Macs are not validated. Close
+memory-heavy apps before loading the model. Allow **at least 25 GB of free disk space**
+as a setup budget for roughly 17 GB of weights plus tools and caches, and stay online
+for installation and the first download. Later model inference runs locally.
+
+### 1. Install the tools
+
+Open **Terminal** (the commands below assume macOS's default zsh). Install Apple's
+Command Line Tools, which provide Git, make and the compiler:
 
 ```sh
-strings /opt/homebrew/lib/libllama.dylib | grep -c '^qwen35$'   # expect 1
+xcode-select --install
 ```
 
-Then:
+Finish the installer dialog before continuing. “Already installed” is fine.
+Install [Homebrew](https://brew.sh/) if you do not already have it:
 
 ```sh
-make check                              # the offline gate: Go, shell, doc links, race tests
-make serve CONFIG=config/tuned.env      # llama-server on 127.0.0.1:8081, ~17 GB of weights
-make smoke                              # in another shell: does it answer, and call a tool?
-make eval N=3 LABEL=tuned-32k           # score the tier-1 suite and print the summary
-make help                               # every target
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-The first `make serve` downloads ~17 GB into llama.cpp's own Hugging Face cache. `make
-eval` refuses to start when the machine has less headroom than
-[`config/machine.json`](config/machine.json) requires — a sweep that pages measures the
-pager, not the model.
+Follow the installer's **Next steps** to add Homebrew to your shell. On Apple Silicon
+the standard setup is:
+
+```sh
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+brew install go python llama.cpp
+brew install --cask claude-code
+```
+
+[Claude Code's Homebrew installation](https://code.claude.com/docs/en/quickstart)
+provides the `claude` command; Node.js is not needed for this installation method.
+Python is used by the session hooks as well as the check scripts. Go's required
+version and toolchain are in [go.mod](go.mod); Go may download that toolchain on the
+first build. Check that all three commands resolve:
+
+```sh
+go version
+python3 --version
+claude --version
+llama-server --version
+```
+
+Homebrew installs its current releases, which may differ from the versions measured
+here. See [runtime versions and compatibility](docs/TECH.md#dependencies) and the
+[Claude Code setup](harness/claude-code/README.md). After installing or upgrading
+llama.cpp, check its model architecture support:
+
+```sh
+strings "$(brew --prefix)/lib/libllama.dylib" | grep -c '^qwen35$'
+```
+
+Expect a nonzero count. A zero or missing library needs investigation before loading
+weights; passing this check alone does not prove the whole flow works.
+
+### 2. Clone and install Localcode
+
+Keep this checkout somewhere permanent: its path is compiled into the launcher.
+
+```sh
+mkdir -p ~/Developer
+cd ~/Developer
+git clone https://github.com/sanyatihy/localcode.git
+cd localcode
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
+export PATH="$HOME/.local/bin:$PATH"
+make install
+localcode -h
+```
+
+`make install` builds `~/.local/bin/localcode`. If you move the checkout or pull an
+update, run `make install` there again. You do not need `kit` to install or use it.
+
+### 3. Download the model and check the server
+
+For the first download, run the server in the foreground so progress and errors are
+visible. Run this from `~/Developer/localcode`:
+
+```sh
+make serve CONFIG=config/agent.env
+```
+
+This downloads roughly 17 GB from Hugging Face into llama.cpp's cache and then loads
+the model. Keep this terminal open. Download time depends on your connection; loading
+and the first reply can also take time. The endpoint is `127.0.0.1:8081`.
+
+In a **second Terminal window**, wait until the health request returns
+`{"status":"ok"}`, then run the smoke test:
+
+```sh
+cd ~/Developer/localcode
+curl -fsS http://127.0.0.1:8081/health
+make smoke
+localcode status
+```
+
+Success is `smoke passed` and status reporting the Qwen model at **49152 ctx**.
+A connection refusal or a loading response means it is not ready yet; check the
+first terminal. The smoke test checks both a reply and a tool call.
+
+### 4. Give it a small coding task
+
+In the second terminal, create a disposable repository and ask for an observable edit:
+
+```sh
+mkdir -p ~/Developer/localcode-tryout
+cd ~/Developer/localcode-tryout
+git init
+localcode -sessions 3 "Create hello.py that prints Hello from localcode, run it with python3, and finish."
+python3 hello.py
+```
+
+Success is a file created by the agent and `Hello from localcode` printed when you run
+it yourself. Allow a few minutes for the first task on the measured machine.
+Localcode supplies the local endpoint and a placeholder authentication token itself;
+this configured flow does not need an Anthropic API key or paid Claude subscription.
+Launch it with `localcode`; no manual environment sourcing or cloud login is part of
+this walkthrough.
+
+When finished:
+
+```sh
+localcode stop
+```
+
+This stops the server and waits for memory to be released. On subsequent runs,
+`localcode` starts the server automatically with `config/agent.env`; you do not need
+the separate server terminal once the weights are cached.
+
+### If something goes wrong
+
+- **Command not found:** reopen Terminal after the PATH steps, then check
+  `command -v brew go python3 llama-server claude localcode`.
+- **Download or startup fails:** read the foreground server output. For a server
+  started automatically, use `tail -n 80 ~/.local/state/localcode/serve.log`.
+  Automatic startup waits up to 20 minutes; use the foreground download above on
+  a slow connection.
+- **Port 8081 is busy or status reports another context:** stop the existing Localcode
+  server with `localcode stop`, then start `config/agent.env` again. If another
+  application owns the port, stop that application first.
+- **The desktop becomes sluggish or Metal reports allocation failure:** stop the
+  server and close memory-heavy apps. The supplied settings were measured on one
+  32 GB M2 Max; other machines are not a reproduced result.
+- **The agent fails while smoke passes:** record `claude --version`,
+  `llama-server --version`, `sw_vers`, your chip/RAM, the command and its error.
+  Newer dependency versions can change behavior; the smoke test checks the server,
+  while the small coding task checks the whole launcher/harness path.
+
+### Optional: checks and benchmarks
+
+From `~/Developer/localcode`, `make check` runs the repository gate without loading
+a model. Install `shellcheck` for the full shell check. A cold run downloads Go tools,
+and vulnerability checking uses the advisory database, so keep network access available.
+
+```sh
+brew install shellcheck
+make check
+make help
+```
+
+To reproduce tier-1 scoring, stop the agent server and serve the scorer's config in
+one terminal, then evaluate in another:
+
+```sh
+localcode stop
+make serve CONFIG=config/tuned.env
+```
+
+```sh
+cd ~/Developer/localcode
+make eval N=3 LABEL=tuned-32k
+```
+
+The scorer supplies its own sampling settings; use `config/agent.env` again before
+coding. Evaluation checks the headroom limits in
+[config/machine.json](config/machine.json), which describe the measured laptop.
 
 ## Coding against the local model
 
-`make install` puts `localcode` on your `PATH` with this checkout's location compiled in.
-Then, in any repository:
+After the setup above, run these from any repository:
 
 ```sh
 localcode                          # a session here, with you at the keyboard
@@ -69,7 +224,7 @@ localcode status                   # what is being served, at what context
 localcode stop                     # stop it, waiting for the memory back
 ```
 
-Nothing is written to the repository you work in. Session state and handoffs live under
+The agent edits files in the repository you work in. Its session state and handoffs live under
 `~/.local/state/localcode/`, keyed by the repository's path, so two checkouts of one project
 are two boxes of work.
 
