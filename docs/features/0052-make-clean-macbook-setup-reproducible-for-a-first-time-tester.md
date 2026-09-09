@@ -1,9 +1,9 @@
 ---
 id: 0052
 title: Make clean MacBook setup reproducible for a first-time tester
-status: Draft
+status: Submitted
 created: 2026-09-09
-submitted: 
+submitted: 2026-09-09
 needs:
 ---
 
