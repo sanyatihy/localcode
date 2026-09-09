@@ -1,9 +1,9 @@
 ---
 id: 0052
 title: Make clean MacBook setup reproducible for a first-time tester
-status: Submitted
+status: Draft
 created: 2026-09-09
-submitted: 2026-09-09
+submitted: 
 needs:
 ---
 
@@ -31,3 +31,4 @@ versions, whose durable record remains in TECH.
 - [x] Make clean MacBook setup reproducible for a first-time tester
 
 ## Log
+- 2026-09-09 — reopen to Draft: Review asks for a shorter setup and a consistent README throughout
