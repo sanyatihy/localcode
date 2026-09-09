@@ -136,9 +136,11 @@ tokeniser instead of guessing. Claude Code points at this server with
 
 ## Checks
 
-`make check` is the offline gate and is what CI runs: `gofmt` cleanliness, `go vet`,
-`golangci-lint`, `shellcheck`, a documentation link check and `go test -race`. It needs no
-server and no model weights, because CI has neither.
+`make check` is what CI runs: `gofmt` cleanliness, `go vet`,
+`golangci-lint`, `shellcheck`, a documentation link check, `govulncheck` and
+`go test -race`. It needs no server or model weights. Cold runs download pinned Go
+tools and may download the toolchain; vulnerability checking uses the advisory
+database, so this is not a fully offline setup gate.
 
 **It covers the repo and not just the Go**, which is half of it by line count. A shell bug
 here does not crash — it produces a wrong measurement, and two of the [gotchas](#gotchas)
@@ -148,9 +150,9 @@ without fetching anything, and the gate holds shell options to the file mode: **
 script must `set -euo pipefail`, and a sourced one must set nothing**, since options set in a
 library leak into whatever sourced it.
 
-**`shellcheck` and `golangci-lint` are skipped loudly when absent** and installed in CI, so
-the gate is absolute where it has to be. The skip is never total: `bash -n` runs in
-`shellcheck`'s place.
+**`shellcheck` falls back to `bash -n` when absent**, with a printed notice; CI installs
+it for full linting. `golangci-lint` runs through Go at the version pinned in the
+Makefile, and a failure is never skipped.
 
 `make smoke` runs `scripts/smoke.sh` against a *running* endpoint: health, a chat
 completion that must return non-empty content, and a tool call that must return valid
