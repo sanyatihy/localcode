@@ -9,24 +9,25 @@ needs:
 
 ## Problem
 
-<!-- What was this for? The tension that made it worth doing, in one to three sentences.
-     The diff says what was built and cannot say why it was worth building. -->
+A first-time tester on a clean MacBook could not follow the README to a coding
+session: installation, PATH, Claude Code and a verifiable first task were missing.
+The entry point prioritized measurement commands and named a stale runtime build.
 
 ## Non-goals
 
-<!-- What this deliberately does not do, and where that lives instead. Delete the section
-     if nothing was ruled out. -->
+Changing runtime behavior, choosing new model settings, or claiming validation on
+hardware other than the measured machine.
 
 ## Design
 
-<!-- What was chosen and what it beat: an alternative rejected, a constraint that shaped
-     the answer, a cost accepted. Only what a reader cannot recover from the code. -->
+Use a sequential Terminal walkthrough with a foreground first download, then a
+disposable repository task whose created file can be run independently. Foreground
+startup exposes progress and avoids the launcher's 20-minute wait on slow downloads.
+Keep benchmarks optional and distinguish current Homebrew installs from measured
+versions, whose durable record remains in TECH.
 
 ## Tasks
 
 - [x] Make clean MacBook setup reproducible for a first-time tester
 
 ## Log
-
-<!-- What the doing taught that a plan would not have predicted: a premise falsified, an
-     approach abandoned, a measurement that changed the shape. -->
