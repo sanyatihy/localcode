@@ -64,6 +64,15 @@ recorded in the config's comment. The per-slot window is set from the ladder, no
 from the laptop's 49,152: what binds at four slots on 128 GB is unknown, and a number
 derived rather than observed is a hypothesis here as everywhere.
 
+**The ladder reaches 131,072 per slot.** The laptop's ladder stopped at 65,536 because
+the desktop died there; nothing on a headless 128 GB box says where to stop, so the
+rungs run 49,152, 65,536, 98,304 and 131,072 per slot, at one slot and at four. Whether
+the model serves 131,072 without RoPE scaling is read off its card at that rung, and a
+rung that needs scaling is recorded as a different config, not as the same one larger.
+Each rung records cold ingest as well as memory: at 64k the laptop took 13 minutes to
+ingest, and a window a user cannot afford to fill is a capacity, not a ceiling. The
+per-slot window and the ceiling in the machine file come from these rows.
+
 **Sharing is measured before it is offered.** 0018 found that a slot is chosen by prefix
 similarity and a prefix the server has never seen ingests from zero; with four users
 that rule decides whose conversation is evicted. Four chains on the fixture run at once
@@ -85,5 +94,6 @@ when SSH access to it exists, and a session that reaches them without it stops t
 - [ ] The server runs as a systemd unit on the committed GB10 config and `stop.sh` stops the unit when one is active
 - [ ] `config/machine-gb10.json` holds the box's measured floor and its one profile, and the tier-1 suite runs on the GB10 under the laptop's settings with prefill, decode and peak memory recorded in TECH beside the laptop's
 - [ ] Four chains run at once against `PARALLEL="4"` and TECH records per-user decode, ingest and prefix survival from the server's log
-- [ ] The context ladder at four slots finds what binds on 128 GB and `config/gb10-agent.env` carries the per-slot window it settled
+- [ ] The context ladder runs to 131,072 per slot at one slot and at four, recording memory and cold ingest per rung, and TECH says what binds on 128 GB and whether the top rung needed RoPE scaling
+- [ ] `config/gb10-agent.env` carries the per-slot window the ladder settled and `config/machine-gb10.json` its ceiling
 - [ ] README documents the GB10 server setup and points the client side at 0053
