@@ -6,18 +6,22 @@ before drafting one.
 
 ## What this is
 
-localcode makes one MacBook a viable place to run agentic coding: a quantised
-Qwen3.8-27B served locally, tuned by measurement rather than guesswork, driven by a
-harness chosen on evidence. The work is **how the model is launched, served and
+localcode makes a machine the developer controls a viable place to run agentic coding:
+a quantised Qwen3.8-27B served on that machine, tuned by measurement rather than
+guesswork, driven by a harness chosen on evidence. The first machine was one MacBook.
+Since 2026-09-13 it may also be a second Mac on the same network, or a GB10 desktop
+serving several developers at once. The work is **how the model is launched, served and
 driven** — not the model's weights, and not a new agent.
 
 ## Who it is for
 
 One developer on an M2 Max doing agentic coding — multi-turn, tool-calling, repo-scale
-edits — who wants the grind to happen on-device: no per-token cost, no network
-dependency for the build loop. Secondarily, anyone reproducing the same choices on
-comparable Apple Silicon, which is why every number here is committed rather than
-remembered.
+edits — who wants the grind to happen on-device: no per-token cost, no vendor
+dependency for the build loop. The same developer with a second machine on a trusted
+network — another Mac, or a GB10 — who wants the grind to happen there while the
+laptop stays usable. A small team, four to begin with, sharing that GB10 as their
+model endpoint. Secondarily, anyone reproducing the same choices on comparable
+hardware, which is why every number here is committed rather than remembered.
 
 ## What done looks like
 
@@ -48,6 +52,14 @@ remembered.
   sends to Anthropic characterised rather than assumed away.
 - **At least one path is genuinely offline.** A harness that needs no vendor
   reachability completes a real task with the network disabled.
+- **A session on one machine drives a model served on another.** The launcher is pointed
+  at a remote endpoint, every harness talks to that endpoint and nothing else, the sandbox
+  admits that one host, and the client never starts or stops a server it does not own.
+  Mac to Mac is the first case, because it needs no new hardware; the GB10 is the second.
+- **The GB10 serves several developers at once, and the numbers say what that costs.**
+  The slot count is a config setting, four at first. Per-user decode rate, ingest and
+  prompt-cache reuse under shared traffic are measured on the committed scorer, with
+  what binds at 128 GB found by the ladder rather than assumed from the laptop.
 - Optionally, a flow exists where a frontier model plans and coordinates while local
   models grind features — the roles `kit` already defines, split across two tiers.
 
@@ -68,8 +80,9 @@ remembered.
   exists. **0016's `## Tasks` parser is on the wrong side of this line and predates it**,
   which is why retiring it is a `BACKLOG.md` entry rather than a rule nobody wrote down.
 
-- **Not multi-user.** One machine, one developer. Auth, quotas and LAN serving would
-  change every design here.
+- **Not a public service.** The GB10 serves a trusted network and nothing else: no TLS,
+  no per-user auth, no quotas, no billing. A shared token at most. Anyone on the network
+  is a trusted user, and exposing the endpoint beyond it is out of scope.
 - **Not a model zoo.** A model earns a place by scoring on the scorer; "worth a look"
   is a BACKLOG line, not a download.
 - **No per-request cloud fallback.** A router that silently retries against a hosted
@@ -78,18 +91,21 @@ remembered.
 
 ## Constraints
 
-- **Hardware is fixed: M2 Max, 32 GB unified memory, 30 GPU cores.** A larger machine was
-  considered and decided against, so this is the envelope every answer here is for. **Some
-  exclusions are therefore permanent rather than provisional** — Q5_K_M and Q6_K stay ruled
-  out *by projection*, and no run will ever test that; **MTPLX is excluded by measurement
-  rather than by assumption**, its filled peak sitting 1.5 GiB above what this machine can cap
-  at while leaving the system its reserve; Hermes stays unattended-only. Where a conclusion rests on a projection this machine cannot check, it says
-  so and stays that way.
-  **Measured numbers are still recorded with the machine they came from**, and this machine's
-  limits still live in `config/machine.json` rather than in code — for the second audience
-  rather than a second machine, since anyone reproducing these choices is on different
-  silicon. No config may make the machine unusable for the editor and browser the developer
-  is running while the agent works.
+- **Two envelopes, each fixed, never conflated.** The laptop is an M2 Max, 32 GB unified
+  memory, 30 GPU cores, and every answer measured before 2026-09-13 is for that envelope.
+  **Its exclusions stay permanent there** — Q5_K_M and Q6_K stay ruled out *by projection*
+  on 32 GB; **MTPLX is excluded by measurement rather than by assumption**, its filled peak
+  sitting 1.5 GiB above what that machine can cap at while leaving the system its reserve;
+  Hermes stays unattended-only. The second envelope is a GB10: 20 Arm cores, a Blackwell
+  GPU, 128 GB of unified LPDDR5X, Linux, headless, CUDA. Its reported memory bandwidth is
+  below the laptop's, so single-stream decode there is a hypothesis and not a promise; its
+  wins, if they are wins, are prefill and room for several slots. A finding from one
+  envelope is not evidence about the other — a projection the 32 GB machine could not check
+  may be measured on 128 GB, and only then does the exclusion lift.
+  **Measured numbers are recorded with the machine they came from**, and each machine's
+  limits live in its own `config/machine*.json` rather than in code. No config may make a
+  Mac unusable for the editor and browser its developer is running while the agent works;
+  the GB10 is headless and that rule does not reach it.
 - **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
   quality, and whatever else emerges are candidates, and which one binds depends on the
   envelope — model, quant, context, and the machine. A constraint asserted in advance is
@@ -113,8 +129,10 @@ remembered.
   turn, a long refactor and a repo-wide search have different context and latency needs, so
   "one winning config" is an assumption the results have to earn rather than a goal.
 - **Two properties, never conflated.** *Inference is local* — no prompt or file content
-  reaches a model this machine does not run. *The harness is offline* — it needs no vendor
-  reachability at all. The first is required everywhere; the second is stronger, and every
+  reaches a model on hardware the developer does not control. A model served on the
+  developer's second Mac or the team's GB10 keeps this property; the network between them
+  is trusted and the traffic is plain HTTP, which is a decision and not an oversight. *The
+  harness is offline* — it needs no vendor reachability at all. The first is required everywhere; the second is stronger, and every
   setup states which of the two it has. `ANTHROPIC_BASE_URL` alone buys only the first,
   because OAuth refresh and feature-flag fetches do not follow it. **Measured since: all
   four harnesses have the second, the incumbent included** — under token authentication and
@@ -124,7 +142,8 @@ remembered.
   its vendor, which fails even the first. The one deliberate exception is the coordination
   flow, which sends planning context to a frontier model and may never be silent.
 - **Go for anything built.** One static binary, no runtime competing with the model for
-  the 32 GB it needs. Where a tool is Python-only — MLX above all — it is confined to
+  the memory it needs, and one that cross-compiles to Linux on Arm without a second
+  toolchain. Where a tool is Python-only — MLX above all — it is confined to
   its own environment and called, never merged into the Go code.
 - **Reproducible over convenient.** Every server invocation, quant and sampling setting
   lives in the repo. A number nobody can regenerate is not evidence.
