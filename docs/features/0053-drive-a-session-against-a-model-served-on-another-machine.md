@@ -9,73 +9,61 @@ needs:
 
 ## Problem
 
-`localcode -endpoint` verifies health and reads the served context from the URL it is
-given, and then every harness talks to `127.0.0.1:8081` anyway: the endpoint lives in the
-committed environment and provider files, the sandbox admits loopback and nothing else,
-and a missing server makes the launcher start one on the laptop. VISION now names a
-second Mac on a trusted network as a place the grind should happen, and it is the same
-client path the GB10 (0054) needs.
+`localcode -endpoint` verifies health and the served context on the URL it is given,
+then both launcher harnesses talk to `127.0.0.1:8081`: the endpoint is written into
+the committed Claude Code environment and the Pi provider file, the sandbox admits
+loopback only, and a missing server makes the launcher start one on the laptop. VISION
+names a second Mac on a trusted network as a place to serve, and the GB10 (0054) uses
+the same client path.
 
 ## Non-goals
 
-- Serving several users from one endpoint — 0054, where the slot count and its cost are
-  measured.
-- TLS or per-user authentication — VISION fixes the network as trusted and the traffic
-  as plain HTTP.
-- Reading the serving machine's log from the client. `cmd/prefixlog` and the account
-  report keep reading a local `serve.log`; a remote server's log stays where it was
-  written and is read there.
-- Porting the desktop and Metal probes. They measure the machine that serves, and they
-  run there.
+- Several users on one endpoint: 0054.
+- TLS or per-user authentication: VISION fixes the network as trusted.
+- Reading a remote server's log from the client. `cmd/prefixlog` and the account report
+  read a local `serve.log`; a remote log is read on the serving machine.
+- Hermes and OpenCode. They are not launcher harnesses; their provider files in
+  `harness/` are edited by hand and their READMEs say so.
+- Porting the desktop and Metal probes. They run on the machine that serves.
 
 ## Design
 
-The endpoint has one home per session, and it is the launcher's. The URL the
-launcher verified `/health` and `/props` on is the URL the harness is handed: for Claude
-Code the launcher sets `ANTHROPIC_BASE_URL` after the committed file rather than
-letting the file set it. The committed file keeps loopback as its documented default, so
-sourcing it by hand still works. Pi, Hermes and OpenCode keep a provider file each with
-the endpoint written into it; a remote endpoint under those harnesses is refused with
-the file to edit named. Refusing beats silently driving loopback, which is what happens
-today, and following the launcher becomes a box when somebody runs Pi remotely — 0040
-settled Pi as a candidate driver, and its provider file is one edit.
+The URL the launcher verified is the URL Claude Code is handed: the launcher sets
+`ANTHROPIC_BASE_URL` after the committed file. The file keeps loopback as its default.
+Pi keeps its provider file; a remote endpoint under Pi is refused naming the file, and
+a file already naming that endpoint lifts the refusal.
 
-The default endpoint is set once per machine. `~/.config/localcode/endpoint` holds
-one URL, read when `-endpoint` is not given; the flag still wins. A file rather than an
-environment variable, because `writable` already lives there and the sandbox strips the
-environment a session inherits.
+An endpoint is loopback when its host is `localhost`, `127.0.0.0/8` or `::1`. Anything
+else is remote. A URL that does not parse is refused before anything runs.
 
-A remote endpoint is never started or stopped from the client. The host of the URL
-decides: loopback keeps today's behaviour, anything else makes a missing server a
-refusal naming the command to run on the serving machine, and makes `localcode stop`
-a refusal. The alternative, an SSH-driven start, puts a credential in the launcher's
-path and is exactly what the sandbox exists to keep out.
+`~/.config/localcode/endpoint` holds the machine's default endpoint; `-endpoint` wins.
+A file rather than an environment variable: the sandbox strips the session's
+environment, and `writable` already lives there. `smoke.sh` keeps reading `ENDPOINT`;
+README shows `ENDPOINT=... make smoke`.
 
-The sandbox admits the endpoint and nothing else beyond loopback. The launcher
-resolves the endpoint's host to its addresses at startup and writes one
-`(allow network-outbound (remote ip "addr:port"))` line per address. Resolved by the
-launcher rather than by name in the profile, because seatbelt matches addresses and a
-name that resolves differently inside the sandbox admits nothing. `-net` is unchanged.
+A remote endpoint is never started or stopped from the client. A missing remote
+server is refused naming the command to run on the serving machine; `localcode stop`
+refuses. Neither refusal leaves a process behind.
 
-The serving machine binds to the network from the environment, not from a second
-config. `serve.sh` takes `HOST` from the environment over the config when set, and
-prints it in the banner. The bind address says where the server listens and not how it
-serves, so it is the one setting that does not change what a measurement was of; a
-second copy of `agent.env` differing in one line is the drift the config layout exists
-to prevent. The config's own `HOST` stays `127.0.0.1`, so nothing binds outward by
-accident.
+The launcher resolves the endpoint's host at startup and writes one
+`(allow network-outbound (remote ip "addr:port"))` line per address. Seatbelt matches
+addresses, not names. `-net` is unchanged.
 
-What the network adds is measured, not assumed. One chain on the fixture is driven
-Mac to Mac under the committed config and read beside the same chain driven locally.
-The hypothesis is that a LAN round trip is invisible against decode, and it stays a
-hypothesis until the rows say so. The serving Mac's own desk profile applies to it; the
-client's does not.
+`serve.sh` takes `HOST` from the environment over the config and prints it in the
+banner. Committed configs keep `HOST="127.0.0.1"`; a machine that serves the network
+sets `HOST` in the environment of whatever starts the server.
+
+The network's cost is one serving Mac on `config/agent.env`, driven from itself and
+from the other Mac, cold prompt cache each time, three repetitions each. Compared:
+chain wall, per-call latency from the transcript, and the server's own prompt and
+decode rates. The serving Mac's desk profile applies; the client's does not.
 
 ## Tasks
 
-- [ ] The endpoint the launcher verified is the endpoint Claude Code talks to, set from the launcher after the committed file; a test on the assembled environment covers a remote URL, and Pi, Hermes and OpenCode refuse a remote endpoint naming the provider file to edit
-- [ ] A remote endpoint is never started or stopped from the client: a missing remote server is refused with the command to run there, and `localcode stop` refuses a remote endpoint
-- [ ] The sandbox admits the endpoint's resolved addresses and port beyond loopback and nothing else, covered by a test on the written profile and by one session on the machine with the network otherwise denied
-- [ ] `~/.config/localcode/endpoint` sets the default endpoint per machine and `-endpoint` still wins, with `localcode status` reporting which one it used
-- [ ] `serve.sh` binds to `HOST` from the environment when set and prints it in the banner; README documents the two-Mac setup — serve on one, smoke and `localcode` from the other
-- [ ] One chain on the fixture runs Mac to Mac and TECH records what the network added beside the local row
+- [ ] Claude Code talks to the endpoint the launcher verified, including `count_tokens`, set after the committed file; a test covers a remote URL, and Pi refuses a remote endpoint its provider file does not name
+- [ ] A URL is classified loopback or remote including `::1`, an unparseable one is refused, and a test covers each case
+- [ ] A missing remote server is refused with the command to run there, `localcode stop` refuses a remote endpoint, and a test shows neither starts a process
+- [ ] The sandbox admits the endpoint's resolved addresses and port beyond loopback and nothing else, covered by a test on the written profile and by one session that reaches the endpoint and is denied another host
+- [ ] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
+- [ ] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
+- [ ] One serving Mac is driven from itself and from the other Mac, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side

@@ -9,56 +9,50 @@ needs: 0053, 0054
 
 ## Problem
 
-0054 makes the GB10 serve four slots and measures what that costs; it does not make the
-endpoint something four people rely on. A config change restarts the server under
-whoever is mid-session, one developer's subagents can take every slot, the server log
-grows without bound, a reboot leaves nothing serving, and nothing tells the team the
-endpoint is down before their next request fails. Each of those is a support request
-the day it happens.
+0054 makes the GB10 serve four slots; it does not make the endpoint something four
+people rely on. A config change restarts the server under whoever is mid-session, one
+session's parallel calls can hold several slots, the log grows without bound, nothing
+says how long a reboot takes to serve again, and nobody learns the endpoint is down
+before a request fails.
 
 ## Non-goals
 
-- Authentication, quotas or billing per user. VISION fixes the network as trusted, and
-  the slot count is the only fairness mechanism this adds.
-- High availability. One box, one server; a failed box is down until it is fixed.
-- A dashboard. The server already exposes `/metrics` and `/slots`; a page that reads
-  them is a later feature if anyone wants one.
+- Per-user authentication, quotas or billing: VISION fixes the network as trusted.
+- High availability. One box; a failed box is down until fixed.
+- A dashboard. `/metrics` and `/slots` exist; a page over them is a later feature.
+- A per-developer slot cap. Slots are per request in llama-server and four sessions
+  from one developer take four slots; sharing is best effort and README says so.
 
 ## Design
 
-A restart drains before it stops. `stop.sh` on the box reads `/slots`, waits for the
-busy ones to finish within a bound, and stops the unit when they are idle or the bound
-runs out; the bound is a config setting and the wait is reported. A restart while a slot
-decodes ends a user's session mid-turn, and the harness reports it as a failed call
-rather than as a restart.
+`stop_server` on the box reads `/slots`, waits for busy slots within a configured bound,
+then stops the unit and reports how long it waited. llama-server has no admission
+control, so a request arriving during the wait is cut when the bound expires; the
+bound is short and the client retries.
 
-The server is enabled at boot, and its log is rotated. The unit is enabled, so a reboot
-serves again without anyone logging in. journald holds the unit's output with the box's
-own rotation, and the server log 0018 reads is a journalctl export rather than a file
-that grows for months.
+The unit is enabled at boot with a configured restart backoff. Its output goes to
+journald with retention set in the unit's drop-in; the log 0018's reader needs is a
+journalctl export, and a test reads an exported log.
 
-Slots are per user before they are per request. The launcher today lets Claude Code
-send its background calls and subagents in parallel, all of which queue for the endpoint;
-on one slot that was harmless and on four it lets one developer hold the other three.
-What one session actually opens concurrently is measured from `/slots` under a real
-chain first. If a single session takes more than one slot at a time, the launcher caps
-it to one through the harness's own concurrency settings, and TECH records which
-settings those are. A cap invented before the measurement is the kind of arithmetic
-VISION says has been wrong three times.
+Claude Code's Explore, Plan and cron are already disabled in its environment. What
+remains concurrent, background model calls above all, is measured from `/slots` under
+a real chain. If a session opens more than one slot at once, the launcher caps it to
+one through a documented Claude Code setting, and a contention test with two sessions
+shows the cap holds.
 
-Down is announced, not discovered. A check on the box hits `/health` on a timer and
-posts to a channel the team reads when it changes state; which channel is a config
-value. `localcode status` on a client already says when the endpoint is not there.
+The health check runs from a client Mac, not from the box: a checker on the box cannot
+announce the box losing power or network. It polls `/health` at a configured interval
+with a timeout and a startup grace, posts a change of state in either direction to a
+configured channel, and a test cuts the box off and sees the post.
 
-Each teammate installs once from the README. The two-Mac section 0053 writes covers
-the client; this adds the per-user endpoint file and the check that `smoke` passes
-from their Mac before their first session.
+README's client section points at 0053's endpoint file and takes a teammate from a
+fresh Mac to a passing `smoke` against the GB10 and a first session.
 
 ## Tasks
 
-- [ ] `stop.sh` on the box drains busy slots within a configured bound before stopping the unit, and reports how long it waited
-- [ ] The unit is enabled at boot and its output goes to journald; the log 0018's reader needs is exported from journalctl and TECH records the command
+- [ ] `stop_server` on the box drains busy slots within a configured bound before stopping the unit, and reports how long it waited
+- [ ] The unit is enabled at boot with restart backoff and journald retention set; a reboot is timed to serving and the number recorded in TECH; the log 0018's reader needs is exported from journalctl and a test reads the export
 - [ ] One real chain is measured from `/slots` for how many slots a single session opens at once, and TECH records the number
-- [ ] If a session opens more than one slot, the launcher caps it to one through the harness's concurrency settings, covered by a test on the assembled environment
-- [ ] A timed `/health` check on the box announces a change of state to a configured channel
-- [ ] README's client section takes a teammate from a fresh Mac to a passing `smoke` against the GB10 and a first session
+- [ ] If a session opens more than one slot, the launcher caps it to one through a documented Claude Code setting, and a contention test with two sessions shows it holds
+- [ ] A health check on a client Mac polls `/health` with a configured interval, timeout and grace, posts a change of state either way to a configured channel, and a test cuts the box off and sees the post
+- [ ] README's client section takes a teammate from a fresh Mac to a passing `smoke` against the GB10 and a first session, and says sharing is best effort
