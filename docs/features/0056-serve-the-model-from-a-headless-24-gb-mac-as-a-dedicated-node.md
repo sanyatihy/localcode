@@ -38,13 +38,22 @@ with the numbers recorded in TECH; a node that reads higher than the record is n
 prepared. The reserve in the machine file is that idle reading plus 1 GiB, and the
 raise `gpuraise.sh` applies is total less the reserve.
 
+The node is SSH-only, lid closed. Remote Login is the one service on, restricted to
+the serving user with key authentication only; Screen Sharing, Remote Management, file
+sharing and every other sharing service are off; the application firewall is on in
+stealth mode admitting `sshd` and the server binary only. `pmset` sets `disablesleep 1`
+so the closed lid does not sleep the node, `sleep 0` on power, and `autorestart 1` so
+a power failure ends in a serving node. Wi-Fi stays on and joins from the system
+network profile at the login window, so the node is reachable from anywhere on the
+network; the Thunderbolt bridge is the link the client uses.
+
 Each OS lever is measured on its own, before and after, by the idle reading, and TECH
 records its saving in a table. Levers, in the order they are applied: logged out at
-the login window; Apple Intelligence, Siri and Spotlight indexing off; iCloud and
-every sharing, Handoff and AirPlay service off; Time Machine, automatic updates and
-the update daemon off; Wi-Fi and Bluetooth off, the Thunderbolt bridge being the only
-link; the screen saver and display sleep off with no display attached. A lever whose
-saving reads under 50 MB is dropped from the script and the table says so.
+the login window; Apple Intelligence, Siri and Spotlight indexing off; iCloud, Handoff,
+AirPlay and every sharing service but Remote Login off; Time Machine, automatic
+updates and the update daemon off; Bluetooth off; the screen saver off, and the lid
+closed with no display attached. A lever whose saving reads under 50 MB is dropped
+from the script and the table says so.
 
 Each server lever is measured by the screen, one at a time, from the node config:
 `NO_MMPROJ`, which `serve.sh` gains and passes as `--no-mmproj` (1.02 GB in TECH);
@@ -95,6 +104,8 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 - [ ] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against TECH's record, and exits nonzero when the node reads higher
 - [ ] Each OS lever is measured on its own by the idle reading, TECH records the table, and a lever under 50 MB is dropped from the script
+- [ ] The node answers SSH by key as the serving user and nothing else: a port scan from the laptop shows `sshd` and the server only, and a password login is refused
+- [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the bridge
 - [ ] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [ ] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [ ] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
@@ -104,6 +115,6 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [ ] `config/machine-m5pro-24gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
 - [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 24 GB, with the ceiling written into the machine file
 - [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
-- [ ] README documents the node: `prepare.sh` and its check, the bridge addresses, the daemons, and a `smoke` from the laptop over the bridge
+- [ ] README documents the node: `prepare.sh` and its check, the SSH-only access, the bridge and Wi-Fi addresses, the daemons, and a `smoke` from the laptop over the bridge
 
 ## Log
