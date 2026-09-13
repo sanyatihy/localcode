@@ -105,7 +105,7 @@ hardware, which is why every number here is committed rather than remembered.
   **Measured numbers are recorded with the machine they came from**, and each machine's
   limits live in its own `config/machine*.json` rather than in code. No config may make a
   Mac unusable for the editor and browser its developer is running while the agent works;
-  the GB10 is headless and that rule does not reach it.
+  the GB10 and a Mac kept only to serve are headless, and the rule does not reach them.
 - **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
   quality, and whatever else emerges are candidates, and which one binds depends on the
   envelope — model, quant, context, and the machine. A constraint asserted in advance is
