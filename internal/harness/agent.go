@@ -87,14 +87,6 @@ type Session struct {
 	ResultCap int
 }
 
-// Endpoint is the server the launcher verified, and whether it is this machine's own.
-// Loopback is the driver's classification rather than this package's: one rule decides
-// what counts as this machine, and the sandbox and the refusals answer to the same one.
-type Endpoint struct {
-	URL      string
-	Loopback bool
-}
-
 // DefaultAgent is the harness a chain runs in when nothing says otherwise: the incumbent,
 // which 0010 measured as the one nothing displaces on both axes at once.
 const DefaultAgent = "claude-code"
@@ -103,7 +95,7 @@ const DefaultAgent = "claude-code"
 // project may choose between. A third one is added here and in its own file, and nowhere
 // else — which is the property `TestNoPackageAboveTheAdaptersNamesAHarness` holds.
 var agents = map[string]struct {
-	agent    func(root string, ep Endpoint) (Agent, error)
+	agent    func(root, endpoint string) (Agent, error)
 	recorder func() Recorder
 }{
 	"claude-code": {newClaudeCodeAgent, func() Recorder { return &claudeCodeRecorder{} }},
@@ -120,12 +112,14 @@ func Names() string {
 	return strings.Join(names, ", ")
 }
 
-// NewAgent returns the agent that name asks for, configured from a localcode checkout.
-// It refuses rather than falling back, and names what it drives: a chain run against a
-// different agent from the one asked for is a comparison of nothing.
-func NewAgent(name, root string, ep Endpoint) (Agent, error) {
+// NewAgent returns the agent that name asks for, configured from a localcode checkout and
+// pointed at endpoint, which is always an address on this machine — the driver serves a
+// model on another one there. It refuses rather than falling back, and names what it
+// drives: a chain run against a different agent from the one asked for is a comparison of
+// nothing.
+func NewAgent(name, root, endpoint string) (Agent, error) {
 	if a, ok := agents[name]; ok {
-		return a.agent(root, ep)
+		return a.agent(root, endpoint)
 	}
 	return nil, unknown(name)
 }

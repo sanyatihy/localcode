@@ -1097,9 +1097,9 @@ not. The extension hosting Claude Code has none of that, because the agent runs 
 after the committed file, so `harness/claude-code/claude-code.env` keeps `127.0.0.1:8081`
 as the default for the flow it is sourced into by hand, and a session driven against
 another machine follows the URL the driver checked — `count_tokens` with it, because one
-base URL carries every call. Pi takes its base URL from its provider file instead, so a
-remote endpoint that file does not name is refused rather than served from loopback while
-the rest of the run addresses the other machine.
+base URL carries every call. Pi needs no such variable: it takes its base URL from its
+provider file, and the address that file names is where the driver serves a model on
+another machine.
 
 Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
 other harnesses, not here.
