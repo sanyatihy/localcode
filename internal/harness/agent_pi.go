@@ -35,7 +35,7 @@ type piAgent struct {
 // The same four capabilities the incumbent's session gets, in Pi's spelling.
 const piTools = "read,edit,write,bash"
 
-func newPiAgent(root string) (Agent, error) {
+func newPiAgent(root string, ep Endpoint) (Agent, error) {
 	bin, err := exec.LookPath("pi")
 	if err != nil {
 		return nil, fmt.Errorf("pi is not on PATH: %w", err)
@@ -48,6 +48,9 @@ func newPiAgent(root string) (Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := piServes(piProviderFile(root), ep); err != nil {
+		return nil, err
+	}
 	return &piAgent{bin: bin, root: root, model: model, maxOut: maxOut, selfPath: self}, nil
 }
 
@@ -56,6 +59,25 @@ func piProviderFile(root string) string {
 }
 
 func (p *piAgent) Name() string { return "pi" }
+
+// piServes refuses an endpoint pi would not use. Pi takes its base URL from the committed
+// provider file rather than from a variable, so a remote endpoint that file does not name
+// would send the session to this machine's loopback while everything else in the run
+// addressed the other one — a chain measuring a server nobody chose.
+func piServes(path string, ep Endpoint) error {
+	if ep.URL == "" || ep.Loopback {
+		return nil
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("pi provider file not readable: %w", err)
+	}
+	if strings.Contains(string(body), strings.TrimRight(ep.URL, "/")) {
+		return nil
+	}
+	return fmt.Errorf("%s does not name %s, and pi reads its endpoint from that file: point "+
+		"it at that server, or run this chain against the endpoint it names", path, ep.URL)
+}
 
 // piDeclares reads the two numbers the committed provider file declares about the model:
 // the id pi must be given, and what one reply may generate. That file is the declaration

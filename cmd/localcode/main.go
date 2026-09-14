@@ -28,6 +28,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,6 +182,10 @@ func run(o opts) (int, error) {
 	if err != nil {
 		return 2, err
 	}
+	lo, err := loopback(o.endpoint)
+	if err != nil {
+		return 2, err
+	}
 	if err := ensureServer(root, o.endpoint, o.config, o.noServe); err != nil {
 		return 2, err
 	}
@@ -193,7 +198,7 @@ func run(o opts) (int, error) {
 	if name == "" {
 		name = harness.DefaultAgent
 	}
-	agent, err := harness.NewAgent(name, root)
+	agent, err := harness.NewAgent(name, root, harness.Endpoint{URL: o.endpoint, Loopback: lo})
 	if err != nil {
 		return 2, err
 	}
@@ -361,6 +366,40 @@ func resolveCheckout(flagValue string) (string, error) {
 		return candidate, nil
 	}
 	return "", errors.New("no localcode checkout: install with `make install`, or pass -checkout")
+}
+
+// loopback reports whether the endpoint is this machine's own: `localhost`, any
+// 127.0.0.0/8 address, or `::1`. Anything else is another machine, and everything that
+// differs turns on this one answer — what the sandbox admits, whether a missing server may
+// be started from here, and which harnesses can be pointed at it.
+func loopback(endpoint string) (bool, error) {
+	u, err := parseEndpoint(endpoint)
+	if err != nil {
+		return false, err
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true, nil
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback(), nil
+	}
+	return false, nil
+}
+
+// parseEndpoint refuses a URL nothing here can act on. A scheme and a host are both
+// required rather than accepted from url.Parse: it reads `mac.local:8081` as a scheme and
+// an opaque path, which would leave another machine classified as this one.
+func parseEndpoint(endpoint string) (*url.URL, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("endpoint %q is not a URL: %w", endpoint, err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return nil, fmt.Errorf("endpoint %q is not a URL a server can be reached at: "+
+			"it needs a scheme and a host, as in http://127.0.0.1:8081", endpoint)
+	}
+	return u, nil
 }
 
 // serverUp reports whether the endpoint can serve, rather than whether something is

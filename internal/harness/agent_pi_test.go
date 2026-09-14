@@ -98,3 +98,48 @@ func TestPiRecorderAnswersUnmeasuredRatherThanNothing(t *testing.T) {
 			peak, turns)
 	}
 }
+
+// piCheckout writes the provider file pi is configured by, naming the endpoint given.
+func piCheckout(t *testing.T, server string) string {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "harness", "pi")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "const SERVER = \"" + server + "\";\n" +
+		"export default async function (pi) {\n  pi.registerProvider(\"local\", {\n" +
+		"    models: [\n      {\n        id: \"served/model:Q4\",\n        maxTokens: 4096,\n" +
+		"      },\n    ],\n  });\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "local-provider.js"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// Pi's endpoint is in its provider file, and nothing the launcher passes moves it. A run
+// pointed at another machine while that file names loopback would be scored against a
+// server nobody chose, so it is refused by name.
+func TestPiRefusesARemoteEndpointItsProviderFileDoesNotName(t *testing.T) {
+	onPath(t, "pi")
+	const remote = "http://mac.local:8081"
+
+	root := piCheckout(t, "http://127.0.0.1:8081")
+	_, err := newPiAgent(root, Endpoint{URL: remote})
+	if err == nil {
+		t.Fatal("a remote endpoint the provider file does not name must be refused")
+	}
+	if !strings.Contains(err.Error(), piProviderFile(root)) || !strings.Contains(err.Error(), remote) {
+		t.Errorf("the refusal must name the file to fix and the endpoint: %v", err)
+	}
+
+	// Loopback is what that file already names, so it is not refused.
+	if _, err := newPiAgent(root, Endpoint{URL: "http://127.0.0.1:8081", Loopback: true}); err != nil {
+		t.Errorf("the endpoint the file names must be accepted: %v", err)
+	}
+
+	// And a file pointed at the other machine lifts the refusal.
+	if _, err := newPiAgent(piCheckout(t, remote), Endpoint{URL: remote}); err != nil {
+		t.Errorf("a provider file naming the endpoint must be accepted: %v", err)
+	}
+}
