@@ -66,7 +66,6 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
 - [x] A remote endpoint is served at 127.0.0.1:8081 by the launcher for the run, the sandbox profile is unchanged, a busy port is refused, covered by a test through the proxy and a test on the profile
 - [x] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
 - [x] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
-- [ ] One serving Mac is driven from itself and from the other Mac, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side
 
 ## Log
 - 2026-09-14 — seatbelt takes no host but `*` or `localhost` in a network address: a
@@ -77,3 +76,4 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
   at the address its provider file already names; box 1 was rewritten to say so.
 - 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
 - 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
+- 2026-09-14 — the Mac-to-Mac measurement box moved to 0056: the second Mac is the node that feature prepares, and it cannot be prepared before this merges.
