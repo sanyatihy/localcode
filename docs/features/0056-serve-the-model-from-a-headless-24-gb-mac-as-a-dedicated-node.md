@@ -114,7 +114,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
 - [x] Three LaunchDaemons under `scripts/node/` hold the link address, apply the cap as root, and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
-- [ ] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
+- [x] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
 - [ ] `config/node.env` carries the levers and the context the screen settled
 - [x] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
 - [x] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
@@ -171,3 +171,9 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   wired unchanged. The ceiling and the floor the machine file carries are unaffected — they
   come from the top rung, which was walked rested — and the node's ingest is now comparable
   with the laptop's at every matched rung.
+- 2026-09-14 — decode is recorded as a curve over prompt depth rather than per rung, because
+  0034 measured that decode falls with the depth a call works at and not with the context the
+  server reserves: per-rung decode would re-measure that at nine contexts. The curve is
+  0017's, on node.env with the draft head on and off at ~200, 8k, 16k and 32k. The screen's
+  per-lever decode column stays one sample a cell, with the spread two settings-identical
+  cells put on it.

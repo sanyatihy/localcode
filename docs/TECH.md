@@ -460,9 +460,8 @@ inside the sampling window against the prefix the fill left — 43,740 of its to
 reused — so it reads decode at about 44k of depth on a cache the fill warmed. One sample is
 all it is: the baseline and the cell that restates llama.cpp's own default differ in no
 setting and sit **5.9% apart**, which is the spread anything below cannot be distinguished
-from. The draft head's 19.62 against that band is the only reading that clears it, and
-whether it survives a proper measurement is what 0056's decode-by-depth curve asks; it is
-not run yet, and no adoption rests on this column.
+from. The draft head's 19.62 is the only reading that clears it, and the curve below is what
+it is read from instead — no adoption rests on this column.
 
 **The context ladder, `config/node.env` with only the context and KV type moved**, each rung
 filled to 90% of its context and sampled through the fill
@@ -532,6 +531,34 @@ that decides what a session costs at depth, so this is the node's whole case. Th
 columns are not the same quantity — peak wired here against the laptop's peak RSS, which
 understates KV on Apple Silicon — and the node serves with the projector off where the
 laptop's rows carry it, so about a gigabyte of the difference at a rung is that.
+
+**Decode by depth, with the draft head and without it**, measured the way 0017 measured the
+laptop's: `scripts/pair.sh` over the same fixtures, three repeats a side, one session per
+depth, `config/node.env` against the same file with `SPEC_TYPE="draft-mtp"` and depth 3
+([rows](data/2026-09-14-m5max-36gb-curve.jsonl)). Client-side decode, from the gap to the
+first token, so prefill is not in it:
+
+| prompt depth | node | node + head | ratio | acceptance | laptop, b10450 + fork | its ratio |
+|---|---|---|---|---|---|---|
+| ~200 (the ranking suite) | 0.0474 s/tok | 0.0252 | **1.88x** | 3.88 | 0.1050 | 1.57x |
+| 8 000 | 0.0516 | 0.0280 | 1.84x | 3.96 | 0.1181 | 1.40x |
+| 16 000 | 0.0546 | 0.0310 | 1.76x | 3.97 | 0.1348 | 1.34x |
+| 32 000 | 0.0601 | 0.0359 | **1.67x** | 3.97 | 0.1700 | 1.26x |
+
+**The node decodes 2.6x faster than the laptop and drafts at the same ratio.** The laptop's
+columns above are build 10450 and the fork, which is the pair 0017 published; on stock 10809
+the laptop re-read 0.1591 s/tok at 32,000 and **1.67x** — the same ratio the node reads at
+that depth on the same stock build, against 0.0601 s/tok. So the head's gain is a property of
+the mechanism and the build, and the 2.6x is the machine.
+
+**Every probe hashes `0f4045cad664f4ac…`, on both sides at all four depths**, which is the
+same hash the laptop's arms produced: the drafted decoder emits the text the undrafted one
+does, and that is what licenses reading the ratio at all. Swap delta is 0 on all 80 rows.
+
+**The head clears the 1.5x bar at every depth measured here**, where on the laptop it cleared
+it only at the top of the context. What it costs on this node is 1.20 GB of wired memory out
+of 8.89 GB of headroom at 49,152 — see the screen table — and it loads at a context the
+laptop's allocator refuses it at.
 
 **65,536 serves here and is refused there**, and not because of the silicon. The laptop
 wires 21.82–22.08 GB at that rung against the 21.33 GiB cap Metal derives and fails on the
