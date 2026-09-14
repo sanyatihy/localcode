@@ -108,7 +108,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the bridge
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
-- [ ] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
+- [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
 - [ ] Two LaunchDaemons under `scripts/node/` apply the cap as root and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
 - [ ] Each server lever is screened one at a time at 32,768 filled with a saved prefix, and TECH records peak wired, headroom and decode per lever
 - [ ] `config/node-32k.env` carries the levers the screen settled, and TECH records whether Q4_K_M fits on 24 GB at 32,768 or 16,384, or does not fit

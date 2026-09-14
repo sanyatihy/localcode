@@ -47,6 +47,14 @@ case "${1:-}" in
     ;;
   *)
     want="$1"
+    # A raise to the cap already in force is what a restart asks for: the LaunchDaemon on the
+    # node applies it at boot, and a serving daemon that crashes and comes back finds its own
+    # sysctl there. Refusing that would fail the boot path on its own earlier success, so it
+    # is a no-op rather than an error, and nothing touches the sysctl.
+    if [ "$current_source" = "sysctl" ] && [ "$want" -eq "$current_mb" ]; then
+      echo "gpuraise: $current_mb MiB is already set; nothing to do" >&2
+      exit 0
+    fi
     # A raise on top of a raise cannot be checked: gpulimit reports the sysctl once one is
     # set, so the kernel's own derivation — the floor a lowering would go under — is no
     # longer readable. Reset first and the next call sees it again.
