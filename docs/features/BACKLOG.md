@@ -146,3 +146,10 @@ trigger nobody watches is not an idea, it is a hedge.
   measured the chain at 32,768 by passing the flag. Whichever way it is settled, the default
   now wants to be the stock config rather than the fork one. Promote when: a chain is started
   without `-config` and the context it gets is questioned.
+- **A session whose transcript cannot be found is recorded as costing nothing** — `chain.Cost`
+  answers `-1, 0` when no transcript exists, the gate never sees the ceiling, and every call
+  lands in one turn, so the session runs until the server refuses it (seen on the first node,
+  where the sandbox had dropped `~/.claude`; that cause is fixed, the silence is not). Promote
+  when: the next launcher change touches the gate — a missing transcript should end the
+  session with a named reason, not a zero.
+
