@@ -17,6 +17,7 @@ A variant is a new file, never an edit to an existing one.
 | [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
 | [`mtp-32k-stock.env`](mtp-32k-stock.env) | 32 768 | `mtp-32k.env` on the binary on PATH. **Use this one**: 0051 measured stock drafting with the same head, at 1.18x the fork's decode |
 | [`driver-mtp-32k-stock.env`](driver-mtp-32k-stock.env) | 32 768 | `driver-mtp-32k.env` on the binary on PATH, and the driver config to use for the same reason |
+| [`node-32k.env`](node-32k.env) | 32 768 | the dedicated 24 GB node (0056): `driver-mtp-32k-stock.env` with the projector off. The rest of its levers wait on that feature's screen |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
 

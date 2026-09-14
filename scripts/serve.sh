@@ -34,6 +34,13 @@ args=(
 # requests, so what a run cost is only countable at the server: 0010 reads the token
 # counters either side of a run and the difference is that run's.
 [ "${METRICS:-0}" = "1" ] && args+=(--metrics)
+# The multimodal projector the repo ships beside the weights, which `-hf` pulls and loads
+# for a text-only flow. 1.02 GB of memory nothing here uses, and on a 24 GB machine that is
+# context: the node config sets it, a machine with room leaves it alone.
+[ "${NO_MMPROJ:-0}" = "1" ] && args+=(--no-mmproj)
+# Pin the weights rather than letting the kernel page them. Whether it changes peak wired or
+# decode is a reading, not an assumption — 0056 screens it — so it is a lever a config sets.
+[ "${MLOCK:-0}" = "1" ] && args+=(--mlock)
 
 # Optional serving defaults, absent from every config the scorer drives. The scorer
 # sends sampling and the thinking toggle on each request; an editor agent sends its
