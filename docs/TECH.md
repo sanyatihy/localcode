@@ -75,6 +75,11 @@ unset, and that is a decision rather than an omission: see
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
 
+**`HOST` from the environment wins over the config's**, and the banner prints what was
+bound. Every committed config keeps `HOST="127.0.0.1"`, so a machine serving the network
+says so where the server is started — `HOST=0.0.0.0 make serve CONFIG=...` — rather than by
+editing a file that records what a measurement was taken with.
+
 ### Baseline, as measured 2026-08-17
 
 | | |
