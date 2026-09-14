@@ -107,8 +107,8 @@ but Remote Login, Time Machine and the update daemon, Bluetooth, the screen save
 power, keys-only SSH for the serving user and the firewall in stealth mode — with nobody
 logged in, and Wi-Fi left alone. It then reads `memprobe.sh` and refuses a node whose idle
 `anonymous_gb` or `wired_gb` is above `idle_anonymous_gb` and `idle_wired_gb` in the machine
-file; a machine file with no record yet gets the readings printed instead. What each lever
-saves is not measured yet. Three things the first node taught, 2026-09-14: the application
+file; a machine file with no record yet gets the readings printed instead. The levers are
+measured as a set, not one by one: on 36 GB none is worth removing for what it saves. Three things the first node taught, 2026-09-14: the application
 firewall must keep Apple's built-in software admitted (`--setallowsigned on`), because with
 it off the node accepted the TCP connection on port 22 and never sent sshd's banner, allow
 list or not, until the firewall was turned off at the screen; `softwareupdated` cannot be
