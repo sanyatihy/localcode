@@ -72,6 +72,11 @@ unset, and that is a decision rather than an omission: see
 [the prefill batch](#the-prefill-batch-was-swept-and-the-default-kept). The defaults are
 2048 logical and 512 physical.
 
+**A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
+`--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
+flow never uses (1.02 GB resident); `MLOCK=1` passes `--mlock`. Both are absent from every
+config a 32 GB desk serves, and `config/node-32k.env` sets the first.
+
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
 
