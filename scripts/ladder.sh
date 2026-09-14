@@ -204,16 +204,10 @@ PY
   wait "$sampler" 2>/dev/null || true
   filled=$(memprobe_json)
 
-  # A rung passes only when every slot filled: one failure among four is the whole cell's
-  # answer, not three quarters of one.
-  outcome=ok
-  slot=1
-  while [ "$slot" -le "$slots" ]; do
-    if grep -q '"error"' "/tmp/ladder-fill-resp-$slot.json" 2>/dev/null; then outcome=rejected; fi
-    if [ "$(cat "/tmp/ladder-fill-http-$slot")" = "000" ]; then outcome=request_failed; fi
-    slot=$(( slot + 1 ))
-  done
-  pgrep -f llama-server >/dev/null || outcome=died
+  # Whether the server is still there at all. The rest of the verdict is arithmetic over the
+  # replies and the swap delta, and is applied where those are read.
+  alive=True
+  server_alive || alive=False
 
   python3 - <<PY >> "$OUT"
 import json, sys
@@ -256,17 +250,54 @@ for i in range(1, $slots + 1):
     except (OSError, ValueError):
         rates.append(0)
 
+# The pass rule, applied rather than implied. A slot filled only if it answered HTTP 200 with
+# a body that parses and has content in it: a 500 with an empty body is a failure the status
+# line alone reports as one and a check for the word "error" does not see at all. A rung is
+# every slot filling, with no failed request and no swap growth — a run that swapped measured
+# the pager, which the vision calls void rather than slow, and is scored here exactly as
+# scripts/screen.sh scores it.
+def slot_outcome(i):
+    try:
+        code=open("/tmp/ladder-fill-http-%d" % i).read().strip()
+    except OSError:
+        code="000"
+    try:
+        body=json.load(open("/tmp/ladder-fill-resp-%d.json" % i))
+    except (OSError, ValueError):
+        body=None
+    if code == "000":
+        return "request_failed"
+    if body is not None and "error" in body:
+        return "rejected"
+    if code != "200":
+        return "http_" + code
+    if body is None:
+        return "unparseable_reply"
+    choices=body.get("choices") or [{}]
+    if not (choices[0].get("message") or {}).get("content"):
+        return "empty_reply"
+    return "ok"
+
+slot_outcomes=[slot_outcome(i) for i in range(1, $slots + 1)]
+swap_delta_total=round(f["swap_used_mb"]-b["swap_used_mb"], 1)
+outcome=next((o for o in slot_outcomes if o != "ok"), "ok")
+if not $alive:
+    outcome="died"
+elif outcome == "ok" and swap_delta_total > 0:
+    outcome="void_swapped"
+
 print(json.dumps({
   "condition": "$CONDITION", "cell": "$name", "ctx": $ctx, "kv": "$kv",
   "slots": $slots, "per_slot_ctx": $per_slot,
   "ubatch": ${ubatch:-None}, "batch": ${batch:-None},
-  "fill_target_tokens": $target, "outcome": "$outcome", "http": "$http",
+  "fill_target_tokens": $target, "outcome": outcome, "http": "$http",
+  **({"slot_outcomes": slot_outcomes} if len(slot_outcomes) > 1 else {}),
   "fill_seconds": $fill_seconds, "prompt_per_second": rates[0],
   **({"prompt_per_second_slots": rates} if len(rates) > 1 else {}),
   "before": b, "loaded": l, "filled": f,
   "swap_delta_load_mb": round(l["swap_used_mb"]-b["swap_used_mb"], 1),
   "swap_delta_fill_mb": round(f["swap_used_mb"]-l["swap_used_mb"], 1),
-  "swap_delta_total_mb": round(f["swap_used_mb"]-b["swap_used_mb"], 1),
+  "swap_delta_total_mb": swap_delta_total,
   "peak_rss_gb": max(l["llama_rss_gb"], f["llama_rss_gb"]),
   "free_at_peak_gb": min(l["free_gb"], f["free_gb"]),
   "wired_peak_gb": (round(wired_peak, 3) if wired_peak is not None else None),
@@ -275,8 +306,8 @@ print(json.dumps({
   "wired_samples": len(series) - 2,
   **desktop,
 }))
-print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%s  headroom_min=%s"
-      % (desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]),
+print("  -> %s  desktop=%s  peak_rss=%.2f GB  wired_peak=%s  headroom_min=%s"
+      % (outcome, desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]),
          gb(wired_peak), gb(wired_headroom_min)),
       file=sys.stderr)
 PY
