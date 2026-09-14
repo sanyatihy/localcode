@@ -115,7 +115,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
 - [x] Three LaunchDaemons under `scripts/node/` hold the link address, apply the cap as root, and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
 - [x] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
-- [ ] `config/node.env` carries the levers and the context the screen settled
+- [x] `config/node.env` carries the levers and the context the screen settled
 - [x] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
 - [x] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
 - [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
@@ -177,3 +177,9 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   0017's, on node.env with the draft head on and off at ~200, 8k, 16k and 32k. The screen's
   per-lever decode column stays one sample a cell, with the spread two settings-identical
   cells put on it.
+- 2026-09-14 — node.env's settings do not move: the screen found one lever worth setting and
+  it was already set. The projector stays off, CACHE_RAM, UBATCH_SIZE, the KV type and MLOCK
+  are all left alone with the readings that say why, and the context stays 49,152 because the
+  ladder measured what the machine allows and 0008 chose this for what a session needs. The
+  draft head clears the adoption bar on decode here and is still not set: what it does to a
+  chain on this node is unmeasured.
