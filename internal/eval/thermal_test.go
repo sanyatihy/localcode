@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,18 @@ func TestThermalReadsACap(t *testing.T) {
 	s := parseThermal("CPU_Scheduler_Limit \t= 100\nCPU_Available_CPUs \t= 12\nCPU_Speed_Limit \t= 62\n")
 	if !s.OK || s.SpeedLimit != 62 {
 		t.Fatalf("got %+v, want 62", s)
+	}
+}
+
+// Off macOS nothing answers, and the sample has to say so. A 100 there would read as a
+// machine that was never warned — the healthy state — and every capped run on the GB10
+// would be recorded as clean.
+func TestThermalIsUnknownWhereNothingAnswers(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("pmset answers here; the unknown path is what the Arm Linux gate walks")
+	}
+	if s := sampleThermal(); s.OK || s.SpeedLimit != 0 {
+		t.Fatalf("got %+v, want an unanswered sample", s)
 	}
 }
 

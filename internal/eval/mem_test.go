@@ -25,10 +25,16 @@ func TestPreflightCarriesAndRefuses(t *testing.T) {
 }
 
 // The sampler must read wired and anonymous off vm_stat's labels, and total off hw.memsize.
+// Where vm_stat is absent the sample is not OK and carries no numbers at all: a plausible
+// zero on a row reads as a machine with nothing wired, which is the reading a preflight
+// would carry rather than refuse.
 func TestSampleReadsWiredAndAnonymous(t *testing.T) {
 	s := sampleMemory()
 	if !s.OK {
-		t.Skip("platform did not answer")
+		if s.TotalGB != 0 || s.WiredGB != 0 || s.AnonymousGB != 0 || s.FreeGB != 0 || s.SwapUsedMB != 0 {
+			t.Fatalf("a platform that did not answer reported numbers anyway: %+v", s)
+		}
+		return
 	}
 	if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 {
 		t.Errorf("missing a headroom input: %+v", s)
