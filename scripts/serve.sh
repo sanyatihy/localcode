@@ -6,8 +6,15 @@ set -euo pipefail
 CONFIG="${1:-config/tuned.env}"
 [ -f "$CONFIG" ] || { echo "no such config: $CONFIG" >&2; exit 2; }
 
+# HOST from the environment wins over the config's, captured before the config is sourced
+# over it. Every committed config keeps 127.0.0.1, so a machine that serves the network
+# says so where the server is started rather than by editing what a measurement was taken
+# with. The banner below prints what was actually bound.
+HOST_ENV="${HOST:-}"
+
 # shellcheck source=/dev/null
 set -a; . "$CONFIG"; set +a
+if [ -n "$HOST_ENV" ]; then HOST="$HOST_ENV"; fi
 
 for var in MODEL_HF HOST PORT CTX_SIZE CACHE_TYPE_K CACHE_TYPE_V FLASH_ATTN N_GPU_LAYERS PARALLEL; do
   [ -n "${!var:-}" ] || { echo "$CONFIG is missing $var" >&2; exit 2; }

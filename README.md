@@ -167,6 +167,29 @@ caches and agent state. Reads exclude credential directories such as `~/.ssh`.
 Additional writable paths go in `~/.config/localcode/writable`, one per line.
 See [the sandbox boundary](docs/TECH.md#the-local-model-runs-in-any-repository-sandboxed).
 
+### Serving from another Mac
+
+Serve on the Mac with the memory, bound beyond loopback:
+
+```sh
+HOST=0.0.0.0 make serve CONFIG=config/agent.env
+```
+
+Committed configs keep `HOST="127.0.0.1"`; the environment overrides it for that run and
+the banner prints what was bound. From the other Mac on the same trusted network, check
+the endpoint and drive it:
+
+```sh
+ENDPOINT=http://mac.local:8081 make smoke
+localcode -endpoint http://mac.local:8081 "fix the failing test"
+```
+
+Write that URL to `~/.config/localcode/endpoint` to make it this machine's default;
+`-endpoint` still wins, and `localcode status` reports which was used. A remote endpoint is
+never started or stopped from here: run `make serve` and `localcode stop` on the machine
+that serves. The session reaches that endpoint and nothing else. Nothing authenticates, so
+serve only on a network you trust.
+
 ## Checks and benchmarks
 
 From the Localcode checkout:

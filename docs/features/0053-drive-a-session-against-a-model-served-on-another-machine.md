@@ -65,5 +65,5 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
 - [x] A missing remote server is refused with the command to run there, `localcode stop` refuses a remote endpoint, and a test shows neither starts a process
 - [x] The sandbox admits the endpoint's resolved addresses and port beyond loopback and nothing else, covered by a test on the written profile and by one session that reaches the endpoint and is denied another host
 - [x] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
-- [ ] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
+- [x] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
 - [ ] One serving Mac is driven from itself and from the other Mac, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side
