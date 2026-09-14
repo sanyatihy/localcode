@@ -187,8 +187,9 @@ localcode -endpoint http://mac.local:8081 "fix the failing test"
 Write that URL to `~/.config/localcode/endpoint` to make it this machine's default;
 `-endpoint` still wins, and `localcode status` reports which was used. A remote endpoint is
 never started or stopped from here: run `make serve` and `localcode stop` on the machine
-that serves. The session reaches that endpoint and nothing else. Nothing authenticates, so
-serve only on a network you trust.
+that serves. The session reaches loopback and, through the launcher, that endpoint, and
+nothing else; port 8081 on this machine must be free while the run lasts. Nothing
+authenticates, so serve only on a network you trust.
 
 ## Checks and benchmarks
 
