@@ -444,6 +444,34 @@ func TestSandboxProfileConfinesWritesAndLeavesOrdinaryReadsAlone(t *testing.T) {
 	}
 }
 
+// The agent's own state directory is writable on a machine where the agent has never
+// run. Absent, it resolves to nothing and would be dropped from the profile — and an
+// agent that cannot write its transcript is an agent whose sessions cost nothing that
+// can be read, which is how a session ran past the served window unbudgeted.
+func TestSandboxProfileMakesTheAgentStateDirectoryItAllows(t *testing.T) {
+	state, cwd := t.TempDir(), t.TempDir()
+	agentState := filepath.Join(t.TempDir(), "never-run", "config")
+
+	path, err := writeSandboxProfile(state, cwd, false, []string{agentState})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(agentState); err != nil {
+		t.Fatalf("the agent's state directory must exist: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(agentState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), sbplString(resolved)) {
+		t.Fatalf("the agent's state directory must be writable, resolved:\n%s", body)
+	}
+}
+
 // The credential roots reach the profile denied, resolved, and after the allow — the
 // order is the policy, because seatbelt applies the last rule that matches.
 func TestSandboxProfileDeniesReadingTheCredentialRoots(t *testing.T) {
