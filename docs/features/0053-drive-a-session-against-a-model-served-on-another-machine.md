@@ -67,3 +67,6 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
 - [x] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
 - [x] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
 - [ ] One serving Mac is driven from itself and from the other Mac, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side
+
+## Log
+- 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
