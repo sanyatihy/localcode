@@ -532,6 +532,39 @@ columns are not the same quantity — peak wired here against the laptop's peak 
 understates KV on Apple Silicon — and the node serves with the projector off where the
 laptop's rows carry it, so about a gigabyte of the difference at a rung is that.
 
+**The tier-1 suite on the node, under the laptop's settings** — `config/tuned.env` at
+32,768, thinking off, model-card sampling sent per request, three passes over the nine
+ranking fixtures, and the same suite again with the draft head as the only thing moved
+([rows](data/2026-09-14-m5max-36gb-tier1.jsonl)):
+
+| | laptop, b10450 | node, b10809 | node + head |
+|---|---|---|---|
+| pass | 25/27 | 24/27 | 23/27 |
+| tool-call valid | 12/12 | 12/12 | 12/12 |
+| cold prefill | 102.9 tok/s (95–114) | **374.8** (308–429) | 330.2 (293–362) |
+| decode, server-reported | 9.69 tok/s (9.18–11.94) | **20.62** (20.06–21.08) | **37.01** (32.96–44.07) |
+| decode, client-side | — | 0.0479 s/tok | 0.0264 — **1.81x**, acceptance 3.87 |
+| suite wall, three passes | 298.8 s | **132.9 s** | **74.6 s** |
+| peak wired | 20.89 GB † | 20.45 GB | 21.48 GB |
+| swap Δ | 0.0 MB | 0.0 MB | 0.0 MB |
+
+† the laptop's tier-1 rows carry no memory at all; 20.89 GB is 0014's reading of the same
+config serving at 32k, with the projector, and is the closest comparable figure rather than
+the same measurement.
+
+**The node finishes the suite in 45% of the laptop's wall clock and scores the same.** The
+quality columns are not moved by the machine, which is what should happen and is worth
+having checked: every failure on either machine is one of the two tasks TECH already names
+as the only ones that discriminate — the contradicted specification and the read-only
+constraint — and tool-call validity is 12/12 in all three columns. The head costs one more
+`fail_wrong_tool` on `toolcall-constraint-readonly` and the greedy probes hash
+`0f4045cad664f4ac` on both sides, so that is the suite's own noise on a task measured at
+8/12 on the laptop, not a distribution the head changed.
+
+**Part of the prefill gap is the build.** The laptop's rows are build 10450 and the node runs
+10809, which the laptop's own re-walk measured as ~9% at this context. The build-matched
+comparison is the ladder's: 73 s against 297 s to fill 32,768 cold, 4.1x.
+
 **Decode by depth, with the draft head and without it**, measured the way 0017 measured the
 laptop's: `scripts/pair.sh` over the same fixtures, three repeats a side, one session per
 depth, `config/node.env` against the same file with `SPEC_TYPE="draft-mtp"` and depth 3
