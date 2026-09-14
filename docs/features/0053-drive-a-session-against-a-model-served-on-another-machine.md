@@ -76,3 +76,4 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
   box 4 was rewritten to that outcome. Pi needs no refusal either, since the proxy answers
   at the address its provider file already names; box 1 was rewritten to say so.
 - 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
+- 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
