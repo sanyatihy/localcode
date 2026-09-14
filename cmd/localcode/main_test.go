@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -298,7 +299,7 @@ func TestStatusReportsWhatIsServed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	code, err := status(srv.URL)
+	code, err := status(&bytes.Buffer{}, srv.URL, "from -endpoint")
 	if err != nil || code != 0 {
 		t.Fatalf("a serving endpoint must report 0: code %d err %v", code, err)
 	}
@@ -311,7 +312,7 @@ func TestStatusAnswersNoWhenNothingIsServing(t *testing.T) {
 	url := srv.URL
 	srv.Close()
 
-	code, err := status(url)
+	code, err := status(&bytes.Buffer{}, url, "from -endpoint")
 	if err != nil || code != 1 {
 		t.Fatalf("a dead endpoint must answer 1 with no error: code %d err %v", code, err)
 	}
@@ -1298,5 +1299,76 @@ func TestAnEndpointThatDoesNotResolveIsRefused(t *testing.T) {
 
 	if _, err := writeSandboxProfile(t.TempDir(), t.TempDir(), "http://mac.local:8081", false, nil); err == nil {
 		t.Fatal("an endpoint that does not resolve must be refused")
+	}
+}
+
+// The machine's own default, so a laptop that drives the other Mac says so once rather
+// than on every invocation. The flag still wins, because a session run against something
+// else is a one-off and not a change of machine.
+func TestTheEndpointFileIsTheDefaultAndTheFlagWinsOverIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	endpoint, from, err := resolveEndpoint("")
+	if err != nil || endpoint != defaultEndpoint {
+		t.Fatalf("with no file the default stands: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, "default") {
+		t.Errorf("the source must say it was the default: %q", from)
+	}
+
+	path := filepath.Join(home, ".config", "localcode", "endpoint")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("http://mac.local:8081\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, from, err = resolveEndpoint("")
+	if err != nil || endpoint != "http://mac.local:8081" {
+		t.Fatalf("the file is the default: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, path) {
+		t.Errorf("the source must name the file it was read from: %q", from)
+	}
+
+	endpoint, from, err = resolveEndpoint("http://127.0.0.1:9999")
+	if err != nil || endpoint != "http://127.0.0.1:9999" {
+		t.Fatalf("the flag must win over the file: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, "-endpoint") {
+		t.Errorf("the source must name the flag: %q", from)
+	}
+
+	// A file holding nothing but a newline is not an endpoint.
+	if err := os.WriteFile(path, []byte("\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if endpoint, _, err := resolveEndpoint(""); err != nil || endpoint != defaultEndpoint {
+		t.Fatalf("an empty file leaves the default: %q %v", endpoint, err)
+	}
+}
+
+// Which endpoint answered is half the report; where it came from is the other half, since
+// three places can name one and only one of them was typed just now.
+func TestStatusReportsWhereTheEndpointCameFrom(t *testing.T) {
+	var out bytes.Buffer
+	if code, err := status(&out, healthy(t, http.StatusOK), "from /home/x/.config/localcode/endpoint"); err != nil || code != 0 {
+		t.Fatalf("status: code %d err %v", code, err)
+	}
+	if !strings.Contains(out.String(), "from /home/x/.config/localcode/endpoint") {
+		t.Errorf("status must say which source named the endpoint: %q", out.String())
+	}
+
+	// And when nothing is serving, which is when the question is usually asked.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	out.Reset()
+	if code, _ := status(&out, url, "from -endpoint"); code != 1 {
+		t.Fatalf("a dead endpoint must answer 1, got %d", code)
+	}
+	if !strings.Contains(out.String(), "from -endpoint") {
+		t.Errorf("a missing server must still say where the endpoint came from: %q", out.String())
 	}
 }

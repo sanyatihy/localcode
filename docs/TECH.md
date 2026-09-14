@@ -1667,6 +1667,11 @@ remote server is refused naming `HOST=0.0.0.0 make serve CONFIG=...` to run wher
 is, and `localcode stop` against a remote endpoint refuses rather than killing a process
 this machine does not own. Neither refusal leaves anything running or stopped here.
 
+**`~/.config/localcode/endpoint` is this machine's default endpoint**, one URL in a file
+beside `writable`, and `-endpoint` wins over it. A file rather than a variable because the
+sandbox strips the session's environment. `localcode status` reports which of the three
+named the endpoint it asked — the flag, that file, or the built-in `127.0.0.1:8081`.
+
 **A denied write is explained by the session, not by the launcher.** claude gives a tool's
 stderr to the model rather than passing it through, so the process that could print a hint
 is the one that never learns the write was refused. The sandbox is described in the
