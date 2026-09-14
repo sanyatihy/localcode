@@ -31,6 +31,23 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`promptwall.sh`](promptwall.sh) | find where Claude Code refuses a prompt against the context it was declared, by padding one to an exact token count and reading whether it was sent |
 | [`claude-code-settings.sh`](claude-code-settings.sh) | generate the project-scoped settings file the editor extension reads |
 
+## The node
+
+[`node/`](node/) is the dedicated 24 GB serving node (0056) and runs nowhere else: both
+scripts refuse unless `LOCALCODE_NODE=1` says the machine is one.
+
+| script | what it does |
+|---|---|
+| [`node/prepare.sh`](node/prepare.sh) | apply every OS lever the node serves under, then read what macOS keeps idle and check it against the machine file's record |
+| [`node/cap.sh`](node/cap.sh) | apply the GPU wired cap as root at boot: total memory less the node machine file's `reserve_gb` |
+| [`node/install.sh`](node/install.sh) | write this checkout's path and the serving user into the two plists, install them in `/Library/LaunchDaemons` and bootstrap them |
+
+`com.localcode.gpucap` runs `cap.sh` as root, because the sysctl needs root and does not
+survive a reboot; `com.localcode.serve` runs `serve.sh` on `config/node-32k.env` as the
+serving user with `HOST=0.0.0.0` and restarts it when it fails. `stop_server` boots that
+service out before stopping the process, or KeepAlive starts another one — under `sudo`,
+since booting a system service out needs root.
+
 Three of them take the machine's own answer rather than a list somebody typed:
 
     ./scripts/ladder.sh                                  # every rung rungs.sh derives, at the base KV type

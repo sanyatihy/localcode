@@ -191,6 +191,50 @@ that serves. The session reaches loopback and, through the launcher, that endpoi
 nothing else; port 8081 on this machine must be free while the run lasts. Nothing
 authenticates, so serve only on a network you trust.
 
+### Dedicated node
+
+A Mac kept only to serve: no desk, lid closed, reachable by SSH. Install the dependencies
+and this checkout on it as in [Getting started](#getting-started), then run everything below
+on that machine, logged out at the login window.
+
+Apply the serving configuration. Root is not enough for the Remote Login levers: grant the
+terminal or SSH client you run this from Full Disk Access in System Settings › Privacy &
+Security first.
+
+```sh
+sudo LOCALCODE_NODE=1 SERVE_USER=<user> scripts/node/prepare.sh
+```
+
+It turns off Spotlight, Siri, Apple Intelligence, Handoff, AirPlay, Bluetooth, Time Machine,
+automatic updates, the screen saver, sleep on power and every sharing service but Remote
+Login; it leaves Wi-Fi alone. It then prints what macOS still keeps with nobody logged in and
+refuses a node reading above the record in [`config/machine-m5pro-24gb.json`](config/machine-m5pro-24gb.json).
+Both node scripts refuse without `LOCALCODE_NODE=1`, because they ruin a machine somebody
+works at.
+
+Install the two daemons:
+
+```sh
+sudo LOCALCODE_NODE=1 SERVE_USER=<user> scripts/node/install.sh
+```
+
+`com.localcode.gpucap` applies the GPU wired cap as root at every boot; `com.localcode.serve`
+serves [`config/node-32k.env`](config/node-32k.env) as the serving user bound to `0.0.0.0`
+and restarts it if it fails. Both log to `/Library/Logs/localcode/`. Stop the server with
+`sudo scripts/stop.sh`, which boots the daemon out; stopping the process leaves the daemon
+loaded and ready to serve again.
+
+Access is SSH by key as the serving user. Password authentication is off, no other service
+answers, and nothing authenticates the endpoint — serve only on a network you trust.
+
+The node's addresses are manual and recorded here: Thunderbolt bridge `<unset>`, Wi-Fi
+`<unset>`. Drive it from the laptop over the bridge:
+
+```sh
+ENDPOINT=http://<bridge address>:8081 make smoke
+localcode -endpoint http://<bridge address>:8081 "fix the failing test"
+```
+
 ## Checks and benchmarks
 
 From the Localcode checkout:

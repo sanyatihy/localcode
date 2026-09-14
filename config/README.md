@@ -44,6 +44,9 @@ only ever disagree with it.
   `desk_profiles[].ceiling_tokens`; `reserve_gb` is read by `scripts/gpuraise.sh` and
   `scripts/rungs.sh` and by nothing in Go; `machine`, `note` and `why` are prose, since JSON
   has no comments.
+- [`machine-m5pro-24gb.json`](machine-m5pro-24gb.json) — the dedicated node's limits (0056),
+  and **a placeholder**: every number in it is unmeasured, and the feature's remaining boxes
+  replace them with readings taken on the node.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
   back. All three are read; a profile naming a mechanism the scorer cannot perform is refused
