@@ -95,6 +95,10 @@ laptop sleeps: both lids closed and reopened on 2026-09-14 left the node awake (
 log shows no sleep after preparation, and `disablesleep` held) but with no USB device
 presented until a login at its screen. A USB-linked node therefore survives its own lid
 closing and not the laptop's; a Thunderbolt bridge is what removes the login.
+With its own lid closed and the laptop open, the node served and passed `smoke` over the
+cable on 2026-09-15. A pulled power cable does nothing to it: the node is a MacBook and
+runs on its battery, so `autorestart` covers only a battery that has drained, and the
+recovery test is a hard restart from the power button.
 
 **A clean node is installed by `scripts/node/bootstrap.sh`**, which is the whole path from a
 new macOS to a checkout that can serve: the Command Line Tools through `softwareupdate`
