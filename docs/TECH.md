@@ -472,9 +472,9 @@ delta:
 
 | ctx | peak wired | headroom to the cap | headroom, total less wired and anon | cold ingest | prompt tok/s | swap Δ |
 |---|---|---|---|---|---|---|
-| 8 192 | 18.40 GB | 11.60 GB | 16.48 GB | 64 s | 115.4 | 0.0 MB |
-| 16 384 | 18.71 | 11.29 | 16.17 | 117 s | 126.5 | 0.0 |
-| 32 768 | 19.32 | 10.68 | 15.54 | 224 s | 131.8 | 0.0 |
+| 8 192 † | 18.22 GB | 11.78 GB | 15.66 GB | 14 s | 539.9 | 0.0 MB |
+| 16 384 † | 18.52 | 11.48 | 15.35 | 31 s | 476.6 | 0.0 |
+| 32 768 † | 19.33 | 10.67 | 14.72 | 73 s | 404.0 | 0.0 |
 | 49 152 | 19.92 | 10.08 | 15.27 | 127 s | 347.5 | 0.0 |
 | 65 536 | 20.52 | 9.47 | 14.66 | 213 s | 277.1 | 0.0 |
 | 81 920 | 21.14 | 8.86 | 14.01 | 316 s | 233.8 | 0.0 |
@@ -497,31 +497,41 @@ than left to finish: the rung is already several times outside the ingest budget
 completed row would add is the exact size of a number nobody will wait for. It is recorded
 as stopped, not as failed — nothing on that machine refused it.
 
-**The matched rungs are not comparable with the laptop's yet**, and the reason is in the
-node's own rows. 8,192, 16,384 and 32,768 were walked immediately after the 196,608 rung was
-killed, at the end of an hour of continuous prefill, and they read **115–132 tok/s** where
-49,152 and everything above it — walked from an idle machine — read 143–348. The per-batch
-log is where it shows: at 8,192 tokens into its fill the 32,768 cell was at 162 tok/s and the
-49,152 cell at 580, same weights, same KV, same batch, differing only in the allocated
-context and in what the machine had just been doing. **The hypothesis is thermal**, and it is
-a hypothesis: a larger allocated context reading faster at the same depth is not a mechanism
-anything here can offer, and sustained load for an hour is. Until those three rungs are
-re-walked from an idle machine, this table's ingest column is comparable within its top six
-rows and not across the break:
+† **re-walked from a rested machine, and that is the row to read.** Those three rungs were
+first walked immediately after the 196,608 fill was killed, at the end of an hour of
+continuous prefill, and read 64, 117 and 224 s — 115–132 tok/s, where every rung above them
+read 143–348. Ten minutes with nothing running turned that into 14, 31 and 73 s: 540, 477 and
+404 tok/s, which is where a curve decaying with depth puts them, and the per-batch log agrees
+to the token — 651 tok/s at 4,096 tokens into the rested 32,768 fill, against 653 in the
+49,152 cell and 255 in the tired one. **The memory columns moved by at most 0.18 GB across
+the pair**, so what the tired walk lost was three to four times its ingest speed and nothing
+else. Both walks are in the file under their own `condition`, `headless` and
+`headless-rested`.
 
-| ctx | node cold ingest | laptop, b10809 | node peak wired | laptop peak RSS |
-|---|---|---|---|---|
-| 8 192 | 64 s † | 66 s | 18.40 GB | 17.91 GB |
-| 16 384 | 117 s † | 142 s | 18.71 | 18.64 |
-| 32 768 | 224 s † | 297 s | 19.32 | 19.13 |
-| 49 152 | 127 s | 543 s (b10450) | 19.92 | 19.72 |
-| 65 536 | 213 s | refused by the cap | 20.52 | 20.27 (b10450) |
+**A tired node is not a slower node, it is an invalid measurement**, and nothing on the
+machine says which one it is: `pmset -g therm` records no thermal or performance warning
+level here, ever, so the mechanism behind the loss is inferred from the rates and is a
+hypothesis. What is a reading is the rule it implies — rest a node before walking it, and
+distrust any rate taken straight after a long fill.
 
-† taken in the state described above; treat as a floor on the node's speed, not a reading of
-it. The two memory columns are not the same quantity — peak wired here against the laptop's
-peak RSS, which understates KV on Apple Silicon — and the node serves with the projector off
-where the laptop's rows carry it, so the node's memory advantage at a rung is about a
-gigabyte of that difference.
+With those three rungs re-walked, the node's ingest is comparable with the laptop's at every
+matched rung:
+
+| ctx | node cold ingest | laptop, b10809 | node : laptop | node peak wired | laptop peak RSS |
+|---|---|---|---|---|---|
+| 8 192 | 14 s | 66 s | 4.7x | 18.22 GB | 17.91 GB |
+| 16 384 | 31 s | 142 s | 4.6x | 18.52 | 18.64 |
+| 32 768 | 73 s | 297 s | 4.1x | 19.33 | 19.13 |
+| 49 152 | 127 s | 543 s (b10450) | 4.3x | 19.92 | 19.72 |
+| 65 536 | 213 s | refused by the cap | — | 20.52 | 20.27 (b10450) |
+
+**The node ingests four to five times faster at every rung, and the ratio is flat across
+them** — 4.1x to 4.7x over a sixteenfold span of context, with the 49,152 row's 4.3x taken
+against an older build and sitting inside the same band. Prefill is the half of the clock
+that decides what a session costs at depth, so this is the node's whole case. The two memory
+columns are not the same quantity — peak wired here against the laptop's peak RSS, which
+understates KV on Apple Silicon — and the node serves with the projector off where the
+laptop's rows carry it, so about a gigabyte of the difference at a rung is that.
 
 **65,536 serves here and is refused there**, and not because of the silicon. The laptop
 wires 21.82–22.08 GB at that rung against the 21.33 GiB cap Metal derives and fails on the

@@ -166,3 +166,8 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   decode-by-depth curve 0017 measured the laptop's table with is what closes it — node.env
   against the draft head at ~200, 8k, 16k and 32k — and it is not run.
 - 2026-09-14 — the lid box says the node's own lid, and a login after a power cut: closing both lids showed the node stays awake but the USB link needs a login at its screen after the laptop sleeps or the node boots. TECH records it.
+- 2026-09-14 — the three rungs the first walk left suspect were re-walked from a rested
+  machine and the anomaly was the machine: 14, 31 and 73 s against 64, 117 and 224, with peak
+  wired unchanged. The ceiling and the floor the machine file carries are unaffected — they
+  come from the top rung, which was walked rested — and the node's ingest is now comparable
+  with the laptop's at every matched rung.
