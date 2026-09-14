@@ -1656,6 +1656,11 @@ a cost of it: a key it can read is a key it can copy into the working tree.
 another. A URL that does not parse, or that names no scheme and host, is refused before
 anything runs, because everything that differs between the two cases reads that one answer.
 
+**A server on another machine is never started or stopped from the client.** A missing
+remote server is refused naming `HOST=0.0.0.0 make serve CONFIG=...` to run where the model
+is, and `localcode stop` against a remote endpoint refuses rather than killing a process
+this machine does not own. Neither refusal leaves anything running or stopped here.
+
 **A denied write is explained by the session, not by the launcher.** claude gives a tool's
 stderr to the model rather than passing it through, so the process that could print a hint
 is the one that never learns the write was refused. The sandbox is described in the

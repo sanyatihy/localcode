@@ -130,7 +130,7 @@ func main() {
 	case len(args) > 0 && args[0] == "serve":
 		code, err = script(*checkoutFlag, "serve.sh", *config)
 	case len(args) > 0 && args[0] == "stop":
-		code, err = script(*checkoutFlag, "stop.sh")
+		code, err = stopServer(*checkoutFlag, *endpoint)
 	case len(args) > 1 && args[0] == "hook":
 		code, err = hook(args[1])
 	case len(args) > 0 && args[0] == "sessions":
@@ -193,7 +193,7 @@ func run(o opts) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	if err := ensureServer(root, o.endpoint, o.config, o.noServe); err != nil {
+	if err := ensureServer(root, o.endpoint, o.config, o.noServe, lo); err != nil {
 		return 2, err
 	}
 
@@ -504,9 +504,16 @@ func status(endpoint string) (int, error) {
 // the headache this command exists to remove. What it costs is printed before it is spent
 // rather than discovered afterwards: twenty seconds and most of the machine's memory are
 // not something to find out about by waiting.
-func ensureServer(root, endpoint, config string, noServe bool) error {
+func ensureServer(root, endpoint, config string, noServe, here bool) error {
 	if serverUp(endpoint) == nil {
 		return nil
+	}
+	// A server on another machine is not this one's to start. Starting one here would
+	// answer a different URL on a laptop that was asked for the other machine's memory, and
+	// the command that fixes it has to be run where the model is.
+	if !here {
+		return fmt.Errorf("no server at %s, and it is not this machine's to start: "+
+			"run `HOST=0.0.0.0 make serve CONFIG=%s` on the machine that serves it", endpoint, config)
 	}
 	if noServe {
 		return fmt.Errorf("no server at %s, and -no-serve was given", endpoint)
@@ -604,6 +611,21 @@ func script(checkoutFlag, name string, args ...string) (int, error) {
 		return 2, fmt.Errorf("could not run %s: %w", name, err)
 	}
 	return 0, nil
+}
+
+// stopServer ends the server this machine is running. A remote endpoint is refused rather
+// than acted on: the process is not this machine's, stopping it would take the model from
+// whoever else is driving it, and nothing here can wait for that machine's memory back.
+func stopServer(checkoutFlag, endpoint string) (int, error) {
+	here, err := loopback(endpoint)
+	if err != nil {
+		return 2, err
+	}
+	if !here {
+		return 2, fmt.Errorf("%s is served by another machine, so it is not stopped from here: "+
+			"run `localcode stop` on that machine", endpoint)
+	}
+	return script(checkoutFlag, "stop.sh")
 }
 
 // repoState is where one repository's session state lives — the handoff above all. Keyed
