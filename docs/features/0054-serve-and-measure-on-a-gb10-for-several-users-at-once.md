@@ -102,3 +102,4 @@ access.
 
 ## Log
 - 2026-09-14 — paused: the remaining boxes need the GB10
+- 2026-09-14 — paused: the remaining boxes need the GB10
