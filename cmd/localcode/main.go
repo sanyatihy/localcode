@@ -62,7 +62,8 @@ usage:
 flags:
   -checkout dir      the localcode checkout to read configuration from
   -harness name      which agent to run the sessions in (%s)
-  -endpoint url      the server to use
+  -endpoint url      the server to use (default ~/.config/localcode/endpoint, else
+                     http://127.0.0.1:8081)
   -config file       the serving config to start (default config/agent.env)
   -no-serve          refuse if no server is running, rather than starting one
   -net               allow outbound network for this session (loopback only by default)
@@ -82,7 +83,7 @@ func main() {
 	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, harness.Names()) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
 	agentName := fs.String("harness", harness.DefaultAgent, "which agent to run the sessions in")
-	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
+	endpoint := fs.String("endpoint", "", "the server to use")
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
@@ -112,25 +113,26 @@ func main() {
 
 	// Before the checkout, the server and the sandbox: every rule below turns on what kind
 	// of endpoint this is, so one nothing can classify is refused before anything runs.
-	if _, err := loopback(*endpoint); err != nil {
+	server, from, err := resolveEndpoint(*endpoint)
+	if err == nil {
+		_, err = loopback(server)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "localcode: "+err.Error())
 		os.Exit(2)
 	}
 
 	args := fs.Args()
-	var (
-		code int
-		err  error
-	)
+	var code int
 	switch {
 	case refusable(args):
 		code, err = 2, notACommand(args)
 	case len(args) > 0 && args[0] == "status":
-		code, err = status(*endpoint)
+		code, err = status(os.Stdout, server, from)
 	case len(args) > 0 && args[0] == "serve":
 		code, err = script(*checkoutFlag, "serve.sh", *config)
 	case len(args) > 0 && args[0] == "stop":
-		code, err = stopServer(*checkoutFlag, *endpoint)
+		code, err = stopServer(*checkoutFlag, server)
 	case len(args) > 1 && args[0] == "hook":
 		code, err = hook(args[1])
 	case len(args) > 0 && args[0] == "sessions":
@@ -141,7 +143,7 @@ func main() {
 		code, err = run(opts{
 			harness:  *agentName,
 			checkout: *checkoutFlag,
-			endpoint: *endpoint,
+			endpoint: server,
 			config:   *config,
 			noServe:  *noServe,
 			net:      *net,
@@ -484,19 +486,20 @@ var errNotReady = errors.New("not ready")
 
 // status reports what the endpoint is actually serving, rather than that something is
 // listening.
-func status(endpoint string) (int, error) {
+func status(w io.Writer, endpoint, from string) (int, error) {
 	p, err := readProps(endpoint)
 	switch {
 	case errors.Is(err, errNotReady):
-		fmt.Println(err)
+		fmt.Fprintln(w, err)
 		return 1, nil
 	case err != nil:
 		return 2, err
 	case p == nil:
-		fmt.Printf("no server at %s\n", endpoint)
+		fmt.Fprintf(w, "no server at %s (%s)\n", endpoint, from)
 		return 1, nil
 	}
-	fmt.Printf("serving %s at %d ctx on %s\n", filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint)
+	fmt.Fprintf(w, "serving %s at %d ctx on %s (%s)\n",
+		filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint, from)
 	return 0, nil
 }
 
@@ -925,6 +928,43 @@ func sbplEscape(s string) string {
 func sbplString(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	return `"` + r.Replace(s) + `"`
+}
+
+// defaultEndpoint is what every committed config serves, and what this machine falls back
+// to when nothing names another.
+const defaultEndpoint = "http://127.0.0.1:8081"
+
+// endpointConfigPath is where this machine says which server it drives. A file rather than
+// a variable, and beside `writable` for the same reason: the sandbox strips the session's
+// environment, so a variable would not survive into the one place it matters.
+func endpointConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "endpoint"), nil
+}
+
+// resolveEndpoint settles which server this invocation talks to, and says where that came
+// from: the flag, the machine's file, or the default. `status` reports it, because an
+// endpoint nobody typed is one nobody can account for afterwards.
+func resolveEndpoint(flagValue string) (endpoint, from string, err error) {
+	if flagValue != "" {
+		return flagValue, "from -endpoint", nil
+	}
+	path, err := endpointConfigPath()
+	if err != nil {
+		return "", "", err
+	}
+	// Absent is the normal case, and so is a file holding nothing but a newline.
+	line := ""
+	if body, readErr := os.ReadFile(path); readErr == nil {
+		line = strings.TrimSpace(string(body))
+	}
+	if line != "" {
+		return line, "from " + path, nil
+	}
+	return defaultEndpoint, "from the built-in default", nil
 }
 
 // writableConfigPath is the one place a developer widens the policy. It is a list of
