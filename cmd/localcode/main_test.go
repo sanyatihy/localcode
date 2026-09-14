@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -298,7 +300,7 @@ func TestStatusReportsWhatIsServed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	code, err := status(srv.URL)
+	code, err := status(&bytes.Buffer{}, srv.URL, "from -endpoint")
 	if err != nil || code != 0 {
 		t.Fatalf("a serving endpoint must report 0: code %d err %v", code, err)
 	}
@@ -311,7 +313,7 @@ func TestStatusAnswersNoWhenNothingIsServing(t *testing.T) {
 	url := srv.URL
 	srv.Close()
 
-	code, err := status(url)
+	code, err := status(&bytes.Buffer{}, url, "from -endpoint")
 	if err != nil || code != 1 {
 		t.Fatalf("a dead endpoint must answer 1 with no error: code %d err %v", code, err)
 	}
@@ -335,7 +337,7 @@ func TestEnsureServerReportsAServerThatDiedInsteadOfWaiting(t *testing.T) {
 	srv.Close() // nothing is listening, so the only thing that can end the wait is the exit
 
 	done := make(chan error, 1)
-	go func() { done <- ensureServer(root, url, "config/driver-mtp-32k.env", false) }()
+	go func() { done <- ensureServer(root, url, "config/driver-mtp-32k.env", false, true) }()
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), "exited before it was ready") {
@@ -1106,6 +1108,299 @@ func TestTheHooksNamedInTheRefusalAreTheOnesThatRun(t *testing.T) {
 	for _, name := range hookNames {
 		if _, err := chain.Hook(name, strings.NewReader(`{"session_id":"s"}`), dir); err != nil {
 			t.Fatalf("the refusal names %q, which internal/chain does not run: %v", name, err)
+		}
+	}
+}
+
+// What counts as this machine decides what the sandbox admits, whether a missing server
+// may be started from here, and which harnesses can be pointed at the endpoint. All three
+// read the same answer, so the answer is held here for every shape a URL arrives in.
+func TestAnEndpointIsClassifiedThisMachineOrAnother(t *testing.T) {
+	for _, c := range []struct {
+		url      string
+		loopback bool
+		refused  bool
+	}{
+		{url: "http://localhost:8081", loopback: true},
+		{url: "http://LOCALHOST:8081", loopback: true},
+		{url: "http://127.0.0.1:8081", loopback: true},
+		// The whole of 127.0.0.0/8, not the one address the configs name.
+		{url: "http://127.9.9.9:8081", loopback: true},
+		{url: "http://[::1]:8081", loopback: true},
+		{url: "https://127.0.0.1", loopback: true},
+		{url: "http://mac.local:8081"},
+		{url: "http://10.0.0.5:8081"},
+		{url: "http://[2001:db8::1]:8081"},
+		// url.Parse reads this as a scheme and an opaque path, which would leave another
+		// machine classified as this one.
+		{url: "mac.local:8081", refused: true},
+		{url: "", refused: true},
+		{url: "://8081", refused: true},
+		{url: "http://:8081", refused: true},
+		{url: "ftp://127.0.0.1:8081", refused: true},
+		{url: "http://%zz:8081", refused: true},
+	} {
+		lo, err := loopback(c.url)
+		switch {
+		case c.refused && err == nil:
+			t.Errorf("%q must be refused rather than classified, got loopback=%v", c.url, lo)
+		case !c.refused && err != nil:
+			t.Errorf("%q: %v", c.url, err)
+		case !c.refused && lo != c.loopback:
+			t.Errorf("%q: loopback=%v, want %v", c.url, lo, c.loopback)
+		}
+	}
+}
+
+// Refused before anything runs: the checkout is not resolved, no server is asked and no
+// sandbox is written, because none of them can be decided without this answer.
+func TestAnUnparseableEndpointIsRefusedBeforeAnythingRuns(t *testing.T) {
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, endpoint: "mac.local:8081"})
+	if code != 2 || err == nil {
+		t.Fatalf("want a refusal, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "mac.local:8081") {
+		t.Errorf("the refusal must name what it refused: %v", err)
+	}
+}
+
+// markedScripts writes serve.sh and stop.sh into the checkout, each recording that it ran.
+// The file's absence is the assertion: a refusal that started or killed something would be
+// a laptop taking a model away from the machine that serves it.
+func markedScripts(t *testing.T, root string) string {
+	t.Helper()
+	dir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	for _, name := range []string{"serve.sh", "stop.sh"} {
+		body := "#!/bin/sh\necho " + name + " >> " + marker + "\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return marker
+}
+
+// A remote endpoint that answers nothing is a machine to go to, not a model to load here:
+// the refusal names the command to run there, and this machine starts nothing.
+func TestAMissingRemoteServerIsRefusedRatherThanStartedHere(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+
+	// Answered here rather than probed: a request to an address nothing answers still
+	// leaves the machine, and an environment naming an HTTP proxy would answer for it.
+	old := serverReachable
+	serverReachable = func(string) error { return fmt.Errorf("nothing there") }
+	t.Cleanup(func() { serverReachable = old })
+
+	err := ensureServer(root, "http://mac.local:8081", "config/agent.env", false, false)
+	if err == nil {
+		t.Fatal("a remote server that is not there must be refused")
+	}
+	for _, want := range []string{"mac.local:8081", "make serve", "config/agent.env"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal must name %q: %v", want, err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a remote endpoint must not start a server on this machine")
+	}
+}
+
+// The server on another machine is not this one's to stop: it is somebody else's process,
+// and nothing here can wait for that machine's memory back.
+func TestStopRefusesARemoteEndpointAndKillsNothing(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+
+	code, err := stopServer(root, "http://mac.local:8081")
+	if code != 2 || err == nil {
+		t.Fatalf("want a refusal, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "mac.local:8081") {
+		t.Errorf("the refusal must name the endpoint: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a remote endpoint must not stop anything from here")
+	}
+
+	// This machine's own server is still stopped by the checkout's own script.
+	if code, err := stopServer(root, "http://127.0.0.1:8081"); err != nil || code != 0 {
+		t.Fatalf("stop: code %d err %v", code, err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("a loopback endpoint must still run stop.sh: %v", err)
+	}
+}
+
+// The machine's own default, so a laptop that drives the other Mac says so once rather
+// than on every invocation. The flag still wins, because a session run against something
+// else is a one-off and not a change of machine.
+func TestTheEndpointFileIsTheDefaultAndTheFlagWinsOverIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	endpoint, from, err := resolveEndpoint("")
+	if err != nil || endpoint != defaultEndpoint {
+		t.Fatalf("with no file the default stands: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, "default") {
+		t.Errorf("the source must say it was the default: %q", from)
+	}
+
+	path := filepath.Join(home, ".config", "localcode", "endpoint")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("http://mac.local:8081\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, from, err = resolveEndpoint("")
+	if err != nil || endpoint != "http://mac.local:8081" {
+		t.Fatalf("the file is the default: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, path) {
+		t.Errorf("the source must name the file it was read from: %q", from)
+	}
+
+	endpoint, from, err = resolveEndpoint("http://127.0.0.1:9999")
+	if err != nil || endpoint != "http://127.0.0.1:9999" {
+		t.Fatalf("the flag must win over the file: %q %q %v", endpoint, from, err)
+	}
+	if !strings.Contains(from, "-endpoint") {
+		t.Errorf("the source must name the flag: %q", from)
+	}
+
+	// A file holding nothing but a newline is not an endpoint.
+	if err := os.WriteFile(path, []byte("\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if endpoint, _, err := resolveEndpoint(""); err != nil || endpoint != defaultEndpoint {
+		t.Fatalf("an empty file leaves the default: %q %v", endpoint, err)
+	}
+}
+
+// Which endpoint answered is half the report; where it came from is the other half, since
+// three places can name one and only one of them was typed just now.
+func TestStatusReportsWhereTheEndpointCameFrom(t *testing.T) {
+	var out bytes.Buffer
+	if code, err := status(&out, healthy(t, http.StatusOK), "from /home/x/.config/localcode/endpoint"); err != nil || code != 0 {
+		t.Fatalf("status: code %d err %v", code, err)
+	}
+	if !strings.Contains(out.String(), "from /home/x/.config/localcode/endpoint") {
+		t.Errorf("status must say which source named the endpoint: %q", out.String())
+	}
+
+	// And when nothing is serving, which is when the question is usually asked.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	out.Reset()
+	if code, _ := status(&out, url, "from -endpoint"); code != 1 {
+		t.Fatalf("a dead endpoint must answer 1, got %d", code)
+	}
+	if !strings.Contains(out.String(), "from -endpoint") {
+		t.Errorf("a missing server must still say where the endpoint came from: %q", out.String())
+	}
+
+	// And while it loads, which is when this question is asked most often of all.
+	out.Reset()
+	if code, _ := status(&out, healthy(t, http.StatusServiceUnavailable), "from -endpoint"); code != 1 {
+		t.Fatalf("a loading server must answer 1, got %d", code)
+	}
+	if !strings.Contains(out.String(), "from -endpoint") {
+		t.Errorf("a loading server must still say where the endpoint came from: %q", out.String())
+	}
+}
+
+// The profile names no host. Seatbelt refuses one that does — `host must be * or localhost
+// in network address`, exit 65, before the session starts — so a model on another machine
+// is reached through this one's loopback and the boundary is the same one either way.
+func TestTheProfileAdmitsLoopbackAndNamesNoHost(t *testing.T) {
+	path, err := writeSandboxProfile(t.TempDir(), t.TempDir(), false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		if !strings.Contains(line, "network") {
+			continue
+		}
+		if !strings.Contains(line, "localhost") && !strings.Contains(line, "unix-socket") &&
+			line != "(deny network*)" {
+			t.Errorf("a network rule naming anything else is refused by seatbelt: %s", line)
+		}
+	}
+}
+
+// The other machine's model, answering where every config already looks for one. The
+// session is handed loopback, so nothing below the launcher knows which machine replied.
+func TestARemoteEndpointIsServedOnThisMachinesLoopback(t *testing.T) {
+	var gotPath, gotHost string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotHost = r.URL.Path, r.Host
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"default_generation_settings":{"n_ctx":49152}}`))
+	}))
+	defer remote.Close()
+
+	// An ephemeral port, because the one a run uses is the one a real server holds.
+	old := proxyAddr
+	proxyAddr = "127.0.0.1:0"
+	t.Cleanup(func() { proxyAddr = old })
+
+	url, stop, err := serveRemote(remote.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	if !strings.HasPrefix(url, "http://127.0.0.1:") {
+		t.Fatalf("the session must be handed loopback, got %q", url)
+	}
+
+	p, err := readProps(url)
+	if err != nil || p == nil {
+		t.Fatalf("the remote endpoint must answer through the proxy: %+v %v", p, err)
+	}
+	if p.Settings.NCtx != 49152 {
+		t.Errorf("the remote's own answer must come back whole: %+v", p)
+	}
+	if gotPath != "/props" {
+		t.Errorf("the path must reach the remote intact, got %q", gotPath)
+	}
+	// The other machine's own name, not this one's loopback.
+	if gotHost != strings.TrimPrefix(remote.URL, "http://") {
+		t.Errorf("the remote must be addressed by its own host, got %q", gotHost)
+	}
+}
+
+// Two servers cannot hold one port, and the second is the one that would fail silently:
+// the session would talk to whatever is already there, on this machine, and a chain
+// attributed to the other Mac would have been run here.
+func TestARemoteEndpointIsRefusedWhenTheLocalAddressIsBusy(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close() //nolint:errcheck // the listener is the fixture
+
+	old := proxyAddr
+	proxyAddr = ln.Addr().String()
+	t.Cleanup(func() { proxyAddr = old })
+
+	_, stop, err := serveRemote("http://mac.local:8081")
+	if err == nil {
+		stop()
+		t.Fatal("an address already in use must be refused")
+	}
+	for _, want := range []string{proxyAddr, "mac.local:8081", "localcode stop"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal must name %q: %v", want, err)
 		}
 	}
 }

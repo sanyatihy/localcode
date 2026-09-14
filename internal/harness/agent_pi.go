@@ -35,7 +35,10 @@ type piAgent struct {
 // The same four capabilities the incumbent's session gets, in Pi's spelling.
 const piTools = "read,edit,write,bash"
 
-func newPiAgent(root string) (Agent, error) {
+// The endpoint is not pi's to be told: it reads its base URL from the committed provider
+// file, and the driver serves a model on another machine at the address that file already
+// names.
+func newPiAgent(root, _ string) (Agent, error) {
 	bin, err := exec.LookPath("pi")
 	if err != nil {
 		return nil, fmt.Errorf("pi is not on PATH: %w", err)

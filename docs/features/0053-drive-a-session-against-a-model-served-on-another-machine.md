@@ -1,9 +1,9 @@
 ---
 id: 0053
 title: Drive a session against a model served on another machine
-status: Draft
+status: Submitted
 created: 2026-09-13
-submitted:
+submitted: 2026-09-14
 needs:
 ---
 
@@ -60,10 +60,20 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
 
 ## Tasks
 
-- [ ] Claude Code talks to the endpoint the launcher verified, including `count_tokens`, set after the committed file; a test covers a remote URL, and Pi refuses a remote endpoint its provider file does not name
-- [ ] A URL is classified loopback or remote including `::1`, an unparseable one is refused, and a test covers each case
-- [ ] A missing remote server is refused with the command to run there, `localcode stop` refuses a remote endpoint, and a test shows neither starts a process
-- [ ] The sandbox admits the endpoint's resolved addresses and port beyond loopback and nothing else, covered by a test on the written profile and by one session that reaches the endpoint and is denied another host
-- [ ] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
-- [ ] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
-- [ ] One serving Mac is driven from itself and from the other Mac, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side
+- [x] Claude Code talks to the endpoint the launcher verified, including `count_tokens`, set after the committed file; a test covers a URL the committed file does not carry, and Pi is unchanged because the proxy answers at the address its provider file names
+- [x] A URL is classified loopback or remote including `::1`, an unparseable one is refused, and a test covers each case
+- [x] A missing remote server is refused with the command to run there, `localcode stop` refuses a remote endpoint, and a test shows neither starts a process
+- [x] A remote endpoint is served at 127.0.0.1:8081 by the launcher for the run, the sandbox profile is unchanged, a busy port is refused, covered by a test through the proxy and a test on the profile
+- [x] `~/.config/localcode/endpoint` sets the default endpoint, `-endpoint` wins, and `localcode status` reports which it used
+- [x] `serve.sh` binds to `HOST` from the environment and prints it; README documents serving on one Mac and running `ENDPOINT=... make smoke` and `localcode` from the other
+
+## Log
+- 2026-09-14 — seatbelt takes no host but `*` or `localhost` in a network address: a
+  profile naming one exits 65 before the session runs, so the per-host rules the Design
+  assumed cannot be written and `*` would open the whole network. A remote endpoint is
+  reverse-proxied at `127.0.0.1:8081` for the run instead, the profile is unchanged, and
+  box 4 was rewritten to that outcome. Pi needs no refusal either, since the proxy answers
+  at the address its provider file already names; box 1 was rewritten to say so.
+- 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
+- 2026-09-14 — paused: the Mac-to-Mac measurement needs a second machine and a model run
+- 2026-09-14 — the Mac-to-Mac measurement box moved to 0056: the second Mac is the node that feature prepares, and it cannot be prepared before this merges.
