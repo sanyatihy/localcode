@@ -490,15 +490,15 @@ func status(w io.Writer, endpoint, from string) (int, error) {
 	p, err := readProps(endpoint)
 	switch {
 	case errors.Is(err, errNotReady):
-		fmt.Fprintln(w, err)
+		_, _ = fmt.Fprintln(w, err)
 		return 1, nil
 	case err != nil:
 		return 2, err
 	case p == nil:
-		fmt.Fprintf(w, "no server at %s (%s)\n", endpoint, from)
+		_, _ = fmt.Fprintf(w, "no server at %s (%s)\n", endpoint, from)
 		return 1, nil
 	}
-	fmt.Fprintf(w, "serving %s at %d ctx on %s (%s)\n",
+	_, _ = fmt.Fprintf(w, "serving %s at %d ctx on %s (%s)\n",
 		filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint, from)
 	return 0, nil
 }
