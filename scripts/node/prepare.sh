@@ -93,6 +93,11 @@ precondition_logged_out() {
   [ -z "$console" ] || {
     echo "prepare: $console is logged in at the console; log out to the login window first —" >&2
     echo "         the idle reading is what macOS keeps with nobody logged in" >&2
+    # Setup Assistant's own account keeps a console session from first boot until the
+    # machine restarts, and a logout cannot end it. Seen on the first node prepared.
+    case "$console" in *_mbsetupuser*)
+      echo "         _mbsetupuser is Setup Assistant's session from first boot; only a reboot ends it" >&2 ;;
+    esac
     exit 2; }
 }
 
@@ -158,7 +163,10 @@ lever_sharing() {
   try /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -deactivate -stop
   try systemsetup -setremoteappleevents off
   try cupsctl --no-share-printers
-  try AssetCacheManagerUtil deactivate
+  # Deactivating a cache that was never activated is refused, and a fresh node has none.
+  if AssetCacheManagerUtil status 2>&1 | grep -q 'Activated: true'; then
+    try AssetCacheManagerUtil deactivate
+  fi
   try defaults write /Library/Preferences/SystemConfiguration/com.apple.nat NAT -dict Enabled -int 0
 }
 
@@ -180,10 +188,14 @@ lever_software_update() {
   try defaults write /Library/Preferences/com.apple.commerce AutoUpdate -bool false
   # The daemon as well as the schedule: an update that downloads while the model serves is
   # memory and bandwidth nobody budgeted, and a reboot it chose is a run lost. disable keeps
-  # it from starting again and does nothing to the instance already running, so it is booted
-  # out too — the idle reading below is taken with it gone.
+  # it from starting at the next boot; booting the running instance out is refused while
+  # System Integrity Protection is on (launchctl exit 150, seen on the first node), so the
+  # idle reading below still has it until the node restarts.
   try launchctl disable system/com.apple.softwareupdated
-  bootout_now com.apple.softwareupdated
+  # The disable is reported as applied whether or not launchd took it; on the first node it
+  # did not register, so the disabled list is read back rather than trusted.
+  launchctl print-disabled system 2>/dev/null | grep -q '"com.apple.softwareupdated" => disabled' ||
+    needs_human "com.apple.softwareupdated is not in launchd's disabled list; automatic updates are off by preference only"
 }
 
 lever_bluetooth() {
@@ -229,13 +241,19 @@ lever_remote_login() {
   info=$(dscl . -read "/Groups/$ssh_group" GroupMembership NestedGroups 2>/dev/null || true)
   while IFS= read -r member; do
     { [ -n "$member" ] && [ "$member" != "$SERVE_USER" ]; } || continue
-    needs_fda dseditgroup -o edit -d "$member" -t user "$ssh_group"
+    dseditgroup -o edit -d "$member" -t user "$ssh_group" || needs_human "dseditgroup could not remove $member from $ssh_group"
   done < <(printf '%s\n' "$info" | awk '/^GroupMembership:/ { for (i = 2; i <= NF; i++) print $i }')
-  while IFS= read -r member; do
-    [ -n "$member" ] || continue
-    needs_fda dseditgroup -o edit -d "$member" -t group "$ssh_group"
+  # NestedGroups holds GUIDs — a fresh install nests admin's — and dseditgroup takes a
+  # name, so each is resolved first. Seen on the first node prepared: passing the GUID
+  # fails, and the failure read as a permissions problem it was not.
+  local guid name
+  while IFS= read -r guid; do
+    [ -n "$guid" ] || continue
+    name=$(dscl . -search /Groups GeneratedUID "$guid" 2>/dev/null | awk 'NR == 1 { print $1 }')
+    [ -n "$name" ] || { needs_human "nested group $guid in $ssh_group resolves to no name; remove it by hand"; continue; }
+    dseditgroup -o edit -d "$name" -t group "$ssh_group" || needs_human "dseditgroup could not remove nested group $name from $ssh_group"
   done < <(printf '%s\n' "$info" | awk '/^NestedGroups:/ { for (i = 2; i <= NF; i++) print $i }')
-  needs_fda dseditgroup -o edit -a "$SERVE_USER" -t user "$ssh_group"
+  dseditgroup -o edit -a "$SERVE_USER" -t user "$ssh_group" || needs_human "dseditgroup could not add $SERVE_USER to $ssh_group"
   # A drop-in rather than an edit: an OS update replaces /etc/ssh/sshd_config and would take
   # the setting with it.
   if grep -q '^Include /etc/ssh/sshd_config.d/' /etc/ssh/sshd_config; then
@@ -250,15 +268,17 @@ lever_remote_login() {
 
 lever_firewall() {
   # unverified on the node
-  step "application firewall on, stealth, sshd and $SERVER_BIN only"
+  step "application firewall on, stealth, built-in software and $SERVER_BIN only"
   local fw=/usr/libexec/ApplicationFirewall/socketfilterfw app server existing apps
   try "$fw" --setglobalstate on
   try "$fw" --setstealthmode on
   # Block-all admits nothing at all, including the server, so a node left in that state
   # answers no request and looks like a dead endpoint. The allowance list is the boundary.
   try "$fw" --setblockall off
-  # Without these two every signed binary is admitted, which is not "sshd and the server".
-  try "$fw" --setallowsigned off
+  # Built-in software stays admitted: sshd is Apple's and is what answers the only way in.
+  # With it off the first node stopped answering SSH on the next connection, allowance list
+  # or not. Downloaded signed apps are not admitted by their signature alone.
+  try "$fw" --setallowsigned on
   try "$fw" --setallowsignedapp off
   # The list is set rather than added to: an allowance somebody granted once is a way in
   # that no lever here turns off, and "only these" is the claim this lever makes.

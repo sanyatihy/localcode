@@ -84,7 +84,12 @@ address from the machine file its plist names — the node's from
 `config/machine-m5max-36gb.json` and the laptop's from `config/machine.json`, installed there
 by `install.sh --link-only`, which needs root but not `LOCALCODE_NODE=1`. It reconciles
 rather than sets, because an `AppleUSBNCMData` interface has no `networksetup` hardware port
-and nothing else restores the address.
+and nothing else restores the address. **The USB side of the node comes up with a user
+session, not at boot**: after a cold boot to the login window the laptop sees no `en14` at
+all, and it appears the moment somebody logs in on the node; it then survives that user
+logging out. Measured 2026-09-14 on the first reboot of the node. Until a Thunderbolt cable
+replaces the link, a rebooted node needs one login at its screen before the laptop can reach
+it over the cable, and the daemons it runs do not depend on that.
 
 **A clean node is installed by `scripts/node/bootstrap.sh`**, which is the whole path from a
 new macOS to a checkout that can serve: the Command Line Tools through `softwareupdate`
@@ -103,7 +108,19 @@ power, keys-only SSH for the serving user and the firewall in stealth mode — w
 logged in, and Wi-Fi left alone. It then reads `memprobe.sh` and refuses a node whose idle
 `anonymous_gb` or `wired_gb` is above `idle_anonymous_gb` and `idle_wired_gb` in the machine
 file; a machine file with no record yet gets the readings printed instead. What each lever
-saves is not measured yet.
+saves is not measured yet. Three things the first node taught, 2026-09-14: the application
+firewall must keep Apple's built-in software admitted (`--setallowsigned on`), because with
+it off the node accepted the TCP connection on port 22 and never sent sshd's banner, allow
+list or not, until the firewall was turned off at the screen; `softwareupdated` cannot be
+booted out while System Integrity Protection is on (launchctl exit 150), so it is disabled
+for the next boot and still present in the first idle reading; and the SSH access group
+nests `admin` by GUID on a fresh install, which `dseditgroup` removes by name only. The
+firewall's list is not three entries but fourteen: macOS keeps its own built-in software
+there (`sshd-session`, `rapportd`, `sharingd`, `smbd`, `cupsd` and the like) whatever is
+removed, so what a prepared node exposes is settled by the services being off and read by
+the port scan, not by that list. With
+every lever applied and iCloud still signed in, the node idled at 2.60 GB anonymous and
+1.93 GB wired at the login window, against 3.98 GB and 2.05 GB before any lever.
 
 **A dedicated node serves from three LaunchDaemons** (0056, `scripts/node/`):
 `com.localcode.link` reconciles the link address at boot and every 30 s, since a replug drops it, `com.localcode.gpucap` applies the wired
