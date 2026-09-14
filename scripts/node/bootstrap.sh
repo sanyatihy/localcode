@@ -112,11 +112,18 @@ step_packages() {
       did "brew install $formula"
     fi
   done
-  if "$BREW" list --cask claude-code >/dev/null 2>&1; then
-    skipped "brew cask claude-code"
+  # claude-code@latest, not claude-code: the plain cask lags the releases by weeks (2.1.236
+  # against 2.1.270 on 2026-09-14), and a node driven by an older Claude Code than the
+  # laptop's is a comparison of two harnesses. A node still carrying the plain cask is moved.
+  if "$BREW" list --cask claude-code@latest >/dev/null 2>&1; then
+    skipped "brew cask claude-code@latest"
   else
-    "$BREW" install --cask claude-code
-    did "brew install --cask claude-code"
+    if "$BREW" list --cask claude-code >/dev/null 2>&1; then
+      "$BREW" uninstall --cask claude-code
+      did "brew uninstall --cask claude-code (the lagging cask)"
+    fi
+    "$BREW" install --cask claude-code@latest
+    did "brew install --cask claude-code@latest"
   fi
 }
 

@@ -28,7 +28,7 @@ terminals and install the dependencies:
 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 brew install go python llama.cpp
-brew install --cask claude-code
+brew install --cask claude-code@latest
 ```
 
 [Claude Code's native package](https://code.claude.com/docs/en/quickstart) needs no
