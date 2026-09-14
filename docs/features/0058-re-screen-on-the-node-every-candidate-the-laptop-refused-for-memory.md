@@ -49,7 +49,7 @@ the baseline on decode without losing on pass rate, and that change is its own b
 
 ## Tasks
 
-- [ ] The native MTP head is screened and paired at the node's window with the draft depth swept, and TECH records its ratio and fidelity beside the laptop's 32k figures
+- [x] The native MTP head is screened and paired at the node's window with the draft depth swept, and TECH records its ratio and fidelity beside the laptop's 32k figures
 - [ ] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
 - [ ] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
 - [ ] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline

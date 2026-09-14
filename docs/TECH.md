@@ -626,6 +626,54 @@ by the hop. Rows: `docs/data/2026-09-14-m5max-36gb-chain.jsonl`.
 | `laptop-chain-2` | the laptop, through 0053's proxy | 20/20 | 1 | 227 s | 12,531 | 164,607 | 3,625 |
 | `laptop-chain-3` | the laptop, through 0053's proxy | 20/20 | 2 | 300 s | 15,066 | 270,756 | 4,711 |
 
+### What the laptop refused for memory, re-screened here (0058)
+
+Four candidates lost on the laptop for memory and for nothing else. Each is re-run on this
+node against `config/node.env` at 49,152, headless with the daemon's server stopped, one
+machine state and one toggle at a time. Screens are in
+[data/2026-09-15-m5max-36gb-0058-screen.jsonl](data/2026-09-15-m5max-36gb-0058-screen.jsonl).
+
+**The native MTP head's draft depth was swept here, the way 0025 swept it at 32,768.** Three
+arms, `config/node.env` with `SPEC_TYPE="draft-mtp"` and `SPEC_DRAFT_N_MAX` as the only thing
+moved, each screened filled to 44,236 tokens and then paired against the unmodified baseline
+on the ranking suite, three passes a side, one session per arm
+([rows](data/2026-09-15-m5max-36gb-0058-mtp.jsonl)):
+
+| draft depth | peak wired | headroom | fill to 44,236 | baseline decode | with the head | ratio | acceptance | pass | tool-call valid |
+|---|---|---|---|---|---|---|---|---|---|
+| 2 | 21.03 GB | 8.97 GB | 133 s | 0.0481 s/tok | 0.0368 | 1.31x | 2.94 | 23/27 against 23/27 | 12/12 |
+| **3** | **21.23** | **8.77** | **137** | **0.0523** | **0.0287** | **1.82x** | **3.84** | **24/27 against 25/27** | **12/12** |
+| 4 | 21.37 | 8.63 | 141 | 0.0534 | 0.0273 | **1.95x** | 4.99 | 22/27 against 23/27 | 12/12 |
+
+**Four is admissible on this node, and it is the depth the laptop's allocator refuses.** At
+32,768 on the laptop, depth 4 returns `kIOGPUCommandBufferCallbackErrorOutOfMemory` on every
+request; here it loads at 49,152, fills, commits five tokens a step and reads the fastest
+ratio of the three. What it costs over depth 2 is 0.34 GB of wired memory out of 8.6 GB of
+headroom, so on this machine the allocator is not what chooses the depth.
+
+**Every arm swaps 0.0 MB and hashes `0f4045cad664f4ac` on both sides** — the same hash the
+laptop's arms produced, on all six sides of the three pairs. The ratios are therefore of one
+decoder, which is what licenses reading them.
+
+**The ratios sit above the laptop's at the same depths**, and the shape is the same: 1.31x
+against 1.33x at depth 2, 1.82x against 1.67x at depth 3, and a fourth arm the laptop has no
+row for. Acceptance matches within 0.13 tokens a step at depth 2 and 3. Read the depths
+against each other and not against the laptop's numbers directly: these are the ranking
+suite's ~200-token prompts on this node, where 0025's are `decode-32000` on that one.
+
+**Pass rate does not separate the arms, and the baseline moved as much as they did.** The
+three baseline sessions read 23, 25 and 23 of 27 against the same fixtures, so the head's
+24/27 at depth 3 is one task inside a baseline that spans two on its own. Every failure on
+every arm is one of the two tasks TECH already names as the only discriminating ones. Tool-call
+validity is 12/12 on all three heads; the one invalid call in the whole file is a baseline row.
+
+**Depth 3 is the setting, and the reason is not speed.** Depth 4 reads 1.95x against 1.82x
+and scores 22/27 against 24/27 — one task, which is inside the baseline's own spread and so
+decides nothing — but its server aborts in `ggml_metal_buffer_free` while tearing the context
+down at the end of the screen, after the fill and the smoke had both passed. The row is
+admissible on what it measured and the abort is recorded rather than explained; a depth whose
+teardown crashes is not the one to serve from.
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,
