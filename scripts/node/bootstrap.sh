@@ -138,7 +138,9 @@ step_checkout() {
   local before="" after
   if [ -d "$CHECKOUT/.git" ]; then
     before=$(git -C "$CHECKOUT" rev-parse HEAD)
-    git -C "$CHECKOUT" fetch --tags origin
+    # --force: a tag the remote has moved is otherwise refused, and the run stops on the
+    # first fetch after any rewrite of the repository's history.
+    git -C "$CHECKOUT" fetch --force --tags --prune origin
     git -C "$CHECKOUT" checkout "$LOCALCODE_REF"
     # Only a branch can be fast-forwarded; a tag or a commit is already where it is going.
     if git -C "$CHECKOUT" symbolic-ref -q HEAD >/dev/null; then
