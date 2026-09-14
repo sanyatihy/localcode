@@ -114,7 +114,7 @@ for cell in $CELLS; do
 
   echo "=== $name  ctx=$ctx kv=$kv  filling to ~$target tokens ===" >&2
   stop_server
-  before=$(./scripts/memprobe.sh)
+  before=$(memprobe_json)
 
   nohup ./scripts/serve.sh "$cfg" >"/tmp/ladder-$name.log" 2>&1 &
   if ! wait_healthy 300; then
@@ -149,7 +149,7 @@ print(json.dumps({'condition':'$CONDITION','cell':'$name','ctx':$ctx,'kv':'$kv',
   # than what the config asked for. On one slot they are the same number.
   target=$(python3 -c "print(int($per_slot * $FILL_FRACTION))")
   [ "$slots" -gt 1 ] && echo "  $slots slots, filling each to ~$target tokens" >&2
-  loaded=$(./scripts/memprobe.sh)
+  loaded=$(memprobe_json)
 
   # One request per slot, each whose prompt genuinely occupies that slot's context. The
   # seeds differ so no two slots send the same prefix: a server that served the second from
@@ -176,8 +176,10 @@ PY
   desk="/tmp/ladder-desk-$name.jsonl"
   : > "$samples"; : > "$desk"
   ( while :; do
-      ./scripts/memprobe.sh >> "$samples"
-      ./scripts/deskprobe.sh >> "$desk"
+      memprobe_json >> "$samples"
+      # The compositor is macOS's, and its probe shells out to tools a headless box does not
+      # have: sampling it there would kill this loop rather than record a verdict.
+      if darwin; then ./scripts/deskprobe.sh >> "$desk"; fi
       sleep 2
     done ) 2>/dev/null &
   sampler=$!
@@ -200,7 +202,7 @@ PY
   http=$(cat "/tmp/ladder-fill-http-1")
   kill "$sampler" 2>/dev/null || true
   wait "$sampler" 2>/dev/null || true
-  filled=$(./scripts/memprobe.sh)
+  filled=$(memprobe_json)
 
   # A rung passes only when every slot filled: one failure among four is the whole cell's
   # answer, not three quarters of one.
@@ -224,9 +226,14 @@ try:
     series += [json.loads(x) for x in open("$samples") if x.strip()]
 except (OSError, ValueError):
     pass
-wired_peak=max(p["wired_gb"] for p in series)
+# Both are Metal's and both are None off macOS, so the series is filtered rather than
+# reduced over: a cell that reports no wired figure has no wired peak, which is not a peak
+# of zero.
+peaks=[p["wired_gb"] for p in series if p["wired_gb"] is not None]
+wired_peak=max(peaks) if peaks else None
 room=[p["wired_headroom_gb"] for p in series if p["wired_headroom_gb"] is not None]
 wired_headroom_min=min(room) if room else None
+gb=lambda v: "unknown" if v is None else "%.2f GB" % v
 
 # WindowServer's progress while the model was under load. Rates are derived from the
 # series rather than in the probe, so the sampling interval stays visible in the raw data.
@@ -262,14 +269,15 @@ print(json.dumps({
   "swap_delta_total_mb": round(f["swap_used_mb"]-b["swap_used_mb"], 1),
   "peak_rss_gb": max(l["llama_rss_gb"], f["llama_rss_gb"]),
   "free_at_peak_gb": min(l["free_gb"], f["free_gb"]),
-  "wired_peak_gb": round(wired_peak, 3),
+  "wired_peak_gb": (round(wired_peak, 3) if wired_peak is not None else None),
   "wired_headroom_min_gb": (round(wired_headroom_min, 3) if wired_headroom_min is not None else None),
   "wired_limit_gb": f["wired_limit_gb"], "wired_limit_source": f["wired_limit_source"],
   "wired_samples": len(series) - 2,
   **desktop,
 }))
-print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%.2f GB  headroom_min=%.2f GB"
-      % (desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min),
+print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%s  headroom_min=%s"
+      % (desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]),
+         gb(wired_peak), gb(wired_headroom_min)),
       file=sys.stderr)
 PY
 done

@@ -114,16 +114,53 @@ weights_bytes() { # path
   if darwin; then stat -L -f%z "$1"; else stat -L -c%s "$1"; fi
 }
 
+# memprobe_json prints one JSON object of the memory facts a cell is judged on, in the shape
+# every row already carries. macOS reads it from scripts/memprobe.sh; Linux builds the same
+# keys from /proc/meminfo, since pagesize, vm_stat and the Metal cap do not exist there and a
+# script that shells out to them dies mid-cell under `set -e`.
+#
+# The figures Linux has no counterpart for are `null`, never 0: the compressor is macOS's,
+# and wired memory and the GPU wired cap are Metal's — a zero there would read as a machine
+# holding nothing against a ceiling of nothing. What replaces them on the GB10 is a
+# measurement that box has not been reached for; `available_gb` is the reading the Linux
+# headroom rule uses in the meantime.
+memprobe_json() {
+  if darwin; then ./scripts/memprobe.sh; return 0; fi
+  local rss
+  rss=$(ps -Ao rss,comm | awk '/llama-server/ {s+=$1} END {printf "%.3f", s/1048576}')
+  RSS="${rss:-0}" python3 -c '
+import json, os
+kb = {}
+with open("/proc/meminfo") as fh:
+    for line in fh:
+        name, _, rest = line.partition(":")
+        parts = rest.split()
+        if parts:
+            try:
+                kb[name] = float(parts[0])
+            except ValueError:
+                pass
+print(json.dumps({
+    "free_gb": round(kb["MemFree"] / 1048576, 3),
+    "available_gb": round(kb["MemAvailable"] / 1048576, 3),
+    "compressed_gb": None,
+    "swap_used_mb": round((kb["SwapTotal"] - kb["SwapFree"]) / 1024, 3),
+    "llama_rss_gb": float(os.environ["RSS"] or 0),
+    "anonymous_gb": round(kb["AnonPages"] / 1048576, 3),
+    "wired_gb": None,
+    "wired_limit_mb": None,
+    "wired_limit_gb": None,
+    "wired_limit_source": "not_applicable",
+    "wired_headroom_gb": None,
+}))'
+}
+
 # apparatus_anonymous_gb prints the memory in use by everything that is not the model, in
 # the one unit that competes with it. A sum of per-process RSS counts every shared page once
 # per resident process and overstated a measured state by about 1.5x, which is why this is
 # anonymous memory and not that.
 apparatus_anonymous_gb() {
-  if darwin; then
-    ./scripts/memprobe.sh | python3 -c "import sys,json;print(json.load(sys.stdin)['anonymous_gb'])"
-  else
-    awk '/^AnonPages:/ {printf "%.3f\n", $2 / 1048576}' /proc/meminfo
-  fi
+  memprobe_json | python3 -c "import sys,json;print(json.load(sys.stdin)['anonymous_gb'])"
 }
 
 # served_slots prints how many slots the endpoint serves, and `null` for a backend that does

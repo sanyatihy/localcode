@@ -412,10 +412,19 @@ a machine that only serves declares its own.
 
 **The readings those scripts take off the machine are per platform, and each has one home
 in `scripts/lib.sh`**: total memory is `sysctl hw.memsize` on macOS and `/proc/meminfo`'s
-`MemTotal` on Linux, the weights size `stat -L -f%z` against `stat -L -c%s`, the apparatus
-figure `memprobe.sh` against `AnonPages`. The desk baseline is macOS only — a headless box
-has no compositor to lose, so it records `not_applicable`, the same value an unattended
-cell's verdict carries.
+`MemTotal` on Linux, the weights size `stat -L -f%z` against `stat -L -c%s`, and every memory
+sample `memprobe_json`, which runs `scripts/memprobe.sh` on macOS and builds the same keys
+from `/proc/meminfo` on Linux. The desk baseline and the compositor probe are macOS only — a
+headless box has no compositor to lose, so the baseline records `not_applicable`, the value an
+unattended cell's verdict already carries, and the sampler does not call `deskprobe.sh` at all.
+
+**A Linux ladder row carries `null` where a macOS one carries a Metal reading**, and the
+scripts are portable only that far: the compressor is macOS's, and wired memory, the GPU wired
+cap and the headroom against it are Metal's. A zero there would read as a machine holding
+nothing against a ceiling of nothing, so the row says `null` and `wired_limit_source` says
+`not_applicable`. `available_gb` is the figure the Linux headroom rule uses in their place, and
+what stands in for the cap on the GB10 — whether CUDA allocations on unified memory show in
+`/proc/meminfo` at all — is measured when the box arrives, not assumed here.
 
 **The ladder fills every slot at once**, reading `total_slots` from `/props`: four slots
 holding one filled context is not the state four developers put a server in, and the KV of
