@@ -105,10 +105,10 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 ## Tasks
 
-- [ ] `scripts/node/bootstrap.sh` takes the node from a clean macOS to an installed checkout and a passing `qwen35` check, idempotently, and a second run changes nothing
+- [x] `scripts/node/bootstrap.sh` takes the node from a clean macOS to an installed checkout and a passing `qwen35` check, idempotently, and a second run changes nothing
 - [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
 - [x] The OS levers are measured as a set by the idle reading at the login window, TECH records the saving, and a lever leaves the script only when it breaks something
-- [ ] The node answers SSH by key as the serving user and nothing else: a port scan from the laptop shows `sshd` and the server only, and a password login is refused
+- [x] The node answers SSH by key as the serving user: a full TCP scan from the laptop shows port 22, the server's 8081 while the daemon serves and one Apple built-in listener on a high random port, and a password login is refused
 - [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the link
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
@@ -150,3 +150,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - 2026-09-14 — paused: the remaining boxes need the node
 - 2026-09-14 — the reserve is idle anonymous plus wired plus 1 GiB, not anonymous plus 1 GiB: the cap is bought from the same 36 GB the kernel's wired pages sit in, and a reserve that ignored them would let the raise plus the kernel exceed the machine. Measured idle 2.60 GB anonymous, 1.93 GB wired; reserve 6.
 - 2026-09-14 — the per-lever table is dropped: attributing the saving lever by lever costs fourteen root toggles and readings at the login window, and on 36 GB no lever is worth removing for what it saves. The set is measured instead: 3.98 GB to 2.60 GB anonymous and 2.05 GB to 1.93 GB wired, the first reading still carrying Setup Assistant's session and an iCloud login.
+- 2026-09-14 — the SSH box said the scan would show sshd and the server and nothing else. It
+  shows a third port, 63198, held by a root-owned Apple daemon the firewall admits as
+  built-in software and `prepare.sh` does not remove; the owner decided not to chase it, so
+  the box now says what a prepared node exposes.

@@ -238,7 +238,9 @@ LOCALCODE_NODE=1 bash bootstrap.sh
 It installs the Command Line Tools without the GUI dialog, Homebrew, `go`, `python`,
 `llama.cpp` and Claude Code, runs the `qwen35` architecture check, clones this repository
 into `~/Developer/localcode` and runs `make install`. It prints what it did and what was
-already there; a second run should say it did nothing. `sudo -v` first because it asks for
+already there; a second run should say it did nothing. `LOCALCODE_REF` names the branch to
+check out and defaults to `main`, so pass it on a node that follows a branch or the rerun
+switches the checkout back. `sudo -v` first because it asks for
 the password once, in your session, rather than installing a sudoers rule. It appends
 Homebrew to `~/.zprofile`, which this shell has already read: open a new SSH session, or run
 `exec zsh -l`, before step 2.

@@ -99,7 +99,13 @@ Claude Code, README's `qwen35` architecture check on `libllama.dylib`, the clone
 it did against what was already there, so rerunning it is how the node is changed. Nothing is
 installed on that machine by hand, which makes it the clean-state test of this script; the
 steps macOS leaves manual are listed in README, and root steps are typed by the owner over
-SSH rather than granted by a sudoers rule.
+SSH rather than granted by a sudoers rule. Run on the node 2026-09-14 from a clean macOS
+26.5.2, it installed the Command Line Tools ("Command Line Tools for Xcode 26.6"), Homebrew,
+`go`, `python`, llama.cpp b10809 and the `claude-code` cask, passed the `qwen35` check,
+cloned and ran `make install`; the rerun reported every step already in place but the
+checkout update and the `make install` that follows it, which ran because trunk had moved.
+`LOCALCODE_REF` defaults to `main`, so a rerun on a node following a branch switches the
+checkout back unless it is passed.
 
 **A node is prepared by `scripts/node/prepare.sh`**, which applies the OS levers 0056 lists
 — Apple Intelligence, Siri and Spotlight, iCloud, Handoff, AirPlay and every sharing service
@@ -118,7 +124,10 @@ nests `admin` by GUID on a fresh install, which `dseditgroup` removes by name on
 firewall's list is not three entries but fourteen: macOS keeps its own built-in software
 there (`sshd-session`, `rapportd`, `sharingd`, `smbd`, `cupsd` and the like) whatever is
 removed, so what a prepared node exposes is settled by the services being off and read by
-the port scan, not by that list. With
+the port scan, not by that list. A full TCP scan from the laptop found three ports open:
+22, the server's 8081 while the daemon serves, and one Apple built-in listener on a high
+random port (63198, a root-owned system daemon), which is left alone by decision; a password
+login is refused with `Permission denied (publickey)`. With
 every lever applied and iCloud still signed in, the node idled at 2.60 GB anonymous and
 1.93 GB wired at the login window, against 3.98 GB and 2.05 GB before any lever.
 
