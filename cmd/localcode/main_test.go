@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -399,7 +400,7 @@ func TestScriptPassesTheExitCodeThrough(t *testing.T) {
 
 func TestSandboxProfileConfinesWritesAndLeavesOrdinaryReadsAlone(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, loopbackEndpoint, false, nil)
+	path, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +453,7 @@ func TestSandboxProfileDeniesReadingTheCredentialRoots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := writeSandboxProfile(t.TempDir(), t.TempDir(), loopbackEndpoint, false, nil)
+	path, err := writeSandboxProfile(t.TempDir(), t.TempDir(), false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +500,7 @@ func TestSandboxRefusesToReadACredentialRoot(t *testing.T) {
 	if err := os.WriteFile(ordinary, []byte("source"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	profile, err := writeSandboxProfile(t.TempDir(), cwd, loopbackEndpoint, false, nil)
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +549,7 @@ func TestSandboxRefusesAWriteOutsideTheWorkingDirectory(t *testing.T) {
 		t.Skip("no seatbelt on this platform")
 	}
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, loopbackEndpoint, false, nil)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +654,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 	defer srv.Close()
 
 	state, cwd := t.TempDir(), t.TempDir()
-	profile, err := writeSandboxProfile(state, cwd, loopbackEndpoint, false, nil)
+	profile, err := writeSandboxProfile(state, cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -676,7 +677,7 @@ func TestSandboxAllowsLoopbackAndRefusesTheInternet(t *testing.T) {
 
 func TestNetOpensOutboundForTheSession(t *testing.T) {
 	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, loopbackEndpoint, true, nil)
+	path, err := writeSandboxProfile(state, cwd, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -888,7 +889,7 @@ func TestSandboxAllowsAWorktreeBesideTheRepositoryAndNothingElseBesideIt(t *test
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(parent)) })
-	profile, err := writeSandboxProfile(t.TempDir(), cwd, loopbackEndpoint, false, nil)
+	profile, err := writeSandboxProfile(t.TempDir(), cwd, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1230,78 +1231,6 @@ func TestStopRefusesARemoteEndpointAndKillsNothing(t *testing.T) {
 	}
 }
 
-// loopbackEndpoint is what the configs serve and what the profile tests that are not about
-// the endpoint stand on.
-const loopbackEndpoint = "http://127.0.0.1:8081"
-
-// A model on another machine has to be reachable or nothing works, and nothing else may
-// become reachable with it — the sandbox is what keeps the repository's source on this
-// machine. The resolver is substituted because `make check` runs where that name is not
-// one, and the profile is what carries the policy either way.
-func TestSandboxAdmitsTheEndpointsAddressesAndNothingBeyondThem(t *testing.T) {
-	old := resolveHost
-	asked := ""
-	resolveHost = func(host string) ([]string, error) {
-		asked = host
-		return []string{"10.0.0.5", "fd00::5"}, nil
-	}
-	t.Cleanup(func() { resolveHost = old })
-
-	state, cwd := t.TempDir(), t.TempDir()
-	path, err := writeSandboxProfile(state, cwd, "http://mac.local:8081", false, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if asked != "mac.local" {
-		t.Errorf("the endpoint's host is what is resolved, got %q", asked)
-	}
-	for _, want := range []string{
-		"(deny network*)",
-		`(allow network-outbound (remote ip "localhost:*"))`,
-		`(allow network-outbound (remote ip "10.0.0.5:8081"))`,
-		// Bracketed, which is the form an address and a port take together.
-		`(allow network-outbound (remote ip "[fd00::5]:8081"))`,
-	} {
-		if !strings.Contains(string(body), want) {
-			t.Errorf("the profile is missing %s:\n%s", want, body)
-		}
-	}
-	// Loopback, the one endpoint's two addresses, and the unix socket a shell needs. One
-	// more line than that is a host nobody admitted.
-	if n := strings.Count(string(body), "allow network"); n != 5 {
-		t.Errorf("%d network rules, want 5 — only the endpoint is admitted beyond loopback:\n%s", n, body)
-	}
-
-	// An endpoint on this machine adds none of them: the loopback rules already reach it.
-	path, err = writeSandboxProfile(state, cwd, loopbackEndpoint, false, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err = os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := strings.Count(string(body), "allow network"); n != 3 {
-		t.Errorf("%d network rules for a loopback endpoint, want 3:\n%s", n, body)
-	}
-}
-
-// A name that does not resolve is a session that could not reach the model, and it is
-// refused while that is still cheap to say.
-func TestAnEndpointThatDoesNotResolveIsRefused(t *testing.T) {
-	old := resolveHost
-	resolveHost = func(string) ([]string, error) { return nil, fmt.Errorf("no such host") }
-	t.Cleanup(func() { resolveHost = old })
-
-	if _, err := writeSandboxProfile(t.TempDir(), t.TempDir(), "http://mac.local:8081", false, nil); err == nil {
-		t.Fatal("an endpoint that does not resolve must be refused")
-	}
-}
-
 // The machine's own default, so a laptop that drives the other Mac says so once rather
 // than on every invocation. The flag still wins, because a session run against something
 // else is a one-off and not a change of machine.
@@ -1370,5 +1299,95 @@ func TestStatusReportsWhereTheEndpointCameFrom(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "from -endpoint") {
 		t.Errorf("a missing server must still say where the endpoint came from: %q", out.String())
+	}
+}
+
+// The profile names no host. Seatbelt refuses one that does — `host must be * or localhost
+// in network address`, exit 65, before the session starts — so a model on another machine
+// is reached through this one's loopback and the boundary is the same one either way.
+func TestTheProfileAdmitsLoopbackAndNamesNoHost(t *testing.T) {
+	path, err := writeSandboxProfile(t.TempDir(), t.TempDir(), false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		if !strings.Contains(line, "network") {
+			continue
+		}
+		if !strings.Contains(line, "localhost") && !strings.Contains(line, "unix-socket") &&
+			line != "(deny network*)" {
+			t.Errorf("a network rule naming anything else is refused by seatbelt: %s", line)
+		}
+	}
+}
+
+// The other machine's model, answering where every config already looks for one. The
+// session is handed loopback, so nothing below the launcher knows which machine replied.
+func TestARemoteEndpointIsServedOnThisMachinesLoopback(t *testing.T) {
+	var gotPath, gotHost string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotHost = r.URL.Path, r.Host
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"default_generation_settings":{"n_ctx":49152}}`))
+	}))
+	defer remote.Close()
+
+	// An ephemeral port, because the one a run uses is the one a real server holds.
+	old := proxyAddr
+	proxyAddr = "127.0.0.1:0"
+	t.Cleanup(func() { proxyAddr = old })
+
+	url, stop, err := serveRemote(remote.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	if !strings.HasPrefix(url, "http://127.0.0.1:") {
+		t.Fatalf("the session must be handed loopback, got %q", url)
+	}
+
+	p, err := readProps(url)
+	if err != nil || p == nil {
+		t.Fatalf("the remote endpoint must answer through the proxy: %+v %v", p, err)
+	}
+	if p.Settings.NCtx != 49152 {
+		t.Errorf("the remote's own answer must come back whole: %+v", p)
+	}
+	if gotPath != "/props" {
+		t.Errorf("the path must reach the remote intact, got %q", gotPath)
+	}
+	// The other machine's own name, not this one's loopback.
+	if gotHost != strings.TrimPrefix(remote.URL, "http://") {
+		t.Errorf("the remote must be addressed by its own host, got %q", gotHost)
+	}
+}
+
+// Two servers cannot hold one port, and the second is the one that would fail silently:
+// the session would talk to whatever is already there, on this machine, and a chain
+// attributed to the other Mac would have been run here.
+func TestARemoteEndpointIsRefusedWhenTheLocalAddressIsBusy(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close() //nolint:errcheck // the listener is the fixture
+
+	old := proxyAddr
+	proxyAddr = ln.Addr().String()
+	t.Cleanup(func() { proxyAddr = old })
+
+	_, stop, err := serveRemote("http://mac.local:8081")
+	if err == nil {
+		stop()
+		t.Fatal("an address already in use must be refused")
+	}
+	for _, want := range []string{proxyAddr, "mac.local:8081", "localcode stop"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal must name %q: %v", want, err)
+		}
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -199,6 +200,20 @@ func run(o opts) (int, error) {
 		return 2, err
 	}
 
+	// A model on another machine is reached through this one's loopback, because the
+	// sandbox cannot admit it directly: seatbelt takes no host but `*` or `localhost` in a
+	// network rule. The session is handed the address every config already names, so
+	// nothing below here knows which machine answered.
+	sessionEndpoint := o.endpoint
+	if !lo {
+		proxied, stop, err := serveRemote(o.endpoint)
+		if err != nil {
+			return 2, err
+		}
+		defer stop()
+		sessionEndpoint = proxied
+	}
+
 	// The agent runs the sessions, and everything that differs between agents is behind
 	// it: the flags, the environment, the window it is told it has, where it files what a
 	// session cost. Built before the work so a harness that cannot be configured is
@@ -207,7 +222,7 @@ func run(o opts) (int, error) {
 	if name == "" {
 		name = harness.DefaultAgent
 	}
-	agent, err := harness.NewAgent(name, root, harness.Endpoint{URL: o.endpoint, Loopback: lo})
+	agent, err := harness.NewAgent(name, root, harness.Endpoint{URL: sessionEndpoint, Loopback: true})
 	if err != nil {
 		return 2, err
 	}
@@ -269,7 +284,7 @@ func run(o opts) (int, error) {
 	if o.net {
 		fmt.Fprintln(os.Stderr, "network: outbound ENABLED for this session")
 	}
-	profile, err := writeSandboxProfile(state, cwd, o.endpoint, o.net, agent.Writable())
+	profile, err := writeSandboxProfile(state, cwd, o.net, agent.Writable())
 	if err != nil {
 		return 2, err
 	}
@@ -631,6 +646,47 @@ func stopServer(checkoutFlag, endpoint string) (int, error) {
 	return script(checkoutFlag, "stop.sh")
 }
 
+// proxyAddr is where a model on another machine is served on this one. It is the address
+// every committed config, provider file and harness environment already names, so a
+// session driven against another Mac needs no configuration of its own. A var so a test
+// can take an ephemeral port rather than the one a real server holds.
+var proxyAddr = "127.0.0.1:8081"
+
+// serveRemote puts a remote endpoint on this machine's loopback for the length of the run,
+// and returns the URL to hand the harness and the function that ends it.
+//
+// A proxy rather than a sandbox rule, because there is no such rule to write: seatbelt
+// refuses a profile naming any host but `*` or `localhost` in a network address, exiting 65
+// before the session starts. Admitting `*` would open the whole network, which is the one
+// property the sandbox exists to hold, so the address the session may reach stays loopback
+// and this is what crosses.
+func serveRemote(endpoint string) (string, func(), error) {
+	u, err := parseEndpoint(endpoint)
+	if err != nil {
+		return "", nil, err
+	}
+	ln, err := net.Listen("tcp", proxyAddr)
+	if err != nil {
+		return "", nil, fmt.Errorf("something on this machine already serves %s, which is where "+
+			"%s has to be served for a sandboxed session to reach it: stop the local server with "+
+			"`localcode stop` first", proxyAddr, endpoint)
+	}
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(u)
+			// The other machine's own name, not this one's loopback: a server that routes
+			// or logs by Host would otherwise see a request nobody sent it.
+			r.Out.Host = u.Host
+		},
+		// A reply arrives token by token over minutes on this model. Buffered, the session
+		// would see nothing until the turn ended.
+		FlushInterval: -1,
+	}
+	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 30 * time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	return "http://" + ln.Addr().String(), func() { _ = srv.Close() }, nil
+}
+
 // repoState is where one repository's session state lives — the handoff above all. Keyed
 // by the repository's path rather than its name, since two checkouts of one project are
 // the normal case here and they are not the same box of work.
@@ -762,7 +818,7 @@ func deniedRead(home string) []string {
 // Every path is resolved first. On macOS /var, /tmp and /etc are symlinks into /private
 // and seatbelt matches the resolved path, so an unresolved TMPDIR denies every compiler
 // that uses one while appearing to allow it.
-func writeSandboxProfile(state, cwd, endpoint string, net bool, agentState []string) (string, error) {
+func writeSandboxProfile(state, cwd string, net bool, agentState []string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("no home directory: %w", err)
@@ -821,16 +877,6 @@ func writeSandboxProfile(state, cwd, endpoint string, net bool, agentState []str
 		b.WriteString("(allow network-outbound (remote ip \"localhost:*\"))\n")
 		b.WriteString("(allow network-inbound (local ip \"localhost:*\"))\n")
 		b.WriteString("(allow network* (remote unix-socket))\n")
-		// A model on another machine is the one host beyond loopback a session may reach.
-		// Seatbelt matches addresses rather than names, so the endpoint is resolved here,
-		// once, and each address it has is admitted on its own port and nothing else is.
-		addrs, err := endpointAddrs(endpoint)
-		if err != nil {
-			return "", err
-		}
-		for _, addr := range addrs {
-			fmt.Fprintf(&b, "(allow network-outbound (remote ip %s))\n", sbplString(addr))
-		}
 	}
 
 	path := filepath.Join(state, "sandbox.sb")
@@ -838,51 +884,6 @@ func writeSandboxProfile(state, cwd, endpoint string, net bool, agentState []str
 		return "", fmt.Errorf("could not write %s: %w", path, err)
 	}
 	return path, nil
-}
-
-// resolveHost turns the endpoint's host into the addresses seatbelt has to be given. A var
-// so a test can substitute one: the machine running `make check` has no name for the other
-// Mac, and the profile is worth asserting where that name does not resolve.
-var resolveHost = net.LookupHost
-
-// endpointAddrs is where the endpoint actually is, in the form the profile matches: an
-// address and a port, one entry per address its host resolves to. Nothing for an endpoint
-// on this machine, which the loopback rules already admit.
-//
-// Resolved at startup rather than per connection, because a profile is written once and a
-// name that moves afterwards is a session that stops reaching the model — which is visible,
-// unlike a rule that admitted more than the one host.
-func endpointAddrs(endpoint string) ([]string, error) {
-	here, err := loopback(endpoint)
-	if err != nil {
-		return nil, err
-	}
-	if here {
-		return nil, nil
-	}
-	u, err := parseEndpoint(endpoint)
-	if err != nil {
-		return nil, err
-	}
-	port := u.Port()
-	if port == "" {
-		port = "80"
-		if u.Scheme == "https" {
-			port = "443"
-		}
-	}
-	hosts, err := resolveHost(u.Hostname())
-	if err != nil {
-		return nil, fmt.Errorf("could not resolve %s: %w", u.Hostname(), err)
-	}
-	if len(hosts) == 0 {
-		return nil, fmt.Errorf("%s resolves to no address, so no session could reach it", u.Hostname())
-	}
-	out := make([]string, 0, len(hosts))
-	for _, h := range hosts {
-		out = append(out, net.JoinHostPort(h, port))
-	}
-	return out, nil
 }
 
 // siblingWorktrees is the pattern matching directories beside the repository and named
