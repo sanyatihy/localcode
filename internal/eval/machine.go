@@ -14,6 +14,10 @@ import (
 // Anything derived from the machine belongs here or in scripts/rungs.sh, which computes
 // the rest from what the machine reports about itself.
 type Machine struct {
+	// Name is what a row taken here says it was measured on. VISION keeps the envelopes
+	// apart — a finding from one is not evidence about the other — and a row that cannot
+	// say which one it came from cannot be held to that.
+	Name          string        `json:"machine"`
 	MinHeadroomGB float64       `json:"min_headroom_gb"`
 	DeskProfiles  []DeskProfile `json:"desk_profiles"`
 }
@@ -28,6 +32,9 @@ func LoadMachine(path string) (Machine, error) {
 	var m Machine
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Machine{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if m.Name == "" {
+		return Machine{}, fmt.Errorf("%s: no machine name, so a row measured here could not say which envelope it belongs to", path)
 	}
 	if m.MinHeadroomGB <= 0 {
 		return Machine{}, fmt.Errorf("%s: min_headroom_gb must be above zero", path)

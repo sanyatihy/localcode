@@ -19,6 +19,11 @@ type Row struct {
 	Config string `json:"config"` // human label for the serving config under test
 	Repeat int    `json:"repeat"`
 
+	// Machine names the hardware the row was measured on, from the `machine` field of the
+	// machine file the run was given. VISION fixes two envelopes and refuses to conflate
+	// them, so the report will not summarise rows from two machines as one.
+	Machine string `json:"machine"`
+
 	// Harness names the agent loop a tier-2 row measured, Profile the desk profile it was
 	// scored under. Empty on tier-1 rows. Two harnesses scored under different profiles
 	// are not comparable, so the profile travels with the numbers.
@@ -119,6 +124,20 @@ type Row struct {
 	// before-and-after measures host drift as well as the change; rows sharing a session
 	// were measured on one machine state, back to back, and only those may be divided.
 	Session string `json:"session,omitempty"`
+}
+
+// LegacyMachine is the machine a row that names none was measured on. Every row written
+// before the field existed came off the laptop, which was the only machine there was; the
+// alternative is discarding the evidence every conclusion in docs/TECH.md rests on.
+const LegacyMachine = "m2max-32gb"
+
+// MachineOrLegacy names the machine a row was taken on, reading an absent name as the
+// laptop rather than as a machine nobody can identify.
+func (r Row) MachineOrLegacy() string {
+	if r.Machine == "" {
+		return LegacyMachine
+	}
+	return r.Machine
 }
 
 // ToolCallValid reports whether the model produced a syntactically valid, schema-

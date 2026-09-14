@@ -200,6 +200,7 @@ func run(args []string, stdout, stderr *os.File) error {
 				row := eval.NewRow(*config, rep, *thinking, *effort, sampling, props, task.Kind, res)
 				row.Forced = *force
 				row.Session = *session
+				row.Machine = machineCfg.Name
 				if err := eval.AppendRow(*results, row); err != nil {
 					return fmt.Errorf("cannot append result: %w", err)
 				}
@@ -232,6 +233,7 @@ func run(args []string, stdout, stderr *os.File) error {
 				eval.Result{TaskID: "fidelity-probe", Outcome: eval.Pass})
 			row.Session, row.FidelityHash, row.Forced = *session, res.Hash, *force
 			row.FidelityProbes = *probeSet
+			row.Machine = machineCfg.Name
 			if err := eval.AppendRow(*results, row); err != nil {
 				return fmt.Errorf("cannot append fidelity row: %w", err)
 			}

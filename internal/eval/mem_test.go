@@ -52,6 +52,11 @@ func TestTheCommittedMachineFileLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("committed machine config: %v", err)
 	}
+	// Every row taken here is named after this, and a row that names no machine is read as
+	// this one, so the two have to agree.
+	if m.Name != LegacyMachine {
+		t.Errorf("the laptop's machine file calls it %q, which no legacy row says", m.Name)
+	}
 	if m.MinHeadroomGB <= 0 || m.MinHeadroomGB > 8 {
 		t.Errorf("min_headroom_gb = %.2f, which is outside anything 0014 measured", m.MinHeadroomGB)
 	}
@@ -68,6 +73,16 @@ func TestLoadMachineRefusesAFloorlessFile(t *testing.T) {
 	}
 	if _, err := LoadMachine(filepath.Join(t.TempDir(), "absent.json")); err == nil {
 		t.Error("a missing config was accepted")
+	}
+	// A file that names no machine would write rows nobody can attribute to an envelope,
+	// and they would read as the laptop's.
+	nameless := filepath.Join(t.TempDir(), "machine.json")
+	if err := os.WriteFile(nameless, []byte(
+		`{"min_headroom_gb":4.0,"desk_profiles":[{"name":"attended","ceiling_tokens":57344}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadMachine(nameless); err == nil {
+		t.Error("a machine file that names no machine was accepted")
 	}
 }
 

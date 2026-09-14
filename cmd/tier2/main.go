@@ -64,6 +64,7 @@ type config struct {
 	fixture     string // one fixture directory
 	fixtures    string // directory of them, scanned for what tier 2 can drive
 	desk        eval.DeskProfile
+	machine     string // the machine file's own name, written onto every row
 	endpoint    string
 	piExtension string
 	ocConfig    string
@@ -126,7 +127,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	cfg := config{
 		forced:  *force,
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
-		desk: desk, endpoint: *endpoint,
+		desk: desk, machine: machineCfg.Name, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
 		results: *results, label: *label, repeats: *repeats, budget: *budget, keep: *keep,
 	}
@@ -259,6 +260,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	// process can claim to have set.
 	row := eval.NewRow(cfg.label, rep, "", "", eval.Sampling{}, props, "tier2", res)
 	row.Harness, row.Profile = d.Name(), cfg.desk.Name
+	row.Machine = cfg.machine
 	row.Forced = cfg.forced
 	row.Offline = cfg.sandbox != ""
 	// What the run cost the server: ingested, reused from a held prefix, generated. Tier 1

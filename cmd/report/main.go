@@ -82,6 +82,9 @@ func run(args []string, stdout, stderr *os.File) error {
 
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
+	// Rows per machine. Two envelopes averaged into one number is the comparison VISION
+	// forbids, and nothing in the table below would show it had happened.
+	byMachine := map[string]int{}
 	// Which groups compare harnesses rather than thinking modes, so the first column
 	// can be named after what is in it.
 	byHarness := map[string]bool{}
@@ -100,6 +103,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		if *only != "" && r.Config != *only {
 			continue
 		}
+		byMachine[r.MachineOrLegacy()]++
 		// The desk profile is part of the group, not a label on it: two profiles cap
 		// the context differently, so their rows are not comparable and a harness may
 		// be admissible under only one of them. Filtering stays on the config label,
@@ -198,11 +202,27 @@ func run(args []string, stdout, stderr *os.File) error {
 	if err := sc.Err(); err != nil {
 		return err
 	}
+	// Refused rather than reported: a summary is one number per config, and two machines
+	// folded into it cannot be separated again by whoever reads the table.
+	if len(byMachine) > 1 {
+		counts := make([]string, 0, len(byMachine))
+		for _, m := range slices.Sorted(maps.Keys(byMachine)) {
+			counts = append(counts, fmt.Sprintf("%s: %d", m, byMachine[m]))
+		}
+		return fmt.Errorf("%s holds rows from %d machines (%s), which are separate envelopes "+
+			"and not one measurement: summarise each machine's rows on their own",
+			*path, len(byMachine), strings.Join(counts, ", "))
+	}
 	if len(byConfig) == 0 {
 		_, _ = fmt.Fprintln(stdout, "no rows matched")
 		return nil
 	}
 
+	// Named once, above the tables: every row here is from this machine, and a number from
+	// it says nothing about the other envelope. Exactly one is left — more was refused above.
+	for machine := range byMachine {
+		_, _ = fmt.Fprintf(stdout, "\nmachine: %s\n", machine)
+	}
 	for _, cfg := range sortedKeys(byConfig) {
 		harnesses := byHarness[cfg]
 		_, _ = fmt.Fprintf(stdout, "\n%s  [%s]\n", cfg, served[cfg])

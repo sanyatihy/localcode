@@ -50,3 +50,14 @@ func TestEveryRowNamesTheBuildThatWroteIt(t *testing.T) {
 		t.Fatalf("driver = %q, want the build's own answer %q", r.Driver, build.Revision())
 	}
 }
+
+// A row names its machine or it is the laptop's: the field was added once there was a
+// second machine, and every row written before it came off the first.
+func TestARowWithoutAMachineIsTheLaptops(t *testing.T) {
+	if got := (Row{}).MachineOrLegacy(); got != LegacyMachine {
+		t.Errorf("a row naming no machine reads as %q, want %q", got, LegacyMachine)
+	}
+	if got := (Row{Machine: "gb10-128gb"}).MachineOrLegacy(); got != "gb10-128gb" {
+		t.Errorf("a row naming a machine reads as %q", got)
+	}
+}

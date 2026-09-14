@@ -827,6 +827,12 @@ close.
 - **A row records what the server reported serving** — `n_ctx`, model file, and the
   `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
   did not take would otherwise attribute one config's numbers to another.
+- **A row names the machine it was measured on**, read from the `machine` field of the
+  machine file the run was given rather than from the host, and `cmd/report` refuses to
+  summarise rows from two machines as one — they are separate envelopes, and an average over
+  both is a number about neither. **Rows written before 2026-09-15 carry no `machine` and are
+  the laptop's**, `m2max-32gb`: it was the only machine there was, and both the report and
+  `eval.Row.MachineOrLegacy` read an absent name that way.
 - **Spread is min–max over three passes, never a standard deviation**, which would claim
   precision three samples do not have. Runs are sequential: the server has one slot.
 - **A tier-1 task must have exactly one defensible action.** A task that scores a style

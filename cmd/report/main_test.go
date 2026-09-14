@@ -216,3 +216,47 @@ func TestReportSurvivesAnUnparseableRow(t *testing.T) {
 		t.Errorf("the readable row is missing from:\n%s", out)
 	}
 }
+
+// Two envelopes are not one measurement. The laptop and the GB10 differ in memory,
+// bandwidth and slot count, so a pass rate or a decode mean over both is a number about
+// neither, and nothing in the table would show that it had happened.
+func TestReportRefusesRowsFromTwoMachines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "r.jsonl")
+	for _, machine := range []string{"m2max-32gb", "gb10-128gb"} {
+		row := eval.Row{Config: "tuned", Kind: "toolcall", Outcome: eval.Pass, Machine: machine}
+		if err := eval.AppendRow(path, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := runReport(t, "-results", path)
+	if err == nil {
+		t.Fatal("rows from two machines were summarised as one")
+	}
+	for _, want := range []string{"m2max-32gb", "gb10-128gb", "envelopes"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not name %q", err, want)
+		}
+	}
+}
+
+// Every row written before the field existed came off the laptop, which was the only
+// machine there was. Read as anything else they would refuse every report over the
+// evidence docs/TECH.md rests on.
+func TestReportReadsARowWithNoMachineAsTheLaptop(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "r.jsonl")
+	legacy := eval.Row{Config: "tuned", Kind: "toolcall", Outcome: eval.Pass}
+	named := legacy
+	named.Machine = eval.LegacyMachine
+	for _, r := range []eval.Row{legacy, named} {
+		if err := eval.AppendRow(path, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := runReport(t, "-results", path)
+	if err != nil {
+		t.Fatalf("a legacy row and a laptop row are one machine: %v", err)
+	}
+	if !strings.Contains(out, "machine: "+eval.LegacyMachine) || !strings.Contains(out, "2/2") {
+		t.Errorf("the summary does not name the machine both rows came from:\n%s", out)
+	}
+}

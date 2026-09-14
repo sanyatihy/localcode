@@ -1,10 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sanyatihy/localcode/internal/eval"
 )
 
 // eval's refusals are the contract a sweep script branches on, and every one of them exists
@@ -76,5 +81,43 @@ func TestParseThinkingKeepsUnsetDistinctFromOff(t *testing.T) {
 	}
 	if _, err := parseThinking("yes"); err == nil {
 		t.Error("a value that is not on, off or empty must be refused rather than guessed")
+	}
+}
+
+// Every row names the machine it was measured on, and it reads the name off the machine
+// file rather than off the host: the file is what declares an envelope, and two envelopes
+// are never compared. `-force` is set so the row is written whatever state this machine
+// happens to be in — what is under test is the name on the row, not the preflight.
+func TestEveryRowNamesTheMachineTheFileDeclares(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/props") {
+			_, _ = w.Write([]byte(`{"model_path":"/m/Qwen.gguf","default_generation_settings":{"n_ctx":32768}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"no tool call"}}]}`))
+	}))
+	defer srv.Close()
+
+	machine := repo("config", "machine.json")
+	results := filepath.Join(t.TempDir(), "rows.jsonl")
+	// The task fails against this stub, which is a scored outcome and still writes a row.
+	_ = runEval(t, "-task", repo("tasks", "toolcall-read-file.json"), "-endpoint", srv.URL,
+		"-machine", machine, "-model-profile", repo("config", "profiles", "qwen3.8.json"),
+		"-results", results, "-force")
+
+	b, err := os.ReadFile(results)
+	if err != nil {
+		t.Fatalf("no row was written: %v", err)
+	}
+	var row eval.Row
+	if err := json.Unmarshal([]byte(strings.SplitN(strings.TrimSpace(string(b)), "\n", 2)[0]), &row); err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	m, err := eval.LoadMachine(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Machine != m.Name {
+		t.Errorf("row names machine %q, want %q from %s", row.Machine, m.Name, machine)
 	}
 }
