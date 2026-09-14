@@ -9,11 +9,11 @@ needs: 0056
 
 ## Problem
 
-Five candidates lost on the laptop for memory and for nothing else: the native MTP head is
+Four candidates lost on the laptop for memory and for nothing else: the native MTP head is
 refused at 49,152 by the GPU cap, the DFlash2 drafter fails at load, MTPLX runs out of
-memory under a real prompt, MLX stalls under pressure, and Q5_K_M and Q6_K were excluded
-by projection with no run ever taken. VISION says such an exclusion lifts only when
-measured on a machine with room, and the node has 36 GB and a 30,720 MiB cap.
+memory under a real prompt, and MLX stalls under pressure. VISION says such an exclusion
+lifts only when measured on a machine with room, and the node has 36 GB and a 30,720 MiB
+cap.
 
 ## Non-goals
 
@@ -21,6 +21,8 @@ measured on a machine with room, and the node has 36 GB and a 30,720 MiB cap.
   for its numbers; the flow it cannot serve is 0006's finding and stands.
 - The GB10. 0054 has its own runtime question.
 - Fine-tuning, and any model other than Qwen3.8-27B.
+- A larger quant. Q5_K_M and Q6_K stay excluded by projection: the owner does not want
+  them tested, and the envelope stays Q4_K_M.
 
 ## Design
 
@@ -39,9 +41,7 @@ The candidates and what each needs on the node: the native MTP head at the node'
 `SPEC_DRAFT_N_MAX` swept as 0025 did; the DFlash2 drafter, which needs the scratch build
 of llama.cpp PR #27342 named in `config/dflash2-49k.env`, built on the node by a script
 this feature adds under `runtimes/`; MTPLX and MLX, each from its own committed venv via
-`runtimes/*/setup.sh`, MLX with the cache bounds 0006 found mandatory; Q5_K_M and Q6_K
-from the same GGUF repository at q8_0 KV, which are a quant ladder rather than a
-runtime and go through the same screen and suites.
+`runtimes/*/setup.sh`, MLX with the cache bounds 0006 found mandatory.
 
 TECH gets one table: candidate, admissible, peak wired, decode ratio, tier-1 pass, and
 the reason where it stops. The node's served config changes only if a candidate beats
@@ -53,5 +53,4 @@ the baseline on decode without losing on pass rate, and that change is its own b
 - [ ] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
 - [ ] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
 - [ ] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline
-- [ ] Q5_K_M and Q6_K are screened at the node's window and, where admissible, scored on tier-1 beside Q4_K_M
 - [ ] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
