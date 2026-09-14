@@ -1830,7 +1830,9 @@ Each of these has already caused a wrong number in this repo.
   **That it binds is measured rather than asserted**: the config that fails the allocator at
   21,845 MiB serves a 44,236-token prompt at 24,576, which
   [`scripts/gpuraise.sh`](../scripts/gpuraise.sh) applies and undoes in one command. A raise is
-  a sysctl, so a reboot is the way back out of one.
+  a sysctl, so a reboot is the way back out of one. A raise to the value already in force is a
+  no-op and touches nothing: a machine that applies its cap at boot would otherwise fail on
+  its own earlier success.
 - **A pass criterion that only asks about the model is blind to the machine.** 0003's
   ladder marked 64k `ok` while that context made the desktop unusable. Any measurement
   meant to protect the machine has to take its verdict from outside the model process.
