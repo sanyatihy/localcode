@@ -1,6 +1,9 @@
 package scripts
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -156,5 +159,76 @@ func TestServeHostFromTheEnvironmentWinsOverTheConfig(t *testing.T) {
 	}
 	if !strings.Contains(out, "on 0.0.0.0:8081") {
 		t.Errorf("the banner does not say what was bound: %s", out)
+	}
+}
+
+// propsEndpoint serves one /props body and nothing else, which is all the slot readings ask
+// of a server.
+func propsEndpoint(t *testing.T, body string) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/props") {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// lib calls one function from scripts/lib.sh against that endpoint and returns what it
+// printed. Sourced rather than executed, which is how every script here uses it.
+func lib(t *testing.T, endpoint, call string) string {
+	t.Helper()
+	cmd := exec.Command("bash", "-c", ". ./lib.sh; "+call)
+	cmd.Env = append(os.Environ(), "ENDPOINT="+endpoint)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%s: %v", call, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// llama-server reports n_ctx as one slot's share on one build and as the whole server's on
+// another, and both sit beside the same total_slots. A ladder that reads the wrong one fills
+// a quarter of the context it believes it is measuring, or refuses a server that is serving
+// exactly what it was asked for — so the request breaks the tie, and a reply that is neither
+// shape is refused rather than guessed at.
+func TestPerSlotContextResolvesBothPropsShapes(t *testing.T) {
+	for _, c := range []struct{ name, props, want string }{
+		{"a per-slot n_ctx beside four slots",
+			`{"default_generation_settings":{"n_ctx":12288},"total_slots":4}`, "12288"},
+		{"a total n_ctx beside four slots",
+			`{"default_generation_settings":{"n_ctx":49152},"total_slots":4}`, "12288"},
+		{"one slot, where the two shapes are the same number",
+			`{"default_generation_settings":{"n_ctx":49152},"total_slots":1}`, "49152"},
+		{"a server that does not say how many slots it has",
+			`{"default_generation_settings":{"n_ctx":49152}}`, "49152"},
+		{"a served context that is neither shape",
+			`{"default_generation_settings":{"n_ctx":32768},"total_slots":4}`, "ambiguous"},
+		{"one slot serving something else, which the caller compares for itself",
+			`{"default_generation_settings":{"n_ctx":8192},"total_slots":1}`, "8192"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := lib(t, propsEndpoint(t, c.props), "per_slot_ctx 49152"); got != c.want {
+				t.Errorf("per_slot_ctx 49152 = %s, want %s", got, c.want)
+			}
+		})
+	}
+
+	// The slot count is read off the same response, and a backend that does not report one
+	// is not a backend serving none.
+	four := propsEndpoint(t, `{"default_generation_settings":{"n_ctx":12288},"total_slots":4}`)
+	if got := lib(t, four, "served_slots"); got != "4" {
+		t.Errorf("served_slots = %s, want 4", got)
+	}
+	silent := propsEndpoint(t, `{"default_generation_settings":{"n_ctx":49152}}`)
+	if got := lib(t, silent, "served_slots"); got != "null" {
+		t.Errorf("served_slots = %s, want null", got)
+	}
+	// An endpoint nothing answers on is not a server serving zero context.
+	if got := lib(t, "http://127.0.0.1:1", "per_slot_ctx 49152"); got != "null" {
+		t.Errorf("an unanswered endpoint resolved to %s, want null", got)
 	}
 }

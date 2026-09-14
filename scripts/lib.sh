@@ -92,10 +92,79 @@ served_ctx() {
     || echo null
 }
 
+# The readings a script takes off the machine itself differ by platform, and each has one
+# home here: a caller that branches for itself is a second answer to the same question,
+# which is the drift this file exists to prevent. Darwin is the laptop and the node; Linux
+# is the GB10, which is headless and runs no compositor at all.
+darwin() { [ "$(uname -s)" = "Darwin" ]; }
+
+# total_memory_gb prints installed memory in whole GiB.
+total_memory_gb() {
+  if darwin; then
+    echo $(( $(sysctl -n hw.memsize) / 1073741824 ))
+  else
+    awk '/^MemTotal:/ {printf "%d\n", $2 / 1048576}' /proc/meminfo
+  fi
+}
+
+# weights_bytes prints the size of a weights file, following the symlink. The HuggingFace
+# cache stores snapshots as links into blobs/, and the link's own size reads as a 0 GB model
+# that silently inflates every headroom estimate built on it.
+weights_bytes() { # path
+  if darwin; then stat -L -f%z "$1"; else stat -L -c%s "$1"; fi
+}
+
+# apparatus_anonymous_gb prints the memory in use by everything that is not the model, in
+# the one unit that competes with it. A sum of per-process RSS counts every shared page once
+# per resident process and overstated a measured state by about 1.5x, which is why this is
+# anonymous memory and not that.
+apparatus_anonymous_gb() {
+  if darwin; then
+    ./scripts/memprobe.sh | python3 -c "import sys,json;print(json.load(sys.stdin)['anonymous_gb'])"
+  else
+    awk '/^AnonPages:/ {printf "%.3f\n", $2 / 1048576}' /proc/meminfo
+  fi
+}
+
+# served_slots prints how many slots the endpoint serves, and `null` for a backend that does
+# not say. One slot serves one developer and the GB10 serves four; a ladder that fills one of
+# four has measured a config nobody runs.
+served_slots() {
+  curl -s -m 5 "$ENDPOINT/props" 2>/dev/null \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['total_slots'])" 2>/dev/null \
+    || echo null
+}
+
+# per_slot_ctx prints the context each slot is serving, given the context that was asked for.
+# `null` when the endpoint did not say, and `ambiguous` when what came back resolves to
+# neither shape — on which a caller measures nothing.
+#
+# Two shapes exist and the response alone cannot tell them apart: `n_ctx` is the slot's share
+# on one build and the whole server's on another, and both sit beside the same `total_slots`.
+# The request is what breaks the tie — a reply equal to the asked-for context over the slots
+# is the per-slot shape, one equal to the asked-for context is the total — and both resolve
+# to the same per-slot number, which is what the fill has to be sized against.
+per_slot_ctx() { # requested_ctx
+  local want="$1" got slots
+  got=$(served_ctx)
+  slots=$(served_slots)
+  [ "$got" = null ] && { echo null; return 0; }
+  [ "$slots" = null ] && slots=1
+  if [ "$slots" -le 1 ]; then echo "$got"; return 0; fi
+  if [ $(( want % slots )) -ne 0 ]; then echo ambiguous; return 0; fi
+  if [ "$got" -eq $(( want / slots )) ]; then echo "$got"; return 0; fi
+  if [ "$got" -eq "$want" ]; then echo $(( want / slots )); return 0; fi
+  echo ambiguous
+}
+
 # desk_baseline prints the compositor's rate in cores before any model is loaded. Per run,
 # because the machine's baseline is not a constant and a desktop verdict has to carry the
 # basis it was judged against.
+#
+# macOS only: a headless box has no compositor to lose, so there is no baseline to take and
+# `not_applicable` is the honest answer — the same one an unattended cell's verdict carries.
 desk_baseline() {
+  if ! darwin; then echo not_applicable; return 0; fi
   local a b
   a=$(./scripts/deskprobe.sh); sleep 6; b=$(./scripts/deskprobe.sh)
   A="$a" B="$b" python3 -c "

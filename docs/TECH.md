@@ -410,6 +410,19 @@ leaves the system under the same number, and `RESERVE_GB` in the environment sti
 the file. It is a judgement about what else runs on the machine, not a reading, which is why
 a machine that only serves declares its own.
 
+**The readings those scripts take off the machine are per platform, and each has one home
+in `scripts/lib.sh`**: total memory is `sysctl hw.memsize` on macOS and `/proc/meminfo`'s
+`MemTotal` on Linux, the weights size `stat -L -f%z` against `stat -L -c%s`, the apparatus
+figure `memprobe.sh` against `AnonPages`. The desk baseline is macOS only — a headless box
+has no compositor to lose, so it records `not_applicable`, the same value an unattended
+cell's verdict carries.
+
+**The ladder fills every slot at once**, reading `total_slots` from `/props`: four slots
+holding one filled context is not the state four developers put a server in, and the KV of
+all four is what has to fit. `n_ctx` there is one slot's share on one build and the whole
+server's on another, and the response cannot say which — so the context asked for breaks the
+tie, and a reply that is neither shape is refused rather than measured on.
+
 On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
 hand — and reports ingest time as the binding constraint. Modelling 128 GB with `TOTAL_GB=128`
 gives **the same rungs**, and so does a 70 GB model: memory allows ~262k tokens in every case

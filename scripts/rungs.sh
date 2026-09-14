@@ -22,15 +22,12 @@ RESERVE_GB="$(reserve_gb)"                    # OS, editor, browser — never th
 
 # TOTAL_GB overrides detection, which is how "would more memory buy context?" was answered
 # without buying any: it would not, and docs/TECH.md records it.
-total_gb="${TOTAL_GB:-$(( $(sysctl -n hw.memsize) / 1073741824 ))}"
+total_gb="${TOTAL_GB:-$(total_memory_gb)}"
 
 # Weights dominate the floor. Measure them from the file when we can, rather than
 # assuming: a different quant or model changes this more than anything else here.
 if [ -n "$MODEL_PATH" ] && [ -f "$MODEL_PATH" ]; then
-  # -L follows the symlink. The HuggingFace cache stores snapshots as links into
-  # blobs/, and BSD stat reports the link's own size without it — which reads as a
-  # 0 GB model and silently inflates the headroom estimate.
-  weights_gb=$(( $(stat -L -f%z "$MODEL_PATH") / 1073741824 ))
+  weights_gb=$(( $(weights_bytes "$MODEL_PATH") / 1073741824 ))
 else
   weights_gb="${WEIGHTS_GB:-16}"
 fi
