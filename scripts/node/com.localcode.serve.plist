@@ -4,7 +4,7 @@
      scripts/node/install.sh writes the checkout, the user, that user's home and the
      serving PATH over the __PLACEHOLDERS__ and bootstraps this.
 
-     HOST is the one thing the environment overrides: config/node-32k.env keeps loopback
+     HOST is the one thing the environment overrides: config/node.env keeps loopback
      like every committed config, and a machine that serves the network says so where the
      server is started (0053). HOME is set explicitly because the weights are read from that
      user's cache, and PATH because launchd's own does not carry Homebrew. -->
@@ -15,7 +15,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>__CHECKOUT__/scripts/serve.sh</string>
-    <string>config/node-32k.env</string>
+    <string>config/node.env</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__CHECKOUT__</string>

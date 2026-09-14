@@ -14,8 +14,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-MACHINE="${MACHINE:-config/machine-m5pro-24gb.json}"
+MACHINE="${MACHINE:-config/machine-m5max-36gb.json}"
 SERVER_BIN="${SERVER_BIN:-llama-server}"
+
+# Homebrew is not on the PATH sudo builds, and bootstrap's `brew shellenv` reached only its
+# own subprocess — so a session that has just bootstrapped finds no llama-server here.
+# Read from the prefix rather than from the caller's profile, which sudo does not source.
+[ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # Every lever below turns off something a person at this machine would want, and several of
 # them are not undone by a reboot. A node is the only machine they belong on.
@@ -45,11 +50,12 @@ as_user() { sudo -u "$SERVE_USER" "$@"; }
 try() { "$@" >/dev/null 2>&1 || needs_human "refused: $*"; }
 
 # Remote Login and the group that restricts it need the calling process to hold Full Disk
-# Access, which being root does not confer: the grant is on the terminal or SSH client that
-# ran this. Their stderr goes through rather than into /dev/null, because "operation not
-# permitted" from one of these means that grant and nothing else.
+# Access, which being root does not confer. Over SSH the grant is on this node — Remote
+# Login's own "Allow full disk access for remote users" — and not on the machine somebody
+# connected from. Their stderr goes through rather than into /dev/null, because "operation
+# not permitted" from one of these means that grant and nothing else.
 needs_fda() {
-  "$@" || needs_human "$* failed — give the terminal or SSH client that ran this Full Disk Access in System Settings > Privacy & Security, then run it again"
+  "$@" || needs_human "$* failed — turn on System Settings > General > Sharing > Remote Login > (i) > Allow full disk access for remote users on this node, then run this again"
 }
 
 step() { echo "prepare: $1" >&2; }
@@ -62,6 +68,20 @@ bootout_now() {
   if [ "$status" -ne 0 ] && [ "$status" -ne 3 ]; then
     needs_human "could not stop $label (launchctl exit $status): $out"
   fi
+}
+
+# Bootstrap first: these levers turn off the machine's own services, and a node that cannot
+# serve afterwards is a node with no way to tell the two failures apart. Named one by one,
+# because "run bootstrap again" is not an answer to which of four things is missing.
+precondition_bootstrapped() {
+  local missing=""
+  xcode-select -p >/dev/null 2>&1 || missing="$missing the Command Line Tools (xcode-select -p),"
+  command -v brew >/dev/null 2>&1 || [ -x /opt/homebrew/bin/brew ] || missing="$missing Homebrew,"
+  command -v "$SERVER_BIN" >/dev/null 2>&1 || missing="$missing $SERVER_BIN,"
+  [ -d .git ] || missing="$missing this checkout,"
+  [ -z "$missing" ] || {
+    echo "prepare: run scripts/node/bootstrap.sh first — this node is missing${missing%,}" >&2
+    exit 2; }
 }
 
 # Logged out at the login window is a precondition rather than a lever: a session holds the
@@ -283,6 +303,7 @@ if anon > record_a or wired > record_w:
 '
 }
 
+precondition_bootstrapped
 precondition_logged_out
 lever_apple_intelligence
 lever_siri

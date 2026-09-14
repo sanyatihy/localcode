@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 # The node's own file, not the laptop's. A node that serves and nothing else keeps far less.
-MACHINE="${MACHINE:-config/machine-m5pro-24gb.json}"
+MACHINE="${MACHINE:-config/machine-m5max-36gb.json}"
 export MACHINE
 
 # shellcheck source=scripts/lib.sh

@@ -72,6 +72,30 @@ unset, and that is a decision rather than an omission: see
 [the prefill batch](#the-prefill-batch-was-swept-and-the-default-kept). The defaults are
 2048 logical and 512 physical.
 
+**The dedicated node is a Mac17,6** — Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2 — so
+it has 4 GB more than the laptop and no desk to protect, and it serves `config/node.env`,
+which is `config/agent.env` at 49,152 with the projector off. What the plan first assumed, a
+24 GB M5 Pro that might not carry Q4_K_M at 32,768, is not this machine: 0056's screen asks
+how far above 49,152 the node reaches. Its link to the laptop is a USB cable that negotiated
+USB 2 at 480 Mb/s with Thunderbolt Bridge inactive — the laptop is `en14` at 10.99.0.1/24 and
+the node `anpi2` at 10.99.0.2/24, both set by `ifconfig`, which no reboot or replug survives.
+Both ends are held by the same `com.localcode.link` daemon, reading the interface and
+address from the machine file its plist names — the node's from
+`config/machine-m5max-36gb.json` and the laptop's from `config/machine.json`, installed there
+by `install.sh --link-only`, which needs root but not `LOCALCODE_NODE=1`. It reconciles
+rather than sets, because an `AppleUSBNCMData` interface has no `networksetup` hardware port
+and nothing else restores the address.
+
+**A clean node is installed by `scripts/node/bootstrap.sh`**, which is the whole path from a
+new macOS to a checkout that can serve: the Command Line Tools through `softwareupdate`
+rather than the GUI dialog, Homebrew non-interactively, `go`, `python`, `llama.cpp` and
+Claude Code, README's `qwen35` architecture check on `libllama.dylib`, the clone at
+`LOCALCODE_REF` and `make install`. Every step checks before it acts and the run prints what
+it did against what was already there, so rerunning it is how the node is changed. Nothing is
+installed on that machine by hand, which makes it the clean-state test of this script; the
+steps macOS leaves manual are listed in README, and root steps are typed by the owner over
+SSH rather than granted by a sudoers rule.
+
 **A node is prepared by `scripts/node/prepare.sh`**, which applies the OS levers 0056 lists
 — Apple Intelligence, Siri and Spotlight, iCloud, Handoff, AirPlay and every sharing service
 but Remote Login, Time Machine and the update daemon, Bluetooth, the screen saver, sleep on
@@ -81,12 +105,13 @@ logged in, and Wi-Fi left alone. It then reads `memprobe.sh` and refuses a node 
 file; a machine file with no record yet gets the readings printed instead. What each lever
 saves is not measured yet.
 
-**A dedicated node serves from two LaunchDaemons** (0056, `scripts/node/`):
-`com.localcode.gpucap` applies the wired cap as root at boot, since the sysctl needs root
-and no raise survives a reboot, and `com.localcode.serve` runs `serve.sh` on
-`config/node-32k.env` as the serving user with `HOST=0.0.0.0` and `KeepAlive` on failure.
-`scripts/node/install.sh` substitutes the checkout and the serving user into the plists and
-bootstraps them, refusing unless `LOCALCODE_NODE=1`. Because a failed server is replaced,
+**A dedicated node serves from three LaunchDaemons** (0056, `scripts/node/`):
+`com.localcode.link` reconciles the link address at boot and every 30 s, since a replug drops it, `com.localcode.gpucap` applies the wired
+cap as root, since the sysctl needs root and no raise survives a reboot, and
+`com.localcode.serve` runs `serve.sh` on `config/node.env` as the serving user with
+`HOST=0.0.0.0` and `KeepAlive` on failure. `scripts/node/install.sh` substitutes the
+checkout, the serving user and the machine file's link into the plists and bootstraps them,
+refusing unless `LOCALCODE_NODE=1` and refusing a value `sed` or XML would read as syntax. Because a failed server is replaced,
 `stop_server` boots that service out when `launchctl` reports it loaded and fails rather than
 going on to the `pkill` when the bootout does — it needs root. `stop.sh` stops it whenever the
 daemon is loaded, since a daemon between restart attempts has no process to find.
@@ -94,7 +119,7 @@ daemon is loaded, since a daemon between restart attempts has no process to find
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
 flow never uses (1.02 GB resident); `MLOCK=1` passes `--mlock`. Both are absent from every
-config a 32 GB desk serves, and `config/node-32k.env` sets the first.
+config a desk serves, and `config/node.env` sets the first.
 
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
