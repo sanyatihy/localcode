@@ -13,6 +13,11 @@ cd "$(dirname "$0")/.."
 # shellcheck source=scripts/lib.sh
 . scripts/lib.sh
 
-server_alive || { echo "no $PROC to stop" >&2; exit 0; }
+# A loaded daemon between restart attempts has no process to find, and stopping the process
+# is not what stops the node's server anyway.
+if ! server_alive && ! serve_daemon_loaded; then
+  echo "no $PROC to stop" >&2
+  exit 0
+fi
 stop_server
 echo "stopped $PROC" >&2

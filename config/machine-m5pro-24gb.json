@@ -1,0 +1,16 @@
+{
+  "note": "PLACEHOLDER — not one number here is measured. It exists so scripts/node/ has a machine file to read on a node nobody has prepared yet, and 0056's remaining boxes replace every value with a reading. No results row may cite this machine until they do. idle_anonymous_gb and idle_wired_gb are deliberately absent rather than guessed: scripts/node/prepare.sh reports the readings and says the record is unset, and a wrong record would pass a node that is not prepared.",
+  "machine": "m5pro-24gb",
+
+  "reserve_gb": 6,
+
+  "min_headroom_gb": 4.0,
+
+  "desk_profiles": [
+    {
+      "name": "headless",
+      "ceiling_tokens": 32768,
+      "why": "PLACEHOLDER — the context 0056's screen starts from, not a ceiling anything measured. The ladder writes the real one"
+    }
+  ]
+}

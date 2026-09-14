@@ -72,6 +72,25 @@ unset, and that is a decision rather than an omission: see
 [the prefill batch](#the-prefill-batch-was-swept-and-the-default-kept). The defaults are
 2048 logical and 512 physical.
 
+**A node is prepared by `scripts/node/prepare.sh`**, which applies the OS levers 0056 lists
+— Apple Intelligence, Siri and Spotlight, iCloud, Handoff, AirPlay and every sharing service
+but Remote Login, Time Machine and the update daemon, Bluetooth, the screen saver, sleep on
+power, keys-only SSH for the serving user and the firewall in stealth mode — with nobody
+logged in, and Wi-Fi left alone. It then reads `memprobe.sh` and refuses a node whose idle
+`anonymous_gb` or `wired_gb` is above `idle_anonymous_gb` and `idle_wired_gb` in the machine
+file; a machine file with no record yet gets the readings printed instead. What each lever
+saves is not measured yet.
+
+**A dedicated node serves from two LaunchDaemons** (0056, `scripts/node/`):
+`com.localcode.gpucap` applies the wired cap as root at boot, since the sysctl needs root
+and no raise survives a reboot, and `com.localcode.serve` runs `serve.sh` on
+`config/node-32k.env` as the serving user with `HOST=0.0.0.0` and `KeepAlive` on failure.
+`scripts/node/install.sh` substitutes the checkout and the serving user into the plists and
+bootstraps them, refusing unless `LOCALCODE_NODE=1`. Because a failed server is replaced,
+`stop_server` boots that service out when `launchctl` reports it loaded and fails rather than
+going on to the `pkill` when the bootout does — it needs root. `stop.sh` stops it whenever the
+daemon is loaded, since a daemon between restart attempts has no process to find.
+
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
 flow never uses (1.02 GB resident); `MLOCK=1` passes `--mlock`. Both are absent from every

@@ -102,14 +102,14 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 ## Tasks
 
-- [ ] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against TECH's record, and exits nonzero when the node reads higher
+- [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
 - [ ] Each OS lever is measured on its own by the idle reading, TECH records the table, and a lever under 50 MB is dropped from the script
 - [ ] The node answers SSH by key as the serving user and nothing else: a port scan from the laptop shows `sshd` and the server only, and a password login is refused
 - [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the bridge
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
-- [ ] Two LaunchDaemons under `scripts/node/` apply the cap as root and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
+- [x] Two LaunchDaemons under `scripts/node/` apply the cap as root and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
 - [ ] Each server lever is screened one at a time at 32,768 filled with a saved prefix, and TECH records peak wired, headroom and decode per lever
 - [ ] `config/node-32k.env` carries the levers the screen settled, and TECH records whether Q4_K_M fits on 24 GB at 32,768 or 16,384, or does not fit
 - [ ] `config/machine-m5pro-24gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
@@ -120,3 +120,6 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 ## Log
 - 2026-09-14 — took 0053's Mac-to-Mac measurement box: the second Mac is this node.
+- 2026-09-14 — the idle record prepare.sh checks itself against lives in the machine file, as `idle_anonymous_gb` and `idle_wired_gb`, rather than in TECH: a script cannot read a number out of prose, and every other limit a machine imposes is already in `config/machine*.json`. TECH still records the reading and the levers it came from. Box 1 says the machine file.
+- 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — paused: the remaining boxes need the node
