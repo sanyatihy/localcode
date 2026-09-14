@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // stubPATH writes a `sysctl` reporting totalBytes of memory and a GPU cap of capMB, and a
@@ -230,5 +233,155 @@ func TestPerSlotContextResolvesBothPropsShapes(t *testing.T) {
 	// An endpoint nothing answers on is not a server serving zero context.
 	if got := lib(t, "http://127.0.0.1:1", "per_slot_ctx 49152"); got != "null" {
 		t.Errorf("an unanswered endpoint resolved to %s, want null", got)
+	}
+}
+
+// ladderStub is the server a ladder cell talks to: health, /props reporting two slots, and a
+// completions endpoint that holds each request until both have arrived. Holding them is the
+// assertion — a ladder that filled one slot at a time could never get past it. The second
+// request to arrive is answered with an empty HTTP 500, which is the failure a check for the
+// word "error" cannot see.
+type ladderStub struct {
+	mu      sync.Mutex
+	prompts []string
+	both    chan struct{}
+	arrived int
+}
+
+func (s *ladderStub) handler(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/health"):
+			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/props"):
+			_, _ = io.WriteString(w, `{"model_path":"/m/Qwen.gguf","total_slots":2,`+
+				`"default_generation_settings":{"n_ctx":2048}}`)
+		default:
+			body, _ := io.ReadAll(r.Body)
+			var req struct {
+				Messages []struct{ Content string } `json:"messages"`
+			}
+			if err := json.Unmarshal(body, &req); err != nil || len(req.Messages) == 0 {
+				t.Errorf("a fill request that is not one: %v", err)
+				return
+			}
+			s.mu.Lock()
+			s.prompts = append(s.prompts, req.Messages[0].Content)
+			s.arrived++
+			mine := s.arrived
+			if s.arrived == 2 {
+				close(s.both)
+			}
+			s.mu.Unlock()
+
+			select {
+			case <-s.both:
+			case <-time.After(30 * time.Second):
+				t.Error("only one request was ever in flight: the slots were not filled at once")
+			}
+			if mine == 2 {
+				// No body at all, which is what a server out of memory answers with.
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"OK"}}],`+
+				`"timings":{"prompt_per_second":42.5}}`)
+		}
+	}
+}
+
+// One ladder cell against that stub. What is under test is the fill loop and the pass rule:
+// a server reporting two slots is filled at both at once, each from its own prompt, and one
+// slot that did not fill is the whole rung's answer.
+func TestLadderFillsEverySlotAtOnceAndOneFailureFailsTheRung(t *testing.T) {
+	stub := &ladderStub{both: make(chan struct{})}
+	srv := httptest.NewServer(stub.handler(t))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	// A server process that stays up and is not llama-server: stop_server and the liveness
+	// check go through PROC, so nothing on the machine running this can be killed by it.
+	proc := "ladder-stub-server"
+	stubBin := filepath.Join(dir, proc)
+	// No `exec`: the shell has to stay in the process table under its own name, which is
+	// what PROC matches and what the liveness check asks about.
+	if err := os.WriteFile(stubBin, []byte("#!/bin/sh\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = exec.Command("pkill", "-f", proc).Run() })
+
+	out := filepath.Join(dir, "ceiling.jsonl")
+	script, err := filepath.Abs("ladder.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(script)
+	cmd.Env = append(os.Environ(),
+		"CELLS=4096:q8_0", "BASE="+serveConfig(t, dir, ""), "OUT="+out,
+		"ENDPOINT="+srv.URL, "SERVER_BIN="+stubBin, "PROC="+proc,
+		// The node's serving daemon is not this machine's business: naming one that is
+		// loaded nowhere keeps stop_server off launchctl.
+		"SERVE_DAEMON=com.localcode.absent", "CONDITION=unattended", "HEALTH_GRACE=60")
+	if got, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("ladder.sh: %v\n%s", err, got)
+	}
+
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if len(stub.prompts) != 2 {
+		t.Fatalf("%d slots were filled, want 2", len(stub.prompts))
+	}
+	if stub.prompts[0] == stub.prompts[1] {
+		t.Error("both slots were sent the same prompt: one could be served from what the other ingested")
+	}
+	// 2,048 per slot at the default fill fraction. A ladder sizing the fill against the
+	// config's 4,096 would send twice this.
+	for i, p := range stub.prompts {
+		if words := len(strings.Fields(p)); words < 1800 || words > 1900 {
+			t.Errorf("slot %d was sent %d words, want ~1,843 — one slot's share of 4,096", i+1, words)
+		}
+	}
+
+	rows, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row struct {
+		Outcome      string   `json:"outcome"`
+		Slots        int      `json:"slots"`
+		PerSlotCtx   int      `json:"per_slot_ctx"`
+		SlotOutcomes []string `json:"slot_outcomes"`
+	}
+	cell := ""
+	for _, line := range strings.Split(strings.TrimSpace(string(rows)), "\n") {
+		if strings.Contains(line, `"cell"`) {
+			cell = line
+		}
+	}
+	if cell == "" {
+		t.Fatalf("no cell row was written:\n%s", rows)
+	}
+	if err := json.Unmarshal([]byte(cell), &row); err != nil {
+		t.Fatalf("cell row: %v\n%s", err, cell)
+	}
+	if row.Slots != 2 || row.PerSlotCtx != 2048 {
+		t.Errorf("row says %d slots at %d per slot, want 2 at 2048", row.Slots, row.PerSlotCtx)
+	}
+	if row.Outcome != "http_500" {
+		t.Errorf("outcome is %q; one slot that did not fill is the whole rung's answer", row.Outcome)
+	}
+	// Which slot the stub failed is a race it does not control, so the row is read for one
+	// of each rather than for an order.
+	ok, failed := 0, 0
+	for _, o := range row.SlotOutcomes {
+		switch o {
+		case "ok":
+			ok++
+		case "http_500":
+			failed++
+		}
+	}
+	if ok != 1 || failed != 1 {
+		t.Errorf("slot outcomes %v do not say which slot filled and which did not", row.SlotOutcomes)
 	}
 }
