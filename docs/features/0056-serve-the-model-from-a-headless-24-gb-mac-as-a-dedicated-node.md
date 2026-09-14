@@ -184,3 +184,4 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   draft head clears the adoption bar on decode here and is still not set: what it does to a
   chain on this node is unmeasured.
 - 2026-09-14 — the first three chain attempts on the node stopped on the launcher's sandbox dropping `~/.claude` on a fresh machine (no transcript, so no budget); fixed in the launcher with a test, and the six chains recorded were run after the fix.
+- 2026-09-14 — paused: the lid and power-cut check waits for the owner at the node
