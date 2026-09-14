@@ -1,0 +1,20 @@
+{
+  "note": "PLACEHOLDER — not one number here is measured. It exists so scripts/node/ has a machine file to read on a node nobody has prepared yet, and 0056's remaining boxes replace every value with a reading. No results row may cite this machine until they do. reserve_gb is a placeholder too, and the cap scripts/node/cap.sh applies is derived from it. idle_anonymous_gb and idle_wired_gb are deliberately absent rather than guessed: scripts/node/prepare.sh reports the readings and says the record is unset, and a wrong record would pass a node that is not prepared. The machine is a Mac17,6: Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2.",
+  "machine": "m5max-36gb",
+
+  "link_note": "The link to the laptop is USB, not Thunderbolt: the cable negotiated USB 2 at 480 Mb/s and Thunderbolt Bridge is inactive. The laptop is en14 at 10.99.0.1/24 and this node is anpi2 at 10.99.0.2/24, both set with ifconfig, which no reboot or replug survives — com.localcode.link reapplies this end at boot and README carries the laptop's. Wi-Fi is 10.20.70.209 and is how the node reaches the internet.",
+  "link_interface": "anpi2",
+  "link_address": "10.99.0.2",
+
+  "reserve_gb": 6,
+
+  "min_headroom_gb": 4.0,
+
+  "desk_profiles": [
+    {
+      "name": "headless",
+      "ceiling_tokens": 49152,
+      "why": "PLACEHOLDER — the context the node starts from, which is the laptop's own, not a ceiling anything measured here. The ladder writes the real one"
+    }
+  ]
+}

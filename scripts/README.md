@@ -33,17 +33,21 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 
 ## The node
 
-[`node/`](node/) is the dedicated 24 GB serving node (0056) and runs nowhere else: both
+[`node/`](node/) is the dedicated 36 GB serving node (0056) and runs nowhere else: both
 scripts refuse unless `LOCALCODE_NODE=1` says the machine is one.
 
 | script | what it does |
 |---|---|
+| [`node/bootstrap.sh`](node/bootstrap.sh) | take a clean macOS to an installed checkout: Command Line Tools, Homebrew, go, python, llama.cpp, Claude Code, the `qwen35` check, the clone and `make install` — every step skipped when it is already done |
 | [`node/prepare.sh`](node/prepare.sh) | apply every OS lever the node serves under, then read what macOS keeps idle and check it against the machine file's record |
+| [`node/link.sh`](node/link.sh) | hold the node's end of the USB link: set the machine file's interface to its address when it is not already there, and say nothing when it is |
 | [`node/cap.sh`](node/cap.sh) | apply the GPU wired cap as root at boot: total memory less the node machine file's `reserve_gb` |
 | [`node/install.sh`](node/install.sh) | write this checkout's path and the serving user into the two plists, install them in `/Library/LaunchDaemons` and bootstrap them |
 
-`com.localcode.gpucap` runs `cap.sh` as root, because the sysctl needs root and does not
-survive a reboot; `com.localcode.serve` runs `serve.sh` on `config/node-32k.env` as the
+`com.localcode.link` runs `link.sh` at boot and every 30 s, because `ifconfig` survives
+neither a reboot nor a replug and a job that exits at boot cannot notice either — and
+`install.sh --link-only` installs that one on the laptop, which holds the other end; `com.localcode.gpucap` runs `cap.sh` as root, because the
+sysctl needs root and does not survive a reboot either; `com.localcode.serve` runs `serve.sh` on `config/node.env` as the
 serving user with `HOST=0.0.0.0` and restarts it when it fails. `stop_server` boots that
 service out before stopping the process, or KeepAlive starts another one — under `sudo`,
 since booting a system service out needs root.
