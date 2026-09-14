@@ -46,8 +46,9 @@ only ever disagree with it.
   of the three by anything in Go; `machine`, `note` and `why` are prose, since JSON
   has no comments.
 - [`machine-m5max-36gb.json`](machine-m5max-36gb.json) — the dedicated node's limits (0056),
-  and **a placeholder**: every number in it is unmeasured, and the feature's remaining boxes
-  replace them with readings taken on the node.
+  every one of them read on the node: the idle reading the reserve is derived from, the
+  headroom floor its heaviest passing rung left, and one `headless` profile whose ceiling is
+  the top rung of its own ladder.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
   back. All three are read; a profile naming a mechanism the scorer cannot perform is refused

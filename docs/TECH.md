@@ -75,8 +75,9 @@ unset, and that is a decision rather than an omission: see
 **The dedicated node is a Mac17,6** — Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2 — so
 it has 4 GB more than the laptop and no desk to protect, and it serves `config/node.env`,
 which is `config/agent.env` at 49,152 with the projector off. What the plan first assumed, a
-24 GB M5 Pro that might not carry Q4_K_M at 32,768, is not this machine: 0056's screen asks
-how far above 49,152 the node reaches. Its link to the laptop is a USB cable that negotiated
+24 GB M5 Pro that might not carry Q4_K_M at 32,768, is not this machine: it fills 163,840
+with 5.81 GB of cap to spare, and what stops it there is ingest time — see
+[the node's envelope](#the-nodes-envelope-measured-on-the-node). Its link to the laptop is a USB cable that negotiated
 USB 2 at 480 Mb/s with Thunderbolt Bridge inactive — the laptop is `en14` at 10.99.0.1/24 and
 the node `anpi2` at 10.99.0.2/24, both set by `ifconfig`, which no reboot or replug survives.
 Both ends are held by the same `com.localcode.link` daemon, reading the interface and
@@ -145,7 +146,10 @@ daemon is loaded, since a daemon between restart attempts has no process to find
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
 flow never uses (1.02 GB resident); `MLOCK=1` passes `--mlock`. Both are absent from every
-config a desk serves, and `config/node.env` sets the first.
+config a desk serves, and `config/node.env` sets the first. Screened on the node, the
+projector costs 1.12 GB of wired memory there and `--mlock` costs the machine its free
+memory for no change in peak or decode — see
+[the node's envelope](#the-nodes-envelope-measured-on-the-node).
 
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
@@ -400,6 +404,127 @@ it would not have bought context.
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
 does not care how much memory is spare.
+
+### The node's envelope, measured on the node
+
+Everything in this subsection is read on the dedicated node — Mac17,6, M5 Max, 36 GB,
+macOS 26.5.2 — at the login window with nobody logged in, the GPU wired cap raised to
+30,720 MiB by `com.localcode.gpucap`, and the serving daemon's own server stopped. The
+figures above are a 32 GB M2 Max at the cap Metal derives there. **Nothing here may be read
+across the two machines without the caveat under the matched rungs**, and the headroom
+columns are against different ceilings — 30.0 GB here against 21.33 GiB there.
+
+**Each server lever, one at a time from `config/node.env` at 49,152**, filled to 44,236
+tokens by the screen's own request and then sampled for 180 s, so every cell is judged
+filled and with that prefix in the prompt cache
+([rows](data/2026-09-14-m5max-36gb-screen.jsonl)):
+
+| lever | peak wired | headroom | cold fill | decode at 44k |
+|---|---|---|---|---|
+| **baseline — `config/node.env`** | **19.91 GB** | **10.09 GB** | **127 s** | **17.16 tok/s** |
+| projector on (`NO_MMPROJ` unset) | 21.03 | 8.97 | 127 s | 16.87 |
+| `CACHE_RAM=0` | 19.92 | 10.08 | 128 s | 16.35 |
+| `CACHE_RAM=2048` | 19.92 | 10.08 | 128 s | 16.27 |
+| `UBATCH_SIZE=256` | 19.85 | 10.15 | 130 s | 16.16 |
+| `UBATCH_SIZE=512` — llama.cpp's default, restated | 19.92 | 10.08 | 129 s | 16.20 |
+| KV `q4_0` on K and V | 19.17 | 10.83 | 129 s | 16.31 |
+| draft head, `--spec-type draft-mtp`, depth 3 | 21.11 | 8.89 | 135 s | 19.62 |
+| `MLOCK=1` | 19.92 | 10.08 | 129 s | 16.09 |
+
+Every cell loaded, answered, and swapped **0.0 MB**; all nine are admissible, which on a
+headless node means loaded with no swap. So the screen ranks rather than refuses, and what
+it ranks is memory:
+
+- **The projector costs 1.12 GB** and is the only lever that moves peak wired upward for
+  nothing — 1.02 GB on the laptop, measured resident rather than wired. `NO_MMPROJ=1` stays.
+- **`CACHE_RAM` moves nothing at either setting**, 0 or 2048 MiB, because the host prompt
+  cache fills lazily: a screen that goes from load to one filled prompt never fills it. What
+  it would cost a session long enough to fill it is not measured here, and the bounded value
+  is the cheap insurance 0041 already showed does not reserve at load.
+- **`UBATCH_SIZE=256` costs 3 s of fill and buys 0.07 GB.** The 512 cell restates
+  llama.cpp's default and is settings-identical to the baseline.
+- **KV `q4_0` saves 0.74 GB at 49,152**, against 0.47 GB at 32,768 on the laptop (0003). It
+  buys memory this machine is not short of and loses the KV precision that bought it.
+- **`MLOCK=1` moves no peak and pins what it takes from elsewhere**: free memory read
+  0.08 GB at load against the baseline's 4.09, and anonymous 1.53 GB against 2.69. Nothing
+  measured favours it here.
+- **The draft head loads at 49,152 on this node**, where the laptop's allocator refuses it
+  on the first prefill batch at the cap Metal derives. It costs 1.20 GB of wired memory.
+
+**The decode column is one 256-token completion per cell, not a decode curve.** It is taken
+inside the sampling window against the prefix the fill left — 43,740 of its tokens are
+reused — so it reads decode at about 44k of depth on a cache the fill warmed. One sample is
+all it is: the baseline and the cell that restates llama.cpp's own default differ in no
+setting and sit **5.9% apart**, which is the spread anything below cannot be distinguished
+from. The draft head's 19.62 against that band is the only reading that clears it, and
+whether it survives a proper measurement is what 0056's decode-by-depth curve asks; it is
+not run yet, and no adoption rests on this column.
+
+**The context ladder, `config/node.env` with only the context and KV type moved**, each rung
+filled to 90% of its context and sampled through the fill
+([rows](data/2026-09-14-m5max-36gb-ladder.jsonl)). `condition` is `headless` throughout, so
+the desktop verdict is `not_applicable` and the pass rule is a completed fill with zero swap
+delta:
+
+| ctx | peak wired | headroom to the cap | headroom, total less wired and anon | cold ingest | prompt tok/s | swap Δ |
+|---|---|---|---|---|---|---|
+| 8 192 | 18.40 GB | 11.60 GB | 16.48 GB | 64 s | 115.4 | 0.0 MB |
+| 16 384 | 18.71 | 11.29 | 16.17 | 117 s | 126.5 | 0.0 |
+| 32 768 | 19.32 | 10.68 | 15.54 | 224 s | 131.8 | 0.0 |
+| 49 152 | 19.92 | 10.08 | 15.27 | 127 s | 347.5 | 0.0 |
+| 65 536 | 20.52 | 9.47 | 14.66 | 213 s | 277.1 | 0.0 |
+| 81 920 | 21.14 | 8.86 | 14.01 | 316 s | 233.8 | 0.0 |
+| 98 304 | 21.75 | 8.25 | 13.13 | 427 s | 207.0 | 0.0 |
+| 131 072 | 22.97 | 7.03 | 11.76 | 690 s | 171.1 | 0.0 |
+| **163 840** | **24.19** | **5.81** | **10.57** | **1 033 s** | **142.8** | **0.0** |
+
+**Time binds on 36 GB, and memory does not.** Marginal KV cost is **38.4–39.6 KB/token**
+across the whole walk, flat enough to extrapolate: the 30,720 MiB cap still has 5.81 GB of
+room at 163,840, and nothing swapped at any rung. What runs out is patience — a cold ingest
+of 1,033 s at the top rung, against 127 s at 49,152 — and the 20-minute budget
+`scripts/rungs.sh` applies is crossed between 163,840 and the rung above it. **163,840 is
+therefore the ceiling in `config/machine-m5max-36gb.json`**, and it is the largest rung that
+was walked to a completed fill rather than the largest that would.
+
+**196,608 was walked and stopped, and has no row.** Its fill reached 88,064 of 176,947
+tokens in 2,097 s — half the prompt in 35 minutes, with the rate down to 42 tok/s — while
+wired sat at 25.22 GB with 4.78 GB of cap left and swap at 0.0. It was stopped there rather
+than left to finish: the rung is already several times outside the ingest budget, so what a
+completed row would add is the exact size of a number nobody will wait for. It is recorded
+as stopped, not as failed — nothing on that machine refused it.
+
+**The matched rungs are not comparable with the laptop's yet**, and the reason is in the
+node's own rows. 8,192, 16,384 and 32,768 were walked immediately after the 196,608 rung was
+killed, at the end of an hour of continuous prefill, and they read **115–132 tok/s** where
+49,152 and everything above it — walked from an idle machine — read 143–348. The per-batch
+log is where it shows: at 8,192 tokens into its fill the 32,768 cell was at 162 tok/s and the
+49,152 cell at 580, same weights, same KV, same batch, differing only in the allocated
+context and in what the machine had just been doing. **The hypothesis is thermal**, and it is
+a hypothesis: a larger allocated context reading faster at the same depth is not a mechanism
+anything here can offer, and sustained load for an hour is. Until those three rungs are
+re-walked from an idle machine, this table's ingest column is comparable within its top six
+rows and not across the break:
+
+| ctx | node cold ingest | laptop, b10809 | node peak wired | laptop peak RSS |
+|---|---|---|---|---|
+| 8 192 | 64 s † | 66 s | 18.40 GB | 17.91 GB |
+| 16 384 | 117 s † | 142 s | 18.71 | 18.64 |
+| 32 768 | 224 s † | 297 s | 19.32 | 19.13 |
+| 49 152 | 127 s | 543 s (b10450) | 19.92 | 19.72 |
+| 65 536 | 213 s | refused by the cap | 20.52 | 20.27 (b10450) |
+
+† taken in the state described above; treat as a floor on the node's speed, not a reading of
+it. The two memory columns are not the same quantity — peak wired here against the laptop's
+peak RSS, which understates KV on Apple Silicon — and the node serves with the projector off
+where the laptop's rows carry it, so the node's memory advantage at a rung is about a
+gigabyte of that difference.
+
+**65,536 serves here and is refused there**, and not because of the silicon. The laptop
+wires 21.82–22.08 GB at that rung against the 21.33 GiB cap Metal derives and fails on the
+first prefill batch; the node fills it in 213 s at 20.52 GB — 1.3 GB of which is the
+projector it does not load — under a cap raised to 30,720 MiB. Either the projector or the
+raise would have been enough at this rung. Both together are what leave the node's ladder
+bounded by the clock instead.
 
 ## The prefill batch was swept, and the default kept
 

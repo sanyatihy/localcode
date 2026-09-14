@@ -116,8 +116,8 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] Three LaunchDaemons under `scripts/node/` hold the link address, apply the cap as root, and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
 - [ ] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
 - [ ] `config/node.env` carries the levers and the context the screen settled
-- [ ] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
-- [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
+- [x] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
+- [x] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
 - [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
 - [ ] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
 - [x] README is the node's runbook in order: the manual steps macOS forces and why, `bootstrap.sh`, `prepare.sh` and its check, `install.sh` and the daemons, the SSH-only access, the link and Wi-Fi addresses, and a `smoke` from the laptop over the link
@@ -154,3 +154,14 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   shows a third port, 63198, held by a root-owned Apple daemon the firewall admits as
   built-in software and `prepare.sh` does not remove; the owner decided not to chase it, so
   the box now says what a prepared node exposes.
+- 2026-09-14 — the ladder's pass rule never failed. Memory bound no rung the node could be
+  waited for: marginal KV held at 39 KB/token from 8,192 to 163,840, where 5.81 GB of the
+  raised cap was still free and swap was flat. What ended the walk was the ingest budget
+  `rungs.sh` applies — 1,033 s cold at 163,840, and 196,608 stopped at half its fill after
+  35 minutes rather than finished. The ceiling is the largest rung walked to a completed
+  fill, and the box says memory or time binds, which it now answers.
+- 2026-09-14 — the screen half of the lever box is done and the box stays open: it also asks
+  for decode per lever and per rung, and the only decode reading so far is one 256-token
+  completion per screened cell, which two settings-identical cells put a 5.9% spread on. The
+  decode-by-depth curve 0017 measured the laptop's table with is what closes it — node.env
+  against the draft head at ~200, 8k, 16k and 32k — and it is not run.
