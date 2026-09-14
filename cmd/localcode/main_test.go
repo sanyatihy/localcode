@@ -1109,3 +1109,55 @@ func TestTheHooksNamedInTheRefusalAreTheOnesThatRun(t *testing.T) {
 		}
 	}
 }
+
+// What counts as this machine decides what the sandbox admits, whether a missing server
+// may be started from here, and which harnesses can be pointed at the endpoint. All three
+// read the same answer, so the answer is held here for every shape a URL arrives in.
+func TestAnEndpointIsClassifiedThisMachineOrAnother(t *testing.T) {
+	for _, c := range []struct {
+		url      string
+		loopback bool
+		refused  bool
+	}{
+		{url: "http://localhost:8081", loopback: true},
+		{url: "http://LOCALHOST:8081", loopback: true},
+		{url: "http://127.0.0.1:8081", loopback: true},
+		// The whole of 127.0.0.0/8, not the one address the configs name.
+		{url: "http://127.9.9.9:8081", loopback: true},
+		{url: "http://[::1]:8081", loopback: true},
+		{url: "https://127.0.0.1", loopback: true},
+		{url: "http://mac.local:8081"},
+		{url: "http://10.0.0.5:8081"},
+		{url: "http://[2001:db8::1]:8081"},
+		// url.Parse reads this as a scheme and an opaque path, which would leave another
+		// machine classified as this one.
+		{url: "mac.local:8081", refused: true},
+		{url: "", refused: true},
+		{url: "://8081", refused: true},
+		{url: "http://:8081", refused: true},
+		{url: "ftp://127.0.0.1:8081", refused: true},
+		{url: "http://%zz:8081", refused: true},
+	} {
+		lo, err := loopback(c.url)
+		switch {
+		case c.refused && err == nil:
+			t.Errorf("%q must be refused rather than classified, got loopback=%v", c.url, lo)
+		case !c.refused && err != nil:
+			t.Errorf("%q: %v", c.url, err)
+		case !c.refused && lo != c.loopback:
+			t.Errorf("%q: loopback=%v, want %v", c.url, lo, c.loopback)
+		}
+	}
+}
+
+// Refused before anything runs: the checkout is not resolved, no server is asked and no
+// sandbox is written, because none of them can be decided without this answer.
+func TestAnUnparseableEndpointIsRefusedBeforeAnythingRuns(t *testing.T) {
+	code, err := run(opts{ceiling: 100, calls: 30, sessions: 1, endpoint: "mac.local:8081"})
+	if code != 2 || err == nil {
+		t.Fatalf("want a refusal, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "mac.local:8081") {
+		t.Errorf("the refusal must name what it refused: %v", err)
+	}
+}

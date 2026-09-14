@@ -1651,6 +1651,11 @@ a cost of it: a key it can read is a key it can copy into the working tree.
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
 `-net` lifts it for one session and widens reachability, never the filesystem.
 
+**An endpoint is this machine's or another machine's, and one rule decides which.**
+`localhost`, any `127.0.0.0/8` address and `::1` are this machine; anything else is
+another. A URL that does not parse, or that names no scheme and host, is refused before
+anything runs, because everything that differs between the two cases reads that one answer.
+
 **A denied write is explained by the session, not by the launcher.** claude gives a tool's
 stderr to the model rather than passing it through, so the process that could print a hint
 is the one that never learns the write was refused. The sandbox is described in the

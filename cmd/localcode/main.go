@@ -110,6 +110,13 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Before the checkout, the server and the sandbox: every rule below turns on what kind
+	// of endpoint this is, so one nothing can classify is refused before anything runs.
+	if _, err := loopback(*endpoint); err != nil {
+		fmt.Fprintln(os.Stderr, "localcode: "+err.Error())
+		os.Exit(2)
+	}
+
 	args := fs.Args()
 	var (
 		code int
@@ -178,11 +185,11 @@ func run(o opts) (int, error) {
 	if o.sessions < 1 {
 		return 2, fmt.Errorf("-sessions is %d: a bound below one runs nothing", o.sessions)
 	}
-	root, err := resolveCheckout(o.checkout)
+	lo, err := loopback(o.endpoint)
 	if err != nil {
 		return 2, err
 	}
-	lo, err := loopback(o.endpoint)
+	root, err := resolveCheckout(o.checkout)
 	if err != nil {
 		return 2, err
 	}
