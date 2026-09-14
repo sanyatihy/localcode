@@ -24,11 +24,11 @@ func TestPreflightCarriesAndRefuses(t *testing.T) {
 	}
 }
 
-// The sampler must read wired and anonymous off vm_stat's labels, and total off hw.memsize.
-// Where vm_stat is absent the sample is not OK and carries no numbers at all: a plausible
-// zero on a row reads as a machine with nothing wired, which is the reading a preflight
-// would carry rather than refuse.
-func TestSampleReadsWiredAndAnonymous(t *testing.T) {
+// This machine, read by whichever sampler is built for it, and held to that platform's own
+// rule rather than to the other's. Where nothing answers the sample is not OK and carries no
+// numbers at all: a plausible zero on a row reads as a machine with nothing wired, which is
+// a reading a preflight would carry rather than refuse.
+func TestSampleReadsWhatItsOwnRuleNeeds(t *testing.T) {
 	s := sampleMemory()
 	if !s.OK {
 		if s.TotalGB != 0 || s.WiredGB != 0 || s.AnonymousGB != 0 || s.FreeGB != 0 || s.SwapUsedMB != 0 {
@@ -36,8 +36,23 @@ func TestSampleReadsWiredAndAnonymous(t *testing.T) {
 		}
 		return
 	}
-	if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 {
-		t.Errorf("missing a headroom input: %+v", s)
+	switch s.Platform {
+	case platformDarwin:
+		if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 {
+			t.Errorf("missing a headroom input: %+v", s)
+		}
+	case platformLinux:
+		if s.TotalGB <= 0 || s.AvailableGB <= 0 {
+			t.Errorf("missing a headroom input: %+v", s)
+		}
+		// Linux has no counter corresponding to either of these, and its rule wants
+		// neither. They stay at zero, and a zero here is read as "no such reading"
+		// only because the platform on the sample says which rule applies.
+		if s.WiredGB != 0 || s.AnonymousGB != 0 {
+			t.Errorf("a Linux sample carries a macOS counter: %+v", s)
+		}
+	default:
+		t.Fatalf("an answered sample names no platform, so it has no headroom rule: %+v", s)
 	}
 	if h := s.Headroom(); h < 0 || h > s.TotalGB {
 		t.Errorf("headroom outside the machine: %v of %v GB", h, s.TotalGB)
