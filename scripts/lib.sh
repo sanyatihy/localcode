@@ -52,6 +52,22 @@ wait_healthy() {
   return 1
 }
 
+# reserve_gb prints what the system side keeps whatever the GPU is allowed, read from the
+# machine file MACHINE names. RESERVE_GB in the environment still wins, because the reserve is
+# a judgement about one machine's desk rather than a reading. Here rather than in each caller:
+# gpuraise.sh refuses a raise that goes under it and rungs.sh holds it back from the ladder,
+# and two answers to one number is how a node gets laddered on a laptop's desk. An integer —
+# both callers do shell arithmetic with it.
+reserve_gb() {
+  if [ -n "${RESERVE_GB:-}" ]; then printf '%s' "$RESERVE_GB"; return 0; fi
+  python3 -c '
+import json, sys
+try:
+    print(json.load(open(sys.argv[1]))["reserve_gb"])
+except (OSError, ValueError, KeyError) as e:
+    sys.exit(f"{sys.argv[1]}: no reserve_gb to read ({e})")' "${MACHINE:-config/machine.json}"
+}
+
 # served_ctx asks the endpoint what it is serving, and prints `null` for a backend that does
 # not say. The guard against measuring one config under another's name, so a caller that
 # skips it is claiming rather than checking.

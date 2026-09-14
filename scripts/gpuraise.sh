@@ -16,10 +16,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# shellcheck source=scripts/lib.sh
+. scripts/lib.sh
+
 # What the system side keeps, whatever the GPU is allowed. The same reserve scripts/rungs.sh
 # holds back for the OS, the editor and the browser, and for the same reason: the ceiling
-# this raises is bought from one pool. Overridable because it is a judgement, not a reading.
-RESERVE_GB="${RESERVE_GB:-8}"
+# this raises is bought from one pool. It is the machine file's, because a node that serves
+# and nothing else keeps far less than a desk does.
+RESERVE_GB="$(reserve_gb)"
 
 [ "$(uname -s)" = "Darwin" ] || { echo "gpuraise: iogpu.wired_limit_mb is a macOS sysctl" >&2; exit 2; }
 

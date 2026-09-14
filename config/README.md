@@ -40,8 +40,9 @@ only ever disagree with it.
   needs before it may start, and the context ceiling each desk profile caps a run at. Read by
   `cmd/eval` and `cmd/tier2`, which refuse below it. Nothing in Go carries one of these
   numbers. The code reads `min_headroom_gb`, `desk_profiles[].name` and
-  `desk_profiles[].ceiling_tokens`; `machine`, `note` and `why` are prose, since JSON has no
-  comments.
+  `desk_profiles[].ceiling_tokens`; `reserve_gb` is read by `scripts/gpuraise.sh` and
+  `scripts/rungs.sh` and by nothing in Go; `machine`, `note` and `why` are prose, since JSON
+  has no comments.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
   back. All three are read; a profile naming a mechanism the scorer cannot perform is refused

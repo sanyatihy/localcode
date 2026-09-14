@@ -13,9 +13,12 @@ set -euo pipefail
 
 MODEL_PATH="${MODEL_PATH:-}"                  # GGUF to size the weights from
 KB_PER_TOKEN="${KB_PER_TOKEN:-35}"            # measured 31-37 on Qwen3.8-27B q8_0 KV
-RESERVE_GB="${RESERVE_GB:-8}"                 # OS, editor, browser — never the model's
 MAX_CTX="${MAX_CTX:-262144}"                  # the model's own limit; no point above it
 MAX_INGEST_MIN="${MAX_INGEST_MIN:-20}"        # a rung nobody will wait for is not a measurement
+
+# shellcheck source=scripts/lib.sh
+. "$(dirname "$0")/lib.sh"
+RESERVE_GB="$(reserve_gb)"                    # OS, editor, browser — never the model's
 
 # TOTAL_GB overrides detection, which is how "would more memory buy context?" was answered
 # without buying any: it would not, and docs/TECH.md records it.

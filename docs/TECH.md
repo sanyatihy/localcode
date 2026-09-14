@@ -310,6 +310,12 @@ the weights file's actual size, a reserve for the desktop, the measured KB/token
 ingest-time budget. It reports **which of memory or time binds**, which is the ladder's
 whole question.
 
+That reserve is `reserve_gb` in the machine file `MACHINE` names, default
+`config/machine.json` and 8 GiB on this laptop; `scripts/gpuraise.sh` refuses a raise that
+leaves the system under the same number, and `RESERVE_GB` in the environment still wins over
+the file. It is a judgement about what else runs on the machine, not a reading, which is why
+a machine that only serves declares its own.
+
 On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
 hand — and reports ingest time as the binding constraint. Modelling 128 GB with `TOTAL_GB=128`
 gives **the same rungs**, and so does a 70 GB model: memory allows ~262k tokens in every case
