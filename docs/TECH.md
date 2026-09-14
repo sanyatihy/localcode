@@ -90,7 +90,11 @@ session, not at boot**: after a cold boot to the login window the laptop sees no
 all, and it appears the moment somebody logs in on the node; it then survives that user
 logging out. Measured 2026-09-14 on the first reboot of the node. Until a Thunderbolt cable
 replaces the link, a rebooted node needs one login at its screen before the laptop can reach
-it over the cable, and the daemons it runs do not depend on that.
+it over the cable, and the daemons it runs do not depend on that. The same happens when the
+laptop sleeps: both lids closed and reopened on 2026-09-14 left the node awake (its power
+log shows no sleep after preparation, and `disablesleep` held) but with no USB device
+presented until a login at its screen. A USB-linked node therefore survives its own lid
+closing and not the laptop's; a Thunderbolt bridge is what removes the login.
 
 **A clean node is installed by `scripts/node/bootstrap.sh`**, which is the whole path from a
 new macOS to a checkout that can serve: the Command Line Tools through `softwareupdate`
