@@ -31,6 +31,9 @@ node that only serves, which levers cut it, or what the model gets after them.
 
 ## Design
 
+Superseded in part by the 2026-09-14 Log entries: the node is a 36 GB M5 Max on a USB
+link, serves `config/node.env` at 49,152, and runs three daemons.
+
 The node's budget is total memory less what macOS keeps idle, and both are readings.
 `scripts/node/prepare.sh` applies every OS lever below, then prints the idle
 `anonymous_gb` and `wired_gb` from `memprobe.sh` at the login window and compares them
@@ -102,21 +105,46 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 ## Tasks
 
-- [ ] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against TECH's record, and exits nonzero when the node reads higher
+- [ ] `scripts/node/bootstrap.sh` takes the node from a clean macOS to an installed checkout and a passing `qwen35` check, idempotently, and a second run changes nothing
+- [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
 - [ ] Each OS lever is measured on its own by the idle reading, TECH records the table, and a lever under 50 MB is dropped from the script
 - [ ] The node answers SSH by key as the serving user and nothing else: a port scan from the laptop shows `sshd` and the server only, and a password login is refused
-- [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the bridge
-- [ ] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
-- [ ] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
-- [ ] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
-- [ ] Two LaunchDaemons under `scripts/node/` apply the cap as root and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
-- [ ] Each server lever is screened one at a time at 32,768 filled with a saved prefix, and TECH records peak wired, headroom and decode per lever
-- [ ] `config/node-32k.env` carries the levers the screen settled, and TECH records whether Q4_K_M fits on 24 GB at 32,768 or 16,384, or does not fit
-- [ ] `config/machine-m5pro-24gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
-- [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 24 GB, with the ceiling written into the machine file
+- [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the link
+- [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
+- [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
+- [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
+- [x] Three LaunchDaemons under `scripts/node/` hold the link address, apply the cap as root, and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
+- [ ] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
+- [ ] `config/node.env` carries the levers and the context the screen settled
+- [ ] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
+- [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
 - [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
 - [ ] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
-- [ ] README documents the node: `prepare.sh` and its check, the SSH-only access, the bridge and Wi-Fi addresses, the daemons, and a `smoke` from the laptop over the bridge
+- [x] README is the node's runbook in order: the manual steps macOS forces and why, `bootstrap.sh`, `prepare.sh` and its check, `install.sh` and the daemons, the SSH-only access, the link and Wi-Fi addresses, and a `smoke` from the laptop over the link
 
 ## Log
 - 2026-09-14 — took 0053's Mac-to-Mac measurement box: the second Mac is this node.
+- 2026-09-14 — the idle record prepare.sh checks itself against lives in the machine file, as `idle_anonymous_gb` and `idle_wired_gb`, rather than in TECH: a script cannot read a number out of prose, and every other limit a machine imposes is already in `config/machine*.json`. TECH still records the reading and the levers it came from. Box 1 says the machine file.
+- 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — the node is not the machine this plan assumed. It is a Mac17,6: Apple M5 Max,
+  32 GPU cores, 36 GB, macOS 26.5.2, 1.8 TB free. Problem's 24 GB arithmetic is void — the
+  node has more room than the 32 GB laptop and carries `config/agent.env` at 49,152 — so the
+  screen no longer asks whether Q4_K_M fits at 32,768 but how far above 49,152 the node
+  reaches, and the node config starts from `agent.env`. The memory levers stand unchanged:
+  every gigabyte macOS keeps is context.
+- 2026-09-14 — the owner requires the node as infrastructure as code. Every step from a clean
+  macOS to a serving node is a script here, idempotent and re-runnable, with only what macOS
+  makes unavoidable left manual and each of those named in README. The node has nothing
+  installed on it and is the clean-state test of `scripts/node/bootstrap.sh`, which is a new
+  box. Steps needing root are run by the owner over SSH with `sudo`; no sudoers or
+  passwordless-sudo mechanism is added.
+- 2026-09-14 — the link is USB, not Thunderbolt: the cable negotiated USB 2 at 480 Mb/s and
+  Thunderbolt Bridge is inactive. The laptop is `en14` (AppleUSBNCMData, which `networksetup`
+  cannot manage, having no hardware port) at 10.99.0.1/24 and the node is `anpi2` at
+  10.99.0.2/24, both set with `ifconfig` and neither surviving a reboot — so the node's
+  address is a LaunchDaemon and the laptop's is a manual step in README. The node's Wi-Fi is
+  <its Wi-Fi address> with internet. The boxes that said bridge say link, and the ladder box says
+  36 GB.
+- 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — paused: the remaining boxes need the node

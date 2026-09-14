@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The node's address on the USB link to the laptop, from the machine file's
+     link_interface and link_address. scripts/node/install.sh writes the checkout path and
+     that machine file over __CHECKOUT__ and __MACHINE__.
+
+     It is a daemon because `ifconfig` survives neither a reboot nor a replug, and the
+     interface this configures is an AppleUSBNCMData one that `networksetup` has no hardware
+     port for and cannot manage. StartInterval rather than RunAtLoad alone: a job that exits
+     0 at boot never runs again, and a replug after that would leave the interface bare.
+     link.sh is quiet when the address is already there, so a reconcile costs a log line
+     only when it did something. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.localcode.link</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CHECKOUT__/scripts/node/link.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__CHECKOUT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Which machine file link.sh reads: this daemon serves both ends of the cable, and
+         each end's interface and address are in its own. -->
+    <key>MACHINE</key>
+    <string>__MACHINE__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/localcode/link.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/localcode/link.log</string>
+</dict>
+</plist>

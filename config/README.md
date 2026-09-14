@@ -17,6 +17,7 @@ A variant is a new file, never an edit to an existing one.
 | [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
 | [`mtp-32k-stock.env`](mtp-32k-stock.env) | 32 768 | `mtp-32k.env` on the binary on PATH. **Use this one**: 0051 measured stock drafting with the same head, at 1.18x the fork's decode |
 | [`driver-mtp-32k-stock.env`](driver-mtp-32k-stock.env) | 32 768 | `driver-mtp-32k.env` on the binary on PATH, and the driver config to use for the same reason |
+| [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off. The rest of its levers, and how far above this context the node reaches, wait on that feature's screen |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
 
@@ -40,8 +41,13 @@ only ever disagree with it.
   needs before it may start, and the context ceiling each desk profile caps a run at. Read by
   `cmd/eval` and `cmd/tier2`, which refuse below it. Nothing in Go carries one of these
   numbers. The code reads `min_headroom_gb`, `desk_profiles[].name` and
-  `desk_profiles[].ceiling_tokens`; `machine`, `note` and `why` are prose, since JSON has no
-  comments.
+  `desk_profiles[].ceiling_tokens`; `reserve_gb` is read by `scripts/gpuraise.sh` and
+  `scripts/rungs.sh`, `link_interface` and `link_address` by `scripts/node/link.sh`, and none
+  of the three by anything in Go; `machine`, `note` and `why` are prose, since JSON
+  has no comments.
+- [`machine-m5max-36gb.json`](machine-m5max-36gb.json) — the dedicated node's limits (0056),
+  and **a placeholder**: every number in it is unmeasured, and the feature's remaining boxes
+  replace them with readings taken on the node.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
   back. All three are read; a profile naming a mechanism the scorer cannot perform is refused

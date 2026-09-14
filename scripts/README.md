@@ -23,13 +23,34 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`chainfixture.py`](chainfixture.py) | write the twenty-bug repository a chain is measured on, buggy or repaired, so two runs start identical by construction |
 | [`chainrun.sh`](chainrun.sh) | drive one instruction to completion on one serving config, and score it by the fixture's own tests |
 | [`gpulimit.sh`](gpulimit.sh) | the ceiling on what the GPU may wire, read from Metal rather than assumed — the sysctl answers 0 and 0 is not unlimited |
-| [`gpuraise.sh`](gpuraise.sh) | apply or undo a raise of that cap by one command, refusing a lowering and one the system side cannot survive |
+| [`gpuraise.sh`](gpuraise.sh) | apply or undo a raise of that cap by one command, refusing a lowering and one the system side cannot survive, and doing nothing when that cap is already in force |
 | [`memprobe.sh`](memprobe.sh) | one JSON object of the memory facts that decide whether a config is viable |
 | [`deskprobe.sh`](deskprobe.sh) | one JSON object of the compositor's state, so the desktop is judged from outside the model process |
 | [`deskverdict.py`](deskverdict.py) | the desktop rule itself, in one place because `ladder.sh` and `screen.sh` both apply it |
 | [`doclinks.py`](doclinks.py) | every relative link and heading anchor in tracked markdown resolves — `make docs` |
 | [`promptwall.sh`](promptwall.sh) | find where Claude Code refuses a prompt against the context it was declared, by padding one to an exact token count and reading whether it was sent |
 | [`claude-code-settings.sh`](claude-code-settings.sh) | generate the project-scoped settings file the editor extension reads |
+
+## The node
+
+[`node/`](node/) is the dedicated 36 GB serving node (0056) and runs nowhere else: both
+scripts refuse unless `LOCALCODE_NODE=1` says the machine is one.
+
+| script | what it does |
+|---|---|
+| [`node/bootstrap.sh`](node/bootstrap.sh) | take a clean macOS to an installed checkout: Command Line Tools, Homebrew, go, python, llama.cpp, Claude Code, the `qwen35` check, the clone and `make install` — every step skipped when it is already done |
+| [`node/prepare.sh`](node/prepare.sh) | apply every OS lever the node serves under, then read what macOS keeps idle and check it against the machine file's record |
+| [`node/link.sh`](node/link.sh) | hold the node's end of the USB link: set the machine file's interface to its address when it is not already there, and say nothing when it is |
+| [`node/cap.sh`](node/cap.sh) | apply the GPU wired cap as root at boot: total memory less the node machine file's `reserve_gb` |
+| [`node/install.sh`](node/install.sh) | write this checkout's path and the serving user into the two plists, install them in `/Library/LaunchDaemons` and bootstrap them |
+
+`com.localcode.link` runs `link.sh` at boot and every 30 s, because `ifconfig` survives
+neither a reboot nor a replug and a job that exits at boot cannot notice either — and
+`install.sh --link-only` installs that one on the laptop, which holds the other end; `com.localcode.gpucap` runs `cap.sh` as root, because the
+sysctl needs root and does not survive a reboot either; `com.localcode.serve` runs `serve.sh` on `config/node.env` as the
+serving user with `HOST=0.0.0.0` and restarts it when it fails. `stop_server` boots that
+service out before stopping the process, or KeepAlive starts another one — under `sudo`,
+since booting a system service out needs root.
 
 Three of them take the machine's own answer rather than a list somebody typed:
 

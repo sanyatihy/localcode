@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The server, as the serving user whose home holds the HuggingFace cache.
+     scripts/node/install.sh writes the checkout, the user, that user's home and the
+     serving PATH over the __PLACEHOLDERS__ and bootstraps this.
+
+     HOST is the one thing the environment overrides: config/node.env keeps loopback
+     like every committed config, and a machine that serves the network says so where the
+     server is started (0053). HOME is set explicitly because the weights are read from that
+     user's cache, and PATH because launchd's own does not carry Homebrew. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.localcode.serve</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CHECKOUT__/scripts/serve.sh</string>
+    <string>config/node.env</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__CHECKOUT__</string>
+  <key>UserName</key>
+  <string>__USER__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOST</key>
+    <string>0.0.0.0</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>PATH</key>
+    <string>__PATH__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/localcode/serve.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/localcode/serve.log</string>
+</dict>
+</plist>

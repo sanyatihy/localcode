@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The GPU wired cap, reapplied at every boot as root. scripts/node/install.sh writes the
+     checkout path over __CHECKOUT__ and bootstraps this; it is not the file launchd reads.
+     No ordering against com.localcode.serve is expressible here: launchd has none. The
+     serving daemon's KeepAlive is what makes that survivable — a server that starts under
+     the derived cap and fails to allocate is restarted once this has run. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.localcode.gpucap</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CHECKOUT__/scripts/node/cap.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__CHECKOUT__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Library/Logs/localcode/gpucap.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Library/Logs/localcode/gpucap.log</string>
+</dict>
+</plist>

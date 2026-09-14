@@ -4,6 +4,12 @@
 
   "gpu_wired_cap_mb": "deliberately not carried. scripts/gpulimit.sh reads the cap from Metal at runtime, so a number here would duplicate a reading already taken; and a raise applied by scripts/gpuraise.sh is a sysctl a reboot undoes, which makes it an override somebody applied rather than a limit this machine imposes. 0042 measured that the derived 21,845 MiB is what refuses the draft head at 49,152 and that 24,576 admits it.",
 
+  "link_note": "The USB link to the dedicated node (0056), which this laptop holds its end of: en14 at 10.99.0.1/24 against the node's anpi2 at 10.99.0.2/24. It is an AppleUSBNCMData interface with no networksetup hardware port, and ifconfig survives neither a reboot nor a replug, so com.localcode.link reconciles it — see README.",
+  "link_interface": "en14",
+  "link_address": "10.99.0.1",
+
+  "reserve_gb": 8,
+
   "min_headroom_gb": 4.0,
 
   "desk_profiles": [

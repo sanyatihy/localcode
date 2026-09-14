@@ -191,6 +191,96 @@ that serves. The session reaches loopback and, through the launcher, that endpoi
 nothing else; port 8081 on this machine must be free while the run lasts. Nothing
 authenticates, so serve only on a network you trust.
 
+### Dedicated node
+
+A Mac kept only to serve: no desk, lid closed, reachable by SSH, set up by running the
+scripts below in order. Each one is re-runnable and skips what is already done. The node
+here is an M5 Max with 36 GB on a USB cable to the laptop; it serves
+[`config/node.env`](config/node.env) at 49,152 tokens.
+
+**0. What macOS will not let a script do.** Do these once, at the machine:
+
+- Plug the USB cable in and join the node to Wi-Fi, which is how it reaches the internet.
+- Create the serving user, and turn on System Settings › General › Sharing › Remote Login
+  for it. Nothing can enable the first login remotely, and a fresh account has no session.
+- Copy your key: `ssh-copy-id <user>@<node>`. Password login is turned off in step 2, and
+  a node with no key installed has no way back in.
+- Turn on System Settings › General › Sharing › Remote Login › (i) › "Allow full disk
+  access for remote users". Step 2's Remote Login levers need it, and root is not enough;
+  for an SSH session the grant is on the node, not on the machine you connect from.
+- Check `fdesetup status`. With FileVault on, no daemon starts and no key-only SSH login
+  works until somebody unlocks the data volume after a reboot: either turn it off on a
+  machine that only serves, or accept that a reboot needs a password before it serves.
+- Give this laptop its end of the link, which no reboot or replug survives. From this
+  checkout:
+
+```sh
+sudo MACHINE=config/machine.json ./scripts/node/install.sh --link-only
+```
+
+That installs `com.localcode.link` here, reading `en14` and `10.99.0.1` from
+[`config/machine.json`](config/machine.json) and reapplying them every 30 seconds. For a
+one-off instead, `sudo ifconfig en14 inet 10.99.0.1 netmask 255.255.255.0`, which is gone at
+the next reboot or replug. `en14` is an `AppleUSBNCMData` interface with no `networksetup`
+hardware port, so `networksetup` cannot manage it. The node's end, `anpi2` at `10.99.0.2`,
+is installed by step 3. The cable negotiated USB 2 at 480 Mb/s; Thunderbolt Bridge is
+inactive.
+
+**1. Bootstrap, over SSH as the serving user.** Fetch the script on its own — there is no
+checkout yet — read it, then run it:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/sanyatihy/localcode/main/scripts/node/bootstrap.sh
+sudo -v
+LOCALCODE_NODE=1 bash bootstrap.sh
+```
+
+It installs the Command Line Tools without the GUI dialog, Homebrew, `go`, `python`,
+`llama.cpp` and Claude Code, runs the `qwen35` architecture check, clones this repository
+into `~/Developer/localcode` and runs `make install`. It prints what it did and what was
+already there; a second run should say it did nothing. `sudo -v` first because it asks for
+the password once, in your session, rather than installing a sudoers rule. It appends
+Homebrew to `~/.zprofile`, which this shell has already read: open a new SSH session, or run
+`exec zsh -l`, before step 2.
+
+**2. Prepare**, from `~/Developer/localcode`:
+
+```sh
+sudo LOCALCODE_NODE=1 SERVE_USER=<user> ./scripts/node/prepare.sh
+```
+
+It turns off Spotlight, Siri, Apple Intelligence, Handoff, AirPlay, Bluetooth, Time Machine,
+automatic updates, the screen saver, sleep on power and every sharing service but Remote
+Login, restricts SSH to the serving user by key, and leaves Wi-Fi alone. It then prints what
+macOS still keeps with nobody logged in and refuses a node reading above the record in
+[`config/machine-m5max-36gb.json`](config/machine-m5max-36gb.json). Run it logged out at the
+login window.
+
+**3. Install the daemons:**
+
+```sh
+sudo LOCALCODE_NODE=1 SERVE_USER=<user> ./scripts/node/install.sh
+```
+
+`com.localcode.link` sets `anpi2` to `10.99.0.2` at every boot, `com.localcode.gpucap`
+applies the GPU wired cap as root, and `com.localcode.serve` serves `config/node.env` as the
+serving user bound to `0.0.0.0`, restarting it if it fails. All three log to
+`/Library/Logs/localcode/`. Stop the server with `sudo ./scripts/stop.sh`, which boots the
+daemon out; stopping the process leaves the daemon loaded and ready to serve again.
+
+Every node script refuses without `LOCALCODE_NODE=1`, because each ruins a machine somebody
+works at.
+
+**4. Drive it from the laptop**, over the link:
+
+```sh
+ENDPOINT=http://10.99.0.2:8081 make smoke
+localcode -endpoint http://10.99.0.2:8081 "fix the failing test"
+```
+
+The node is also on Wi-Fi at `<its Wi-Fi address>`. Nothing authenticates the endpoint — serve
+only on a network you trust.
+
 ## Checks and benchmarks
 
 From the Localcode checkout:
