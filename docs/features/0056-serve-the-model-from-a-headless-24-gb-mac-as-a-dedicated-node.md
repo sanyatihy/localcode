@@ -119,7 +119,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
 - [x] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
 - [x] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
-- [ ] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
+- [x] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
 - [x] README is the node's runbook in order: the manual steps macOS forces and why, `bootstrap.sh`, `prepare.sh` and its check, `install.sh` and the daemons, the SSH-only access, the link and Wi-Fi addresses, and a `smoke` from the laptop over the link
 
 ## Log
@@ -183,3 +183,4 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   ladder measured what the machine allows and 0008 chose this for what a session needs. The
   draft head clears the adoption bar on decode here and is still not set: what it does to a
   chain on this node is unmeasured.
+- 2026-09-14 — the first three chain attempts on the node stopped on the launcher's sandbox dropping `~/.claude` on a fresh machine (no transcript, so no budget); fixed in the launcher with a test, and the six chains recorded were run after the fix.

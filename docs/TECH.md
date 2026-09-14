@@ -600,6 +600,28 @@ projector it does not load — under a cap raised to 30,720 MiB. Either the proj
 raise would have been enough at this rung. Both together are what leave the node's ladder
 bounded by the clock instead.
 
+**The network adds nothing a chain can see.** The same twenty-bug fixture, `config/node.env`
+served on the node, driven three times from the node against loopback and three times from the
+laptop through the proxy 0053 puts at `127.0.0.1:8081`, the server restarted cold before every
+chain. Every chain fixed all twenty. From the node the walls were 259, 198, 331 s
+(mean 263); from the laptop 250, 227, 300 s (mean
+259). The spread within either side is larger than the gap between them,
+and the two chains that took a second session sit one on each side. Against the laptop's own
+chains on the same fixture (0041: 498 s in one session, 1,132 and 1,147 s in four, on the 32k
+draft-head config) the node finishes in a quarter of the wall on the config the laptop cannot
+serve with the head at all. The prompt-cache reuse behind that, over a hundred thousand tokens
+reused against thirty thousand ingested per chain, is the mechanism 0018 found and is unchanged
+by the hop. Rows: `docs/data/2026-09-14-m5max-36gb-chain.jsonl`.
+
+| chain | driven from | tests | sessions | wall | prompt ingested | prompt reused | generated |
+|---|---|---|---|---|---|---|---|
+| `node-chain-self-1` | the node itself | 20/20 | 1 | 259 s | 27,226 | 106,159 | 3,643 |
+| `node-chain-self-2` | the node itself | 20/20 | 1 | 198 s | 11,877 | 101,442 | 3,047 |
+| `node-chain-self-3` | the node itself | 20/20 | 2 | 331 s | 14,262 | 193,176 | 5,318 |
+| `laptop-chain-1` | the laptop, through 0053's proxy | 20/20 | 1 | 250 s | 12,709 | 200,399 | 4,232 |
+| `laptop-chain-2` | the laptop, through 0053's proxy | 20/20 | 1 | 227 s | 12,531 | 164,607 | 3,625 |
+| `laptop-chain-3` | the laptop, through 0053's proxy | 20/20 | 2 | 300 s | 15,066 | 270,756 | 4,711 |
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,
