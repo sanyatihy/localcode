@@ -837,7 +837,18 @@ func writeSandboxProfile(state, cwd string, net bool, agentState []string) (stri
 		filepath.Join(home, "Library", "Caches"), // where macOS toolchains cache
 		filepath.Join(home, ".cache"),            // where XDG ones do
 	}
-	// Where the agent files its own state, which only the agent knows.
+	// Where the agent files its own state, which only the agent knows. Made here, because
+	// the loop below drops a path that does not resolve and an absent one never resolves:
+	// on a machine where the agent has never run, its state directory does not exist yet,
+	// and dropped from the profile the kernel denies the transcript the session would have
+	// written there. A chain then reads every session as costing nothing — measured on the
+	// node, a 1,506-second session recorded 0 turns and 0 peak tokens and ran into the
+	// server's own 400. An absent cache root is still not an error; this one is.
+	for _, p := range agentState {
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			return "", fmt.Errorf("could not make %s, where the agent files its own state: %w", p, err)
+		}
+	}
 	writable = append(writable, agentState...)
 	// Whatever this developer's ecosystems need, named once by them rather than guessed
 	// once by us.

@@ -75,8 +75,9 @@ unset, and that is a decision rather than an omission: see
 **The dedicated node is a Mac17,6** — Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2 — so
 it has 4 GB more than the laptop and no desk to protect, and it serves `config/node.env`,
 which is `config/agent.env` at 49,152 with the projector off. What the plan first assumed, a
-24 GB M5 Pro that might not carry Q4_K_M at 32,768, is not this machine: 0056's screen asks
-how far above 49,152 the node reaches. Its link to the laptop is a USB cable that negotiated
+24 GB M5 Pro that might not carry Q4_K_M at 32,768, is not this machine: it fills 163,840
+with 5.81 GB of cap to spare, and what stops it there is ingest time — see
+[the node's envelope](#the-nodes-envelope-measured-on-the-node). Its link to the laptop is a USB cable that negotiated
 USB 2 at 480 Mb/s with Thunderbolt Bridge inactive — the laptop is `en14` at 10.99.0.1/24 and
 the node `anpi2` at 10.99.0.2/24, both set by `ifconfig`, which no reboot or replug survives.
 Both ends are held by the same `com.localcode.link` daemon, reading the interface and
@@ -89,7 +90,15 @@ session, not at boot**: after a cold boot to the login window the laptop sees no
 all, and it appears the moment somebody logs in on the node; it then survives that user
 logging out. Measured 2026-09-14 on the first reboot of the node. Until a Thunderbolt cable
 replaces the link, a rebooted node needs one login at its screen before the laptop can reach
-it over the cable, and the daemons it runs do not depend on that.
+it over the cable, and the daemons it runs do not depend on that. The same happens when the
+laptop sleeps: both lids closed and reopened on 2026-09-14 left the node awake (its power
+log shows no sleep after preparation, and `disablesleep` held) but with no USB device
+presented until a login at its screen. A USB-linked node therefore survives its own lid
+closing and not the laptop's; a Thunderbolt bridge is what removes the login.
+With its own lid closed and the laptop open, the node served and passed `smoke` over the
+cable on 2026-09-15. A pulled power cable does nothing to it: the node is a MacBook and
+runs on its battery, so `autorestart` covers only a battery that has drained, and the
+recovery test is a hard restart from the power button.
 
 **A clean node is installed by `scripts/node/bootstrap.sh`**, which is the whole path from a
 new macOS to a checkout that can serve: the Command Line Tools through `softwareupdate`
@@ -99,7 +108,13 @@ Claude Code, README's `qwen35` architecture check on `libllama.dylib`, the clone
 it did against what was already there, so rerunning it is how the node is changed. Nothing is
 installed on that machine by hand, which makes it the clean-state test of this script; the
 steps macOS leaves manual are listed in README, and root steps are typed by the owner over
-SSH rather than granted by a sudoers rule.
+SSH rather than granted by a sudoers rule. Run on the node 2026-09-14 from a clean macOS
+26.5.2, it installed the Command Line Tools ("Command Line Tools for Xcode 26.6"), Homebrew,
+`go`, `python`, llama.cpp b10809 and the `claude-code` cask, passed the `qwen35` check,
+cloned and ran `make install`; the rerun reported every step already in place but the
+checkout update and the `make install` that follows it, which ran because trunk had moved.
+`LOCALCODE_REF` defaults to `main`, so a rerun on a node following a branch switches the
+checkout back unless it is passed.
 
 **A node is prepared by `scripts/node/prepare.sh`**, which applies the OS levers 0056 lists
 — Apple Intelligence, Siri and Spotlight, iCloud, Handoff, AirPlay and every sharing service
@@ -107,8 +122,8 @@ but Remote Login, Time Machine and the update daemon, Bluetooth, the screen save
 power, keys-only SSH for the serving user and the firewall in stealth mode — with nobody
 logged in, and Wi-Fi left alone. It then reads `memprobe.sh` and refuses a node whose idle
 `anonymous_gb` or `wired_gb` is above `idle_anonymous_gb` and `idle_wired_gb` in the machine
-file; a machine file with no record yet gets the readings printed instead. What each lever
-saves is not measured yet. Three things the first node taught, 2026-09-14: the application
+file; a machine file with no record yet gets the readings printed instead. The levers are
+measured as a set, not one by one: on 36 GB none is worth removing for what it saves. Three things the first node taught, 2026-09-14: the application
 firewall must keep Apple's built-in software admitted (`--setallowsigned on`), because with
 it off the node accepted the TCP connection on port 22 and never sent sshd's banner, allow
 list or not, until the firewall was turned off at the screen; `softwareupdated` cannot be
@@ -118,7 +133,10 @@ nests `admin` by GUID on a fresh install, which `dseditgroup` removes by name on
 firewall's list is not three entries but fourteen: macOS keeps its own built-in software
 there (`sshd-session`, `rapportd`, `sharingd`, `smbd`, `cupsd` and the like) whatever is
 removed, so what a prepared node exposes is settled by the services being off and read by
-the port scan, not by that list. With
+the port scan, not by that list. A full TCP scan from the laptop found three ports open:
+22, the server's 8081 while the daemon serves, and one Apple built-in listener on a high
+random port (63198, a root-owned system daemon), which is left alone by decision; a password
+login is refused with `Permission denied (publickey)`. With
 every lever applied and iCloud still signed in, the node idled at 2.60 GB anonymous and
 1.93 GB wired at the login window, against 3.98 GB and 2.05 GB before any lever.
 
@@ -136,7 +154,10 @@ daemon is loaded, since a daemon between restart attempts has no process to find
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
 flow never uses (1.02 GB resident); `MLOCK=1` passes `--mlock`. Both are absent from every
-config a desk serves, and `config/node.env` sets the first.
+config a desk serves, and `config/node.env` sets the first. Screened on the node, the
+projector costs 1.12 GB of wired memory there and `--mlock` costs the machine its free
+memory for no change in peak or decode — see
+[the node's envelope](#the-nodes-envelope-measured-on-the-node).
 
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
@@ -391,6 +412,219 @@ it would not have bought context.
 That is worth stating plainly: **more RAM does not buy more context for this model.** It
 buys larger quants and larger models. Context is bounded by ingest time, and ingest time
 does not care how much memory is spare.
+
+### The node's envelope, measured on the node
+
+Everything in this subsection is read on the dedicated node — Mac17,6, M5 Max, 36 GB,
+macOS 26.5.2 — at the login window with nobody logged in, the GPU wired cap raised to
+30,720 MiB by `com.localcode.gpucap`, and the serving daemon's own server stopped. The
+figures above are a 32 GB M2 Max at the cap Metal derives there. **Nothing here may be read
+across the two machines without the caveat under the matched rungs**, and the headroom
+columns are against different ceilings — 30.0 GB here against 21.33 GiB there.
+
+**Each server lever, one at a time from `config/node.env` at 49,152**, filled to 44,236
+tokens by the screen's own request and then sampled for 180 s, so every cell is judged
+filled and with that prefix in the prompt cache
+([rows](data/2026-09-14-m5max-36gb-screen.jsonl)):
+
+| lever | peak wired | headroom | cold fill | decode at 44k |
+|---|---|---|---|---|
+| **baseline — `config/node.env`** | **19.91 GB** | **10.09 GB** | **127 s** | **17.16 tok/s** |
+| projector on (`NO_MMPROJ` unset) | 21.03 | 8.97 | 127 s | 16.87 |
+| `CACHE_RAM=0` | 19.92 | 10.08 | 128 s | 16.35 |
+| `CACHE_RAM=2048` | 19.92 | 10.08 | 128 s | 16.27 |
+| `UBATCH_SIZE=256` | 19.85 | 10.15 | 130 s | 16.16 |
+| `UBATCH_SIZE=512` — llama.cpp's default, restated | 19.92 | 10.08 | 129 s | 16.20 |
+| KV `q4_0` on K and V | 19.17 | 10.83 | 129 s | 16.31 |
+| draft head, `--spec-type draft-mtp`, depth 3 | 21.11 | 8.89 | 135 s | 19.62 |
+| `MLOCK=1` | 19.92 | 10.08 | 129 s | 16.09 |
+
+Every cell loaded, answered, and swapped **0.0 MB**; all nine are admissible, which on a
+headless node means loaded with no swap. So the screen ranks rather than refuses, and what
+it ranks is memory:
+
+- **The projector costs 1.12 GB** and is the only lever that moves peak wired upward for
+  nothing — 1.02 GB on the laptop, measured resident rather than wired. `NO_MMPROJ=1` stays.
+- **`CACHE_RAM` moves nothing at either setting**, 0 or 2048 MiB, because the host prompt
+  cache fills lazily: a screen that goes from load to one filled prompt never fills it. What
+  it would cost a session long enough to fill it is not measured here, and the bounded value
+  is the cheap insurance 0041 already showed does not reserve at load.
+- **`UBATCH_SIZE=256` costs 3 s of fill and buys 0.07 GB.** The 512 cell restates
+  llama.cpp's default and is settings-identical to the baseline.
+- **KV `q4_0` saves 0.74 GB at 49,152**, against 0.47 GB at 32,768 on the laptop (0003). It
+  buys memory this machine is not short of and loses the KV precision that bought it.
+- **`MLOCK=1` moves no peak and pins what it takes from elsewhere**: free memory read
+  0.08 GB at load against the baseline's 4.09, and anonymous 1.53 GB against 2.69. Nothing
+  measured favours it here.
+- **The draft head loads at 49,152 on this node**, where the laptop's allocator refuses it
+  on the first prefill batch at the cap Metal derives. It costs 1.20 GB of wired memory.
+
+**The decode column is one 256-token completion per cell, not a decode curve.** It is taken
+inside the sampling window against the prefix the fill left — 43,740 of its tokens are
+reused — so it reads decode at about 44k of depth on a cache the fill warmed. One sample is
+all it is: the baseline and the cell that restates llama.cpp's own default differ in no
+setting and sit **5.9% apart**, which is the spread anything below cannot be distinguished
+from. The draft head's 19.62 is the only reading that clears it, and the curve below is what
+it is read from instead — no adoption rests on this column.
+
+**The context ladder, `config/node.env` with only the context and KV type moved**, each rung
+filled to 90% of its context and sampled through the fill
+([rows](data/2026-09-14-m5max-36gb-ladder.jsonl)). `condition` is `headless` throughout, so
+the desktop verdict is `not_applicable` and the pass rule is a completed fill with zero swap
+delta:
+
+| ctx | peak wired | headroom to the cap | headroom, total less wired and anon | cold ingest | prompt tok/s | swap Δ |
+|---|---|---|---|---|---|---|
+| 8 192 † | 18.22 GB | 11.78 GB | 15.66 GB | 14 s | 539.9 | 0.0 MB |
+| 16 384 † | 18.52 | 11.48 | 15.35 | 31 s | 476.6 | 0.0 |
+| 32 768 † | 19.33 | 10.67 | 14.72 | 73 s | 404.0 | 0.0 |
+| 49 152 | 19.92 | 10.08 | 15.27 | 127 s | 347.5 | 0.0 |
+| 65 536 | 20.52 | 9.47 | 14.66 | 213 s | 277.1 | 0.0 |
+| 81 920 | 21.14 | 8.86 | 14.01 | 316 s | 233.8 | 0.0 |
+| 98 304 | 21.75 | 8.25 | 13.13 | 427 s | 207.0 | 0.0 |
+| 131 072 | 22.97 | 7.03 | 11.76 | 690 s | 171.1 | 0.0 |
+| **163 840** | **24.19** | **5.81** | **10.57** | **1 033 s** | **142.8** | **0.0** |
+
+**Time binds on 36 GB, and memory does not.** Marginal KV cost is **38.4–39.6 KB/token**
+across the whole walk, flat enough to extrapolate: the 30,720 MiB cap still has 5.81 GB of
+room at 163,840, and nothing swapped at any rung. What runs out is patience — a cold ingest
+of 1,033 s at the top rung, against 127 s at 49,152 — and the 20-minute budget
+`scripts/rungs.sh` applies is crossed between 163,840 and the rung above it. **163,840 is
+therefore the ceiling in `config/machine-m5max-36gb.json`**, and it is the largest rung that
+was walked to a completed fill rather than the largest that would.
+
+**196,608 was walked and stopped, and has no row.** Its fill reached 88,064 of 176,947
+tokens in 2,097 s — half the prompt in 35 minutes, with the rate down to 42 tok/s — while
+wired sat at 25.22 GB with 4.78 GB of cap left and swap at 0.0. It was stopped there rather
+than left to finish: the rung is already several times outside the ingest budget, so what a
+completed row would add is the exact size of a number nobody will wait for. It is recorded
+as stopped, not as failed — nothing on that machine refused it.
+
+† **re-walked from a rested machine, and that is the row to read.** Those three rungs were
+first walked immediately after the 196,608 fill was killed, at the end of an hour of
+continuous prefill, and read 64, 117 and 224 s — 115–132 tok/s, where every rung above them
+read 143–348. Ten minutes with nothing running turned that into 14, 31 and 73 s: 540, 477 and
+404 tok/s, which is where a curve decaying with depth puts them, and the per-batch log agrees
+to the token — 651 tok/s at 4,096 tokens into the rested 32,768 fill, against 653 in the
+49,152 cell and 255 in the tired one. **The memory columns moved by at most 0.18 GB across
+the pair**, so what the tired walk lost was three to four times its ingest speed and nothing
+else. Both walks are in the file under their own `condition`, `headless` and
+`headless-rested`.
+
+**A tired node is not a slower node, it is an invalid measurement**, and nothing on the
+machine says which one it is: `pmset -g therm` records no thermal or performance warning
+level here, ever, so the mechanism behind the loss is inferred from the rates and is a
+hypothesis. What is a reading is the rule it implies — rest a node before walking it, and
+distrust any rate taken straight after a long fill.
+
+With those three rungs re-walked, the node's ingest is comparable with the laptop's at every
+matched rung:
+
+| ctx | node cold ingest | laptop, b10809 | node : laptop | node peak wired | laptop peak RSS |
+|---|---|---|---|---|---|
+| 8 192 | 14 s | 66 s | 4.7x | 18.22 GB | 17.91 GB |
+| 16 384 | 31 s | 142 s | 4.6x | 18.52 | 18.64 |
+| 32 768 | 73 s | 297 s | 4.1x | 19.33 | 19.13 |
+| 49 152 | 127 s | 543 s (b10450) | 4.3x | 19.92 | 19.72 |
+| 65 536 | 213 s | refused by the cap | — | 20.52 | 20.27 (b10450) |
+
+**The node ingests four to five times faster at every rung, and the ratio is flat across
+them** — 4.1x to 4.7x over a sixteenfold span of context, with the 49,152 row's 4.3x taken
+against an older build and sitting inside the same band. Prefill is the half of the clock
+that decides what a session costs at depth, so this is the node's whole case. The two memory
+columns are not the same quantity — peak wired here against the laptop's peak RSS, which
+understates KV on Apple Silicon — and the node serves with the projector off where the
+laptop's rows carry it, so about a gigabyte of the difference at a rung is that.
+
+**The tier-1 suite on the node, under the laptop's settings** — `config/tuned.env` at
+32,768, thinking off, model-card sampling sent per request, three passes over the nine
+ranking fixtures, and the same suite again with the draft head as the only thing moved
+([rows](data/2026-09-14-m5max-36gb-tier1.jsonl)):
+
+| | laptop, b10450 | node, b10809 | node + head |
+|---|---|---|---|
+| pass | 25/27 | 24/27 | 23/27 |
+| tool-call valid | 12/12 | 12/12 | 12/12 |
+| cold prefill | 102.9 tok/s (95–114) | **374.8** (308–429) | 330.2 (293–362) |
+| decode, server-reported | 9.69 tok/s (9.18–11.94) | **20.62** (20.06–21.08) | **37.01** (32.96–44.07) |
+| decode, client-side | — | 0.0479 s/tok | 0.0264 — **1.81x**, acceptance 3.87 |
+| suite wall, three passes | 298.8 s | **132.9 s** | **74.6 s** |
+| peak wired | 20.89 GB † | 20.45 GB | 21.48 GB |
+| swap Δ | 0.0 MB | 0.0 MB | 0.0 MB |
+
+† the laptop's tier-1 rows carry no memory at all; 20.89 GB is 0014's reading of the same
+config serving at 32k, with the projector, and is the closest comparable figure rather than
+the same measurement.
+
+**The node finishes the suite in 45% of the laptop's wall clock and scores the same.** The
+quality columns are not moved by the machine, which is what should happen and is worth
+having checked: every failure on either machine is one of the two tasks TECH already names
+as the only ones that discriminate — the contradicted specification and the read-only
+constraint — and tool-call validity is 12/12 in all three columns. The head costs one more
+`fail_wrong_tool` on `toolcall-constraint-readonly` and the greedy probes hash
+`0f4045cad664f4ac` on both sides, so that is the suite's own noise on a task measured at
+8/12 on the laptop, not a distribution the head changed.
+
+**Part of the prefill gap is the build.** The laptop's rows are build 10450 and the node runs
+10809, which the laptop's own re-walk measured as ~9% at this context. The build-matched
+comparison is the ladder's: 73 s against 297 s to fill 32,768 cold, 4.1x.
+
+**Decode by depth, with the draft head and without it**, measured the way 0017 measured the
+laptop's: `scripts/pair.sh` over the same fixtures, three repeats a side, one session per
+depth, `config/node.env` against the same file with `SPEC_TYPE="draft-mtp"` and depth 3
+([rows](data/2026-09-14-m5max-36gb-curve.jsonl)). Client-side decode, from the gap to the
+first token, so prefill is not in it:
+
+| prompt depth | node | node + head | ratio | acceptance | laptop, b10450 + fork | its ratio |
+|---|---|---|---|---|---|---|
+| ~200 (the ranking suite) | 0.0474 s/tok | 0.0252 | **1.88x** | 3.88 | 0.1050 | 1.57x |
+| 8 000 | 0.0516 | 0.0280 | 1.84x | 3.96 | 0.1181 | 1.40x |
+| 16 000 | 0.0546 | 0.0310 | 1.76x | 3.97 | 0.1348 | 1.34x |
+| 32 000 | 0.0601 | 0.0359 | **1.67x** | 3.97 | 0.1700 | 1.26x |
+
+**The node decodes 2.6x faster than the laptop and drafts at the same ratio.** The laptop's
+columns above are build 10450 and the fork, which is the pair 0017 published; on stock 10809
+the laptop re-read 0.1591 s/tok at 32,000 and **1.67x** — the same ratio the node reads at
+that depth on the same stock build, against 0.0601 s/tok. So the head's gain is a property of
+the mechanism and the build, and the 2.6x is the machine.
+
+**Every probe hashes `0f4045cad664f4ac…`, on both sides at all four depths**, which is the
+same hash the laptop's arms produced: the drafted decoder emits the text the undrafted one
+does, and that is what licenses reading the ratio at all. Swap delta is 0 on all 80 rows.
+
+**The head clears the 1.5x bar at every depth measured here**, where on the laptop it cleared
+it only at the top of the context. What it costs on this node is 1.20 GB of wired memory out
+of 8.89 GB of headroom at 49,152 — see the screen table — and it loads at a context the
+laptop's allocator refuses it at.
+
+**65,536 serves here and is refused there**, and not because of the silicon. The laptop
+wires 21.82–22.08 GB at that rung against the 21.33 GiB cap Metal derives and fails on the
+first prefill batch; the node fills it in 213 s at 20.52 GB — 1.3 GB of which is the
+projector it does not load — under a cap raised to 30,720 MiB. Either the projector or the
+raise would have been enough at this rung. Both together are what leave the node's ladder
+bounded by the clock instead.
+
+**The network adds nothing a chain can see.** The same twenty-bug fixture, `config/node.env`
+served on the node, driven three times from the node against loopback and three times from the
+laptop through the proxy 0053 puts at `127.0.0.1:8081`, the server restarted cold before every
+chain. Every chain fixed all twenty. From the node the walls were 259, 198, 331 s
+(mean 263); from the laptop 250, 227, 300 s (mean
+259). The spread within either side is larger than the gap between them,
+and the two chains that took a second session sit one on each side. Against the laptop's own
+chains on the same fixture (0041: 498 s in one session, 1,132 and 1,147 s in four, on the 32k
+draft-head config) the node finishes in a quarter of the wall on the config the laptop cannot
+serve with the head at all. The prompt-cache reuse behind that, over a hundred thousand tokens
+reused against thirty thousand ingested per chain, is the mechanism 0018 found and is unchanged
+by the hop. Rows: `docs/data/2026-09-14-m5max-36gb-chain.jsonl`.
+
+| chain | driven from | tests | sessions | wall | prompt ingested | prompt reused | generated |
+|---|---|---|---|---|---|---|---|
+| `node-chain-self-1` | the node itself | 20/20 | 1 | 259 s | 27,226 | 106,159 | 3,643 |
+| `node-chain-self-2` | the node itself | 20/20 | 1 | 198 s | 11,877 | 101,442 | 3,047 |
+| `node-chain-self-3` | the node itself | 20/20 | 2 | 331 s | 14,262 | 193,176 | 5,318 |
+| `laptop-chain-1` | the laptop, through 0053's proxy | 20/20 | 1 | 250 s | 12,709 | 200,399 | 4,232 |
+| `laptop-chain-2` | the laptop, through 0053's proxy | 20/20 | 1 | 227 s | 12,531 | 164,607 | 3,625 |
+| `laptop-chain-3` | the laptop, through 0053's proxy | 20/20 | 2 | 300 s | 15,066 | 270,756 | 4,711 |
 
 ## The prefill batch was swept, and the default kept
 

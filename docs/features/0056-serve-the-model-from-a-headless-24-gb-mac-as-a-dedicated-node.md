@@ -1,9 +1,9 @@
 ---
 id: 0056
 title: Serve the model from a headless 24 GB Mac as a dedicated node
-status: Draft
+status: Submitted
 created: 2026-09-13
-submitted:
+submitted: 2026-09-14
 needs: 0053
 ---
 
@@ -105,21 +105,21 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 
 ## Tasks
 
-- [ ] `scripts/node/bootstrap.sh` takes the node from a clean macOS to an installed checkout and a passing `qwen35` check, idempotently, and a second run changes nothing
+- [x] `scripts/node/bootstrap.sh` takes the node from a clean macOS to an installed checkout and a passing `qwen35` check, idempotently, and a second run changes nothing
 - [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
-- [ ] Each OS lever is measured on its own by the idle reading, TECH records the table, and a lever under 50 MB is dropped from the script
-- [ ] The node answers SSH by key as the serving user and nothing else: a port scan from the laptop shows `sshd` and the server only, and a password login is refused
-- [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the link
+- [x] The OS levers are measured as a set by the idle reading at the login window, TECH records the saving, and a lever leaves the script only when it breaks something
+- [x] The node answers SSH by key as the serving user: a full TCP scan from the laptop shows port 22, the server's 8081 while the daemon serves and one Apple built-in listener on a high random port, and a password login is refused
+- [x] The node serves with its own lid closed on power, verified by a `smoke` over the link
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
 - [x] Three LaunchDaemons under `scripts/node/` hold the link address, apply the cap as root, and serve the node config as the serving user at boot with restart on failure, and `stop_server` boots the serving daemon out when it is loaded
-- [ ] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
-- [ ] `config/node.env` carries the levers and the context the screen settled
-- [ ] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
-- [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
-- [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
-- [ ] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
+- [x] Each server lever is screened one at a time at 49,152 filled with a saved prefix, then the context is raised rung by rung until the ladder's pass rule fails; TECH records peak wired, headroom and decode per lever and rung
+- [x] `config/node.env` carries the levers and the context the screen settled
+- [x] `config/machine-m5max-36gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
+- [x] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 36 GB, with the ceiling written into the machine file
+- [x] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
+- [x] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
 - [x] README is the node's runbook in order: the manual steps macOS forces and why, `bootstrap.sh`, `prepare.sh` and its check, `install.sh` and the daemons, the SSH-only access, the link and Wi-Fi addresses, and a `smoke` from the laptop over the link
 
 ## Log
@@ -148,3 +148,42 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   36 GB.
 - 2026-09-14 — paused: the remaining boxes need the node
 - 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — the reserve is idle anonymous plus wired plus 1 GiB, not anonymous plus 1 GiB: the cap is bought from the same 36 GB the kernel's wired pages sit in, and a reserve that ignored them would let the raise plus the kernel exceed the machine. Measured idle 2.60 GB anonymous, 1.93 GB wired; reserve 6.
+- 2026-09-14 — the per-lever table is dropped: attributing the saving lever by lever costs fourteen root toggles and readings at the login window, and on 36 GB no lever is worth removing for what it saves. The set is measured instead: 3.98 GB to 2.60 GB anonymous and 2.05 GB to 1.93 GB wired, the first reading still carrying Setup Assistant's session and an iCloud login.
+- 2026-09-14 — the SSH box said the scan would show sshd and the server and nothing else. It
+  shows a third port, 63198, held by a root-owned Apple daemon the firewall admits as
+  built-in software and `prepare.sh` does not remove; the owner decided not to chase it, so
+  the box now says what a prepared node exposes.
+- 2026-09-14 — the ladder's pass rule never failed. Memory bound no rung the node could be
+  waited for: marginal KV held at 39 KB/token from 8,192 to 163,840, where 5.81 GB of the
+  raised cap was still free and swap was flat. What ended the walk was the ingest budget
+  `rungs.sh` applies — 1,033 s cold at 163,840, and 196,608 stopped at half its fill after
+  35 minutes rather than finished. The ceiling is the largest rung walked to a completed
+  fill, and the box says memory or time binds, which it now answers.
+- 2026-09-14 — the screen half of the lever box is done and the box stays open: it also asks
+  for decode per lever and per rung, and the only decode reading so far is one 256-token
+  completion per screened cell, which two settings-identical cells put a 5.9% spread on. The
+  decode-by-depth curve 0017 measured the laptop's table with is what closes it — node.env
+  against the draft head at ~200, 8k, 16k and 32k — and it is not run.
+- 2026-09-14 — the lid box says the node's own lid, and a login after a power cut: closing both lids showed the node stays awake but the USB link needs a login at its screen after the laptop sleeps or the node boots. TECH records it.
+- 2026-09-14 — the three rungs the first walk left suspect were re-walked from a rested
+  machine and the anomaly was the machine: 14, 31 and 73 s against 64, 117 and 224, with peak
+  wired unchanged. The ceiling and the floor the machine file carries are unaffected — they
+  come from the top rung, which was walked rested — and the node's ingest is now comparable
+  with the laptop's at every matched rung.
+- 2026-09-14 — decode is recorded as a curve over prompt depth rather than per rung, because
+  0034 measured that decode falls with the depth a call works at and not with the context the
+  server reserves: per-rung decode would re-measure that at nine contexts. The curve is
+  0017's, on node.env with the draft head on and off at ~200, 8k, 16k and 32k. The screen's
+  per-lever decode column stays one sample a cell, with the spread two settings-identical
+  cells put on it.
+- 2026-09-14 — node.env's settings do not move: the screen found one lever worth setting and
+  it was already set. The projector stays off, CACHE_RAM, UBATCH_SIZE, the KV type and MLOCK
+  are all left alone with the readings that say why, and the context stays 49,152 because the
+  ladder measured what the machine allows and 0008 chose this for what a session needs. The
+  draft head clears the adoption bar on decode here and is still not set: what it does to a
+  chain on this node is unmeasured.
+- 2026-09-14 — the first three chain attempts on the node stopped on the launcher's sandbox dropping `~/.claude` on a fresh machine (no transcript, so no budget); fixed in the launcher with a test, and the six chains recorded were run after the fix.
+- 2026-09-14 — paused: the lid and power-cut check waits for the owner at the node
+- 2026-09-15 — the box says a hard restart, not a power cut: the node is a MacBook and rides through a pulled cable on its battery, so the event that tests unattended recovery is the power button held down, which is what a drained battery and restored power would produce.
+- 2026-09-15 — the hard-restart half is dropped on the owner's decision: the lid-closed smoke is the requirement, and the reboot of 2026-09-14 already showed the three daemons and the server coming back on their own once somebody logged in for the USB link.

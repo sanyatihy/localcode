@@ -17,7 +17,7 @@ A variant is a new file, never an edit to an existing one.
 | [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
 | [`mtp-32k-stock.env`](mtp-32k-stock.env) | 32 768 | `mtp-32k.env` on the binary on PATH. **Use this one**: 0051 measured stock drafting with the same head, at 1.18x the fork's decode |
 | [`driver-mtp-32k-stock.env`](driver-mtp-32k-stock.env) | 32 768 | `driver-mtp-32k.env` on the binary on PATH, and the driver config to use for the same reason |
-| [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off. The rest of its levers, and how far above this context the node reaches, wait on that feature's screen |
+| [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off, which the screen measured as the only lever that earns a setting there. The node's ladder reaches 163,840; this context is what a session needs, not what the machine allows |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
 
@@ -46,8 +46,9 @@ only ever disagree with it.
   of the three by anything in Go; `machine`, `note` and `why` are prose, since JSON
   has no comments.
 - [`machine-m5max-36gb.json`](machine-m5max-36gb.json) — the dedicated node's limits (0056),
-  and **a placeholder**: every number in it is unmeasured, and the feature's remaining boxes
-  replace them with readings taken on the node.
+  every one of them read on the node: the idle reading the reserve is derived from, the
+  headroom floor its heaviest passing rung left, and one `headless` profile whose ceiling is
+  the top rung of its own ladder.
 - [`profiles/qwen3.8.json`](profiles/qwen3.8.json) — the *model's* properties, not the
   server's: how thinking is switched, each mode's recommended sampling, where reasoning comes
   back. All three are read; a profile naming a mechanism the scorer cannot perform is refused

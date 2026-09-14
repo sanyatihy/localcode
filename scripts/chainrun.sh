@@ -33,7 +33,12 @@ SESSION_TIMEOUT="${SESSION_TIMEOUT:-45m}"
 # comparison across two contexts is measuring both unless one of them is pinned.
 CEILING="${CEILING:-}"
 PORT="${PORT:-8081}"
-ENDPOINT="http://127.0.0.1:$PORT"
+# ENDPOINT may name a server on another machine, which this script then does not start:
+# 0056 drives the node from the laptop, where the serving half happens over there. SERVE=0
+# says so. CONFIG stays required either way, because it is what the row records the chain as
+# having been served by, and a chain that cannot name its config is not evidence.
+ENDPOINT="${ENDPOINT:-http://127.0.0.1:$PORT}"
+SERVE="${SERVE:-1}"
 LOAD_TIMEOUT="${LOAD_TIMEOUT:-900}"
 
 # The bounds are deliberately far above what either side needs. A chain stopped by its
@@ -84,21 +89,27 @@ p = sys.argv[1]
 print(os.path.basename(p) + '-' + hashlib.sha256(p.encode()).hexdigest()[:8])" "$repo")"
 rm -rf "$state"
 
-echo "=== chain $LABEL on $CONFIG: $total bugs, up to $SESSIONS sessions ===" >&2
-stop_server
-nohup ./scripts/serve.sh "$CONFIG" > "/tmp/chainrun-$LABEL-serve.log" 2>&1 &
-trap 'stop_server' EXIT
-wait_healthy "$LOAD_TIMEOUT" || { echo "the server did not load — see /tmp/chainrun-$LABEL-serve.log" >&2; exit 2; }
+echo "=== chain $LABEL on $CONFIG at $ENDPOINT: $total bugs, up to $SESSIONS sessions ===" >&2
+if [ "$SERVE" = "1" ]; then
+  stop_server
+  nohup ./scripts/serve.sh "$CONFIG" > "/tmp/chainrun-$LABEL-serve.log" 2>&1 &
+  trap 'stop_server' EXIT
+  wait_healthy "$LOAD_TIMEOUT" || { echo "the server did not load — see /tmp/chainrun-$LABEL-serve.log" >&2; exit 2; }
+else
+  wait_healthy "$LOAD_TIMEOUT" || { echo "nothing is serving at $ENDPOINT, and SERVE=0 says this script must not start it" >&2; exit 2; }
+fi
 served=$(served_ctx)
 echo "    serving $served on $ENDPOINT" >&2
 
 read -r p0 c0 g0 <<<"$(metrics)"
 started=$SECONDS
 set +e
+# Expanded through ${arr[@]+...}: an empty array under set -u is an unbound variable on
+# the bash 3.2 macOS ships, which is what a node without Homebrew bash first on PATH runs.
 ceiling_arg=()
 [ -n "$CEILING" ] && ceiling_arg=(-ceiling "$CEILING")
 ( cd "$repo" && "$BIN" -checkout "$root" -endpoint "$ENDPOINT" -no-serve \
-    "${ceiling_arg[@]}" \
+    ${ceiling_arg[@]+"${ceiling_arg[@]}"} \
     -calls "$CALLS" -sessions "$SESSIONS" -session-timeout "$SESSION_TIMEOUT" "$GOAL" )
 chain_exit=$?
 set -e
@@ -114,9 +125,11 @@ sessions_file=$(find "$state/chains" -name sessions.jsonl 2>/dev/null | head -1)
 spent=0
 [ -n "$sessions_file" ] && spent=$(grep -c . "$sessions_file")
 
-LABEL="$LABEL" CONFIG="$CONFIG" GOAL="$GOAL" SESSIONS_FILE="${sessions_file:-}" python3 - <<PY >> "$OUT"
+LABEL="$LABEL" CONFIG="$CONFIG" GOAL="$GOAL" SESSIONS_FILE="${sessions_file:-}" \
+ENDPOINT="$ENDPOINT" python3 - <<PY >> "$OUT"
 import json, os
 row = {"record": "chain", "label": os.environ["LABEL"], "config": os.environ["CONFIG"],
+       "endpoint": os.environ["ENDPOINT"], "served_locally": $SERVE == 1,
        "served_n_ctx": json.loads('''$served'''), "goal": os.environ["GOAL"],
        "bugs": $total, "tests_passing": $passed, "finished": $passed == $total,
        "chain_exit": $chain_exit, "sessions": $spent, "wall_seconds": $seconds,
