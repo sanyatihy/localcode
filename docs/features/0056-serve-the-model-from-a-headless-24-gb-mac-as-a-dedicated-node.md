@@ -1,9 +1,9 @@
 ---
 id: 0056
 title: Serve the model from a headless 24 GB Mac as a dedicated node
-status: Draft
+status: Submitted
 created: 2026-09-13
-submitted:
+submitted: 2026-09-14
 needs: 0053
 ---
 
