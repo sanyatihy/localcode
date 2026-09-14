@@ -220,8 +220,13 @@ func TestVMStatParserReadsTheLabels(t *testing.T) {
 	}
 	// Three numbers of the same shape sit on the swapusage line, and the one the run
 	// depended on is the one labelled used.
-	if got := parseSwapUsage("total = 4096.00M  used = 1465.44M  free = 2630.56M  (encrypted)"); got != 1465.44 {
-		t.Fatalf("swap used = %v, want 1465.44 — the used figure, not the total beside it", got)
+	if got, ok := parseSwapUsage("total = 4096.00M  used = 1465.44M  free = 2630.56M  (encrypted)"); got != 1465.44 || !ok {
+		t.Fatalf("swap used = %v (read %v), want 1465.44 — the used figure, not the total beside it", got, ok)
+	}
+	// A machine that has never swapped reports 0.00M, so an unread line cannot come back as
+	// a zero: the two mean opposite things and one of them voids a run.
+	if got, ok := parseSwapUsage("vm.swapusage: unknown oid"); ok {
+		t.Fatalf("an unreadable swap line was read as %v MB in use", got)
 	}
 }
 
@@ -246,23 +251,26 @@ func TestMeminfoParserReadsWhatTheLinuxRuleNeeds(t *testing.T) {
 }
 
 // A kernel too old to report MemAvailable leaves the Linux rule with nothing to refuse a
-// sweep with, so the sample is not a reading and the preflight says so.
-func TestAMeminfoMissingAHeadroomFieldIsRefused(t *testing.T) {
-	var without []string
-	for _, line := range strings.Split(procMeminfoFixture, "\n") {
-		if !strings.HasPrefix(line, "MemAvailable:") {
-			without = append(without, line)
+// sweep with, and a file with no swap line leaves the contamination check reporting a delta
+// of zero it never read. Neither is a reading, and the preflight says so.
+func TestAMeminfoMissingAFieldItNeedsIsRefused(t *testing.T) {
+	for _, missing := range []string{"MemAvailable:", "MemTotal:", "SwapTotal:", "SwapFree:"} {
+		var without []string
+		for _, line := range strings.Split(procMeminfoFixture, "\n") {
+			if !strings.HasPrefix(line, missing) {
+				without = append(without, line)
+			}
 		}
-	}
-	s := parseMeminfo(strings.Join(without, "\n"))
-	if s.OK || s.TotalGB != 0 {
-		t.Fatalf("got %+v, want an unanswered sample rather than a partial one", s)
-	}
-	if p := Check(s, 4); p.Carries {
-		t.Fatalf("a sample missing MemAvailable carried a sweep: %+v", p)
-	}
-	if why := Check(s, 4).Refuse(); !strings.Contains(why, "did not answer") {
-		t.Errorf("refusal %q does not say the machine was not read", why)
+		s := parseMeminfo(strings.Join(without, "\n"))
+		if s.OK || s.TotalGB != 0 || s.SwapUsedMB != 0 {
+			t.Fatalf("without %s: got %+v, want an unanswered sample rather than a partial one", missing, s)
+		}
+		if p := Check(s, 4); p.Carries {
+			t.Fatalf("without %s: a partial sample carried a sweep: %+v", missing, p)
+		}
+		if why := Check(s, 4).Refuse(); !strings.Contains(why, "did not answer") {
+			t.Errorf("without %s: refusal %q does not say the machine was not read", missing, why)
+		}
 	}
 }
 

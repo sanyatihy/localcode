@@ -23,8 +23,9 @@ func pageSize() float64 {
 
 // sampleMemory reads this Mac: the page counters off vm_stat, the installed memory and the
 // swap in use off sysctl. A sample missing any of the three figures the macOS headroom rule
-// needs is returned empty rather than partial, so a preflight refuses it instead of
-// subtracting a zero that reads as a machine holding nothing.
+// needs — or the swap the contamination check rests on — is returned empty rather than
+// partial, so a preflight refuses it instead of subtracting a zero that reads as a machine
+// holding nothing.
 func sampleMemory() MemSample {
 	page := pageSize()
 	if page == 0 {
@@ -39,10 +40,11 @@ func sampleMemory() MemSample {
 			s.TotalGB = n / 1073741824
 		}
 	}
+	swapRead := false
 	if out, err := exec.Command("sysctl", "-n", "vm.swapusage").Output(); err == nil {
-		s.SwapUsedMB = parseSwapUsage(string(out))
+		s.SwapUsedMB, swapRead = parseSwapUsage(string(out))
 	}
-	if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 {
+	if s.TotalGB <= 0 || s.WiredGB <= 0 || s.AnonymousGB <= 0 || !swapRead {
 		return MemSample{}
 	}
 	s.Platform, s.OK = platformDarwin, true

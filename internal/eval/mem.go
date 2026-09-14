@@ -104,7 +104,11 @@ func parseVMStat(out string, page float64) MemSample {
 // "total = 4096.00M  used = 1465.44M  free = 2630.56M  (encrypted)". Keyed off the "used"
 // label rather than field position: three numbers of the same shape sit on this line, and
 // picking the wrong one records a plausible number that is not the one the run depended on.
-func parseSwapUsage(out string) float64 {
+//
+// The second return says whether it was found at all. A machine that has never swapped
+// reports 0.00M, so a bare zero cannot tell "nothing swapped" from "nothing was read" — and
+// the delta across a run is the signal that a timing measured the pager rather than the model.
+func parseSwapUsage(out string) (float64, bool) {
 	fields := strings.Fields(out)
 	for i, f := range fields {
 		if f != "used" {
@@ -115,13 +119,13 @@ func parseSwapUsage(out string) float64 {
 				continue
 			}
 			if n, err := strconv.ParseFloat(strings.TrimSuffix(cand, "M"), 64); err == nil {
-				return n
+				return n, true
 			}
 			break
 		}
 		break
 	}
-	return 0
+	return 0, false
 }
 
 // parseMeminfo reads Linux's /proc/meminfo, whose every line is "Name:<space>value kB".
@@ -129,12 +133,14 @@ func parseSwapUsage(out string) float64 {
 // kernel writes kB for every field taken here.
 //
 // A sample without MemTotal and MemAvailable is not a reading: MemAvailable is the whole
-// headroom rule on Linux, so a file missing it leaves nothing to refuse a sweep with.
-// Swap is total less free, which is what macOS reports directly.
+// headroom rule on Linux, so a file missing it leaves nothing to refuse a sweep with. Swap is
+// total less free, which is what macOS reports directly, and its absence is not a reading
+// either: a swapless zero and an unread zero mean opposite things, and the delta across a run
+// is what says a timing measured the pager.
 func parseMeminfo(text string) MemSample {
 	var s MemSample
 	var swapTotalKB, swapFreeKB float64
-	var haveTotal, haveAvailable bool
+	var haveTotal, haveAvailable, haveSwapTotal, haveSwapFree bool
 	for _, line := range strings.Split(text, "\n") {
 		name, rest, found := strings.Cut(line, ":")
 		if !found {
@@ -158,12 +164,12 @@ func parseMeminfo(text string) MemSample {
 			// pressure signal — it is no more one here than on macOS.
 			s.FreeGB = kb / 1048576
 		case "SwapTotal":
-			swapTotalKB = kb
+			swapTotalKB, haveSwapTotal = kb, true
 		case "SwapFree":
-			swapFreeKB = kb
+			swapFreeKB, haveSwapFree = kb, true
 		}
 	}
-	if !haveTotal || !haveAvailable {
+	if !haveTotal || !haveAvailable || !haveSwapTotal || !haveSwapFree {
 		return MemSample{}
 	}
 	s.SwapUsedMB = (swapTotalKB - swapFreeKB) / 1024
