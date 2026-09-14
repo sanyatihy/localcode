@@ -38,7 +38,7 @@ type claudeCodeRecorder struct {
 // and a session that has to ask writes the answer into the repository it is visiting.
 const claudeCodeTools = "Bash,Edit,Read,Write"
 
-func newClaudeCodeAgent(root string, ep Endpoint) (Agent, error) {
+func newClaudeCodeAgent(root, endpoint string) (Agent, error) {
 	bin, err := exec.LookPath("claude")
 	if err != nil {
 		return nil, fmt.Errorf("claude is not on PATH: %w", err)
@@ -48,10 +48,11 @@ func newClaudeCodeAgent(root string, ep Endpoint) (Agent, error) {
 		return nil, err
 	}
 	// After the committed file, so what the session talks to is the endpoint the launcher
-	// verified rather than the loopback default that file keeps. One base URL carries every
-	// model call, `count_tokens` included, so nothing else may name a host.
-	if ep.URL != "" {
-		env = setEnv(env, "ANTHROPIC_BASE_URL", ep.URL)
+	// verified rather than the default that file keeps for the flow a person sources it
+	// into. One base URL carries every model call, `count_tokens` included, so nothing else
+	// may name a host.
+	if endpoint != "" {
+		env = setEnv(env, "ANTHROPIC_BASE_URL", endpoint)
 	}
 	return &claudeCodeAgent{claudeCodeRecorder: claudeCodeRecorder{env: env}, bin: bin, root: root}, nil
 }

@@ -60,7 +60,7 @@ decode rates. The serving Mac's desk profile applies; the client's does not.
 
 ## Tasks
 
-- [x] Claude Code talks to the endpoint the launcher verified, including `count_tokens`, set after the committed file; a test covers a remote URL, and Pi refuses a remote endpoint its provider file does not name
+- [x] Claude Code talks to the endpoint the launcher verified, including `count_tokens`, set after the committed file; a test covers a URL the committed file does not carry, and Pi is unchanged because the proxy answers at the address its provider file names
 - [x] A URL is classified loopback or remote including `::1`, an unparseable one is refused, and a test covers each case
 - [x] A missing remote server is refused with the command to run there, `localcode stop` refuses a remote endpoint, and a test shows neither starts a process
 - [x] A remote endpoint is served at 127.0.0.1:8081 by the launcher for the run, the sandbox profile is unchanged, a busy port is refused, covered by a test through the proxy and a test on the profile

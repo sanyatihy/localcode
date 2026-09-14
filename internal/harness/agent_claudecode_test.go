@@ -128,16 +128,17 @@ func claudeCodeCheckout(t *testing.T) string {
 	return root
 }
 
-// The endpoint the launcher verified is the one every model call goes to. Asserted on a
-// remote URL, because loopback is what the committed file already says: one entry, the
-// launcher's, and no other variable naming a host — `count_tokens` follows the base URL,
-// so a second one would send the count somewhere the conversation did not go.
+// The endpoint the launcher hands over is the one every model call goes to. Asserted on a
+// URL the committed file does not carry: one entry, the launcher's, and no other variable
+// naming a host — `count_tokens` follows the base URL, so a second one would send the count
+// somewhere the conversation did not go.
 func TestTheSessionTalksToTheEndpointTheLauncherVerified(t *testing.T) {
 	root := claudeCodeCheckout(t)
 	onPath(t, "claude")
-	const remote = "http://mac.local:8081"
+	// The port a remote endpoint is proxied onto is not the one the file names.
+	const remote = "http://127.0.0.1:9099"
 
-	a, err := newClaudeCodeAgent(root, Endpoint{URL: remote})
+	a, err := newClaudeCodeAgent(root, remote)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,10 +161,10 @@ func TestTheSessionTalksToTheEndpointTheLauncherVerified(t *testing.T) {
 			continue
 		}
 		if strings.Contains(value, "127.0.0.1") || strings.Contains(value, "localhost") {
-			t.Errorf("%s pins loopback, so not every call follows the base URL", kv)
+			t.Errorf("%s names a host of its own, so not every call follows the base URL", kv)
 		}
 	}
 	if len(base) != 1 || base[0] != remote {
-		t.Fatalf("the session must be given the verified endpoint exactly once, got %q", base)
+		t.Fatalf("the session must be given what the launcher passed, exactly once, got %q", base)
 	}
 }

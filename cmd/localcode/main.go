@@ -222,7 +222,7 @@ func run(o opts) (int, error) {
 	if name == "" {
 		name = harness.DefaultAgent
 	}
-	agent, err := harness.NewAgent(name, root, harness.Endpoint{URL: sessionEndpoint, Loopback: true})
+	agent, err := harness.NewAgent(name, root, sessionEndpoint)
 	if err != nil {
 		return 2, err
 	}
