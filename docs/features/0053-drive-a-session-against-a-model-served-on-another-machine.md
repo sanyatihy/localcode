@@ -1,9 +1,9 @@
 ---
 id: 0053
 title: Drive a session against a model served on another machine
-status: Draft
+status: Submitted
 created: 2026-09-13
-submitted:
+submitted: 2026-09-14
 needs:
 ---
 
