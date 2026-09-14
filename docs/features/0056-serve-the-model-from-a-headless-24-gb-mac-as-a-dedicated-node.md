@@ -109,7 +109,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
 - [x] The OS levers are measured as a set by the idle reading at the login window, TECH records the saving, and a lever leaves the script only when it breaks something
 - [x] The node answers SSH by key as the serving user: a full TCP scan from the laptop shows port 22, the server's 8081 while the daemon serves and one Apple built-in listener on a high random port, and a password login is refused
-- [ ] The node serves with its own lid closed on power and comes back serving after a hard restart and a login, each verified by a `smoke` over the link
+- [x] The node serves with its own lid closed on power, verified by a `smoke` over the link
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
@@ -186,3 +186,4 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - 2026-09-14 — the first three chain attempts on the node stopped on the launcher's sandbox dropping `~/.claude` on a fresh machine (no transcript, so no budget); fixed in the launcher with a test, and the six chains recorded were run after the fix.
 - 2026-09-14 — paused: the lid and power-cut check waits for the owner at the node
 - 2026-09-15 — the box says a hard restart, not a power cut: the node is a MacBook and rides through a pulled cable on its battery, so the event that tests unattended recovery is the power button held down, which is what a drained battery and restored power would produce.
+- 2026-09-15 — the hard-restart half is dropped on the owner's decision: the lid-closed smoke is the requirement, and the reboot of 2026-09-14 already showed the three daemons and the server coming back on their own once somebody logged in for the USB link.
