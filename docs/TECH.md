@@ -674,6 +674,47 @@ down at the end of the screen, after the fill and the smoke had both passed. The
 admissible on what it measured and the abort is recorded rather than explained; a depth whose
 teardown crashes is not the one to serve from.
 
+**DFlash2 is admissible on this node, and it is the fastest decoder measured here.** The
+drafter loads at 49,152 where the laptop's allocator refused it at both contexts, fills to
+44,236 tokens and answers, at 23.59 GB of peak wired with 6.41 GB of headroom and a swap
+delta of 0.0 — 2.2 GB more than the draft head costs. Paired against `config/node.env` on
+the ranking suite, three passes a side, one session
+([rows](data/2026-09-15-m5max-36gb-0058-dflash2.jsonl)):
+
+| | baseline | DFlash2, `n_max` 7 |
+|---|---|---|
+| decode, client-side | 0.0474 s/tok | **0.0245 — 1.94x** |
+| acceptance | — | **6.74** |
+| peak wired | 19.91 GB (0056's screen) | 23.59 GB |
+| pass | 23/27 | 21/27 |
+| tool-call valid | 12/12 | 11/12 |
+| greedy fidelity hash | `0f4045cad664f4ac` | `0f4045cad664f4ac` |
+| swap Δ | 0.0 MB | 0.0 MB |
+
+**It is lossless and it is not free.** The hash is the draft head's and the baseline's, so
+the drafter emits the same text; what moves is pass rate, by two tasks, and one of the
+twelve tool calls came back with no call at all. Two tasks is inside the spread the draft
+head's own three baseline sessions showed (23, 25, 23 of 27), so it is not a distribution
+this run can separate from noise — but it is the wrong side of the baseline where the head
+at depth 3 was on the same side of it.
+
+**The build is the confound this pair cannot remove**, and it is the mechanism rather than
+an oversight: `--spec-type draft-dflash` exists only in PR #27342, so the candidate is
+b10498 with its own `libggml-metal.0.20.2.dylib` against the baseline's b10809 on ggml
+0.23.0. 0017's fork-against-stock pair measured that backend gap at 1.18x on the laptop,
+so part of the 1.94x is the binary and this pair cannot say how much.
+
+**The node cannot fetch its own weights.** The drafter is named by path rather than by
+`-hf` tag in [`config/dflash2-node-49k.env`](../config/dflash2-node-49k.env). That
+repository's main moved from 57ab3265 to 2d9571f8 after 0017, so the tag now resolves to a
+1.1 GB download, and this machine's route to the Hugging Face CDN runs at 8–130 KB/s
+against 142–263 ms of ping — 2.5 to 30 hours for that file, and it stalled twice at zero.
+Two `load_failed` rows in the screen file are that: 601 s of waiting on the download, and
+21 s to fail under `LLAMA_ARG_OFFLINE=1`, which resolves a cached target but not a cached
+`--spec-draft-hf`. **Every weight this feature measures was staged over the 0053 link
+instead**, which runs at 37 MB/s, and `LLAMA_ARG_OFFLINE=1` keeps both sides of the pair
+out of the metadata check that stalls the load.
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,

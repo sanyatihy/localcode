@@ -70,6 +70,11 @@ add_opt --cache-ram "${CACHE_RAM:-}"
 # the mechanism are part of how a measurement was produced, so they live in the config with
 # everything else rather than being passed at the call site.
 add_opt --spec-draft-hf "${SPEC_DRAFT_HF:-}"
+# The same drafter named by path instead of by repository tag. `-hf user/repo:quant`
+# resolves against whatever that repository's main is on the day it runs, and the node's
+# link cannot fetch a gigabyte when it moves; a path carries the revision it was taken
+# from and cannot silently become a different file. One of the two, never both.
+add_opt --spec-draft-model "${SPEC_DRAFT_MODEL:-}"
 add_opt --spec-type "${SPEC_TYPE:-}"
 add_opt --spec-draft-n-max "${SPEC_DRAFT_N_MAX:-}"
 

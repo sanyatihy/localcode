@@ -20,6 +20,7 @@ A variant is a new file, never an edit to an existing one.
 | [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off, which the screen measured as the only lever that earns a setting there. The node's ladder reaches 163,840; this context is what a session needs, not what the machine allows |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
+| [`dflash2-node-49k.env`](dflash2-node-49k.env) | 49 152 | that drafter on the node, where it does generate: `config/node.env` plus the PR build, and the drafter named by path because its repository's tag has moved (0058) |
 
 The six speculative configs name a `SERVER_BIN` that is **not** the binary on `PATH`: the
 mechanism exists only in llama.cpp PR #27342, and the config says which build served it.
