@@ -62,3 +62,4 @@ the baseline on decode without losing on pass rate, and that change is its own b
   now resolves to a 1.1 GB download this node's link cannot deliver. `scripts/serve.sh`
   gains `SPEC_DRAFT_MODEL` and `config/dflash2-node-49k.env` names the cached revision, so
   what served is recorded rather than resolved at run time.
+- 2026-09-14 — paused: the remaining candidates wait for the owner's word
