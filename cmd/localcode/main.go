@@ -446,6 +446,12 @@ func serverUp(endpoint string) error {
 	return nil
 }
 
+// serverReachable is the health check `ensureServer` decides on. A var so a test can
+// answer without a network: a probe of an address nothing answers still leaves the machine,
+// and an environment naming an HTTP proxy answers for it — which is not this machine's
+// answer about the endpoint.
+var serverReachable = serverUp
+
 // props is what the endpoint says it is serving. The served context is the number that
 // matters: it is the one limit a session hits without warning, and it is a property of the
 // running server rather than of a config file that may not be the one that started it.
@@ -523,7 +529,7 @@ func status(w io.Writer, endpoint, from string) (int, error) {
 // rather than discovered afterwards: twenty seconds and most of the machine's memory are
 // not something to find out about by waiting.
 func ensureServer(root, endpoint, config string, noServe, here bool) error {
-	if serverUp(endpoint) == nil {
+	if serverReachable(endpoint) == nil {
 		return nil
 	}
 	// A server on another machine is not this one's to start. Starting one here would

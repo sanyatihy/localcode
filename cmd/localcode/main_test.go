@@ -1189,13 +1189,17 @@ func TestAMissingRemoteServerIsRefusedRatherThanStartedHere(t *testing.T) {
 	root := fakeCheckout(t)
 	marker := markedScripts(t, root)
 
-	// 192.0.2.0/24 is TEST-NET-1: reserved, routable-looking and never a real host, so
-	// nothing answers and no real machine is contacted.
-	err := ensureServer(root, "http://192.0.2.1:8081", "config/agent.env", false, false)
+	// Answered here rather than probed: a request to an address nothing answers still
+	// leaves the machine, and an environment naming an HTTP proxy would answer for it.
+	old := serverReachable
+	serverReachable = func(string) error { return fmt.Errorf("nothing there") }
+	t.Cleanup(func() { serverReachable = old })
+
+	err := ensureServer(root, "http://mac.local:8081", "config/agent.env", false, false)
 	if err == nil {
 		t.Fatal("a remote server that is not there must be refused")
 	}
-	for _, want := range []string{"192.0.2.1:8081", "make serve", "config/agent.env"} {
+	for _, want := range []string{"mac.local:8081", "make serve", "config/agent.env"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal must name %q: %v", want, err)
 		}
