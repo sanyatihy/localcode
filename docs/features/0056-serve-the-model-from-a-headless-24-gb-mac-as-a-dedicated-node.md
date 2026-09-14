@@ -148,3 +148,4 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   36 GB.
 - 2026-09-14 — paused: the remaining boxes need the node
 - 2026-09-14 — paused: the remaining boxes need the node
+- 2026-09-14 — the reserve is idle anonymous plus wired plus 1 GiB, not anonymous plus 1 GiB: the cap is bought from the same 36 GB the kernel's wired pages sit in, and a reserve that ignored them would let the raise plus the kernel exceed the machine. Measured idle 2.60 GB anonymous, 1.93 GB wired; reserve 6.

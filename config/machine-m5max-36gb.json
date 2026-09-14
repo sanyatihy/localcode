@@ -1,5 +1,5 @@
 {
-  "note": "PLACEHOLDER — not one number here is measured. It exists so scripts/node/ has a machine file to read on a node nobody has prepared yet, and 0056's remaining boxes replace every value with a reading. No results row may cite this machine until they do. reserve_gb is a placeholder too, and the cap scripts/node/cap.sh applies is derived from it. idle_anonymous_gb and idle_wired_gb are deliberately absent rather than guessed: scripts/node/prepare.sh reports the readings and says the record is unset, and a wrong record would pass a node that is not prepared. The machine is a Mac17,6: Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2.",
+  "note": "Measured 2026-09-14 at the login window with every prepare.sh lever applied, iCloud signed out, and nothing serving: idle anonymous 2.60 GB and wired 1.93 GB (3.98 and 2.05 before any lever). reserve_gb is that idle anonymous plus wired plus a 1 GiB margin, 5.53 rounded up to the integer the cap arithmetic takes; scripts/node/cap.sh raises the GPU cap to total less this, 30,720 MiB on 36 GB against Metal's derived 28,753. min_headroom_gb and the ceiling are still the laptop's numbers until the ladder runs here. The machine is a Mac17,6: Apple M5 Max, 32 GPU cores, 36 GB, macOS 26.5.2.",
   "machine": "m5max-36gb",
 
   "link_note": "The link to the laptop is USB, not Thunderbolt: the cable negotiated USB 2 at 480 Mb/s and Thunderbolt Bridge is inactive. The laptop is en14 at 10.99.0.1/24 and this node is anpi2 at 10.99.0.2/24, both set with ifconfig, which no reboot or replug survives — com.localcode.link reapplies this end at boot and README carries the laptop's. Wi-Fi is <its Wi-Fi address> and is how the node reaches the internet.",
@@ -7,6 +7,8 @@
   "link_address": "10.99.0.2",
 
   "reserve_gb": 6,
+  "idle_anonymous_gb": 2.60,
+  "idle_wired_gb": 1.93,
 
   "min_headroom_gb": 4.0,
 
