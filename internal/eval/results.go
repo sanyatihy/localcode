@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/sanyatihy/localcode/internal/build"
@@ -126,18 +127,23 @@ type Row struct {
 	Session string `json:"session,omitempty"`
 }
 
-// LegacyMachine is the machine a row that names none was measured on. Every row written
-// before the field existed came off the laptop, which was the only machine there was; the
-// alternative is discarding the evidence every conclusion in docs/TECH.md rests on.
-const LegacyMachine = "m2max-32gb"
+// machineInFileName matches the machine token docs/data/README fixes in a results file's
+// name, `<date>-<machine>-<what>.jsonl`. The size is what ends the token: both the machine
+// name and the description after it carry hyphens of their own, so `m5max-36gb` can only be
+// told from `tier1-matrix` by the shape of its second half.
+var machineInFileName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-([a-z0-9]+-\d+gb)-`)
 
-// MachineOrLegacy names the machine a row was taken on, reading an absent name as the
-// laptop rather than as a machine nobody can identify.
-func (r Row) MachineOrLegacy() string {
-	if r.Machine == "" {
-		return LegacyMachine
+// MachineFromFileName reads the machine a file's rows were measured on out of its name, and
+// false when the name does not say. Rows written before the `machine` field existed carry
+// none, and they did not all come off one machine — the laptop's and the node's sit in
+// docs/data together — so the name is the only record of which, and guessing would put two
+// envelopes in one average. A reader that needs the machine passes the file name in.
+func MachineFromFileName(path string) (string, bool) {
+	m := machineInFileName.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return "", false
 	}
-	return r.Machine
+	return m[1], true
 }
 
 // ToolCallValid reports whether the model produced a syntactically valid, schema-

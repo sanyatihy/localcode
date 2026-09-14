@@ -83,8 +83,10 @@ func run(args []string, stdout, stderr *os.File) error {
 	byConfig := map[string]map[string]*agg{}
 	served := map[string]string{}
 	// Rows per machine. Two envelopes averaged into one number is the comparison VISION
-	// forbids, and nothing in the table below would show it had happened.
+	// forbids, and nothing in the table below would show it had happened. A row written
+	// before the field existed names none, and takes the machine from the file's own name.
 	byMachine := map[string]int{}
+	fileMachine, fileNames := eval.MachineFromFileName(*path)
 	// Which groups compare harnesses rather than thinking modes, so the first column
 	// can be named after what is in it.
 	byHarness := map[string]bool{}
@@ -103,7 +105,17 @@ func run(args []string, stdout, stderr *os.File) error {
 		if *only != "" && r.Config != *only {
 			continue
 		}
-		byMachine[r.MachineOrLegacy()]++
+		machine := r.Machine
+		if machine == "" {
+			if !fileNames {
+				return fmt.Errorf("%s holds rows that name no machine, and its own name does "+
+					"not say which one measured them: docs/data/README names a results file "+
+					"<date>-<machine>-<what>.jsonl, and rows nobody can attribute to an "+
+					"envelope are not summarised", *path)
+			}
+			machine = fileMachine
+		}
+		byMachine[machine]++
 		// The desk profile is part of the group, not a label on it: two profiles cap
 		// the context differently, so their rows are not comparable and a harness may
 		// be admissible under only one of them. Filtering stays on the config label,

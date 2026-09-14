@@ -852,9 +852,12 @@ close.
 - **A row names the machine it was measured on**, read from the `machine` field of the
   machine file the run was given rather than from the host, and `cmd/report` refuses to
   summarise rows from two machines as one — they are separate envelopes, and an average over
-  both is a number about neither. **Rows written before 2026-09-15 carry no `machine` and are
-  the laptop's**, `m2max-32gb`: it was the only machine there was, and both the report and
-  `eval.Row.MachineOrLegacy` read an absent name that way.
+  both is a number about neither. **Rows written before 2026-09-15 carry no `machine`, and
+  they did not all come off one machine**: the laptop's files and the node's sit in
+  `docs/data` together. Such a row takes its machine from the file's name, which
+  [docs/data/README](data/README.md) fixes as `<date>-<machine>-<what>.jsonl`, and a file
+  that names no machine holding rows that name none either is refused rather than attributed
+  to a guess — `results/tier1.jsonl` is written on whichever machine ran the sweep.
 - **Spread is min–max over three passes, never a standard deviation**, which would claim
   precision three samples do not have. Runs are sequential: the server has one slot.
 - **A tier-1 task must have exactly one defensible action.** A task that scores a style

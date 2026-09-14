@@ -67,10 +67,11 @@ func TestTheCommittedMachineFileLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("committed machine config: %v", err)
 	}
-	// Every row taken here is named after this, and a row that names no machine is read as
-	// this one, so the two have to agree.
-	if m.Name != LegacyMachine {
-		t.Errorf("the laptop's machine file calls it %q, which no legacy row says", m.Name)
+	// The name every row taken here carries. It has to be the same token the laptop's data
+	// files are named with, or a file's rows and the file itself would name two machines.
+	fromFile, ok := MachineFromFileName("2026-08-17-m2max-32gb-tier1-matrix.jsonl")
+	if !ok || m.Name != fromFile {
+		t.Errorf("the laptop's machine file calls it %q; its data files say %q", m.Name, fromFile)
 	}
 	if m.MinHeadroomGB <= 0 || m.MinHeadroomGB > 8 {
 		t.Errorf("min_headroom_gb = %.2f, which is outside anything 0014 measured", m.MinHeadroomGB)

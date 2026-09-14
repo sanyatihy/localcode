@@ -86,8 +86,10 @@ func TestParseThinkingKeepsUnsetDistinctFromOff(t *testing.T) {
 
 // Every row names the machine it was measured on, and it reads the name off the machine
 // file rather than off the host: the file is what declares an envelope, and two envelopes
-// are never compared. `-force` is set so the row is written whatever state this machine
-// happens to be in — what is under test is the name on the row, not the preflight.
+// are never compared. The name under test is one no machine here is called, so a row
+// carrying it cannot have come from anywhere but that file. `-force` is set so the row is
+// written whatever state this machine happens to be in — what is under test is the name on
+// the row, not the preflight.
 func TestEveryRowNamesTheMachineTheFileDeclares(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/props") {
@@ -98,26 +100,34 @@ func TestEveryRowNamesTheMachineTheFileDeclares(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	machine := repo("config", "machine.json")
-	results := filepath.Join(t.TempDir(), "rows.jsonl")
+	dir := t.TempDir()
+	machine := filepath.Join(dir, "machine.json")
+	if err := os.WriteFile(machine, []byte(`{"machine":"testbox","min_headroom_gb":0.5,`+
+		`"desk_profiles":[{"name":"attended","ceiling_tokens":57344}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results := filepath.Join(dir, "rows.jsonl")
 	// The task fails against this stub, which is a scored outcome and still writes a row.
+	// The fidelity probes write a second, and it is a results row like any other.
 	_ = runEval(t, "-task", repo("tasks", "toolcall-read-file.json"), "-endpoint", srv.URL,
 		"-machine", machine, "-model-profile", repo("config", "profiles", "qwen3.8.json"),
-		"-results", results, "-force")
+		"-results", results, "-fidelity", "-force")
 
 	b, err := os.ReadFile(results)
 	if err != nil {
 		t.Fatalf("no row was written: %v", err)
 	}
-	var row eval.Row
-	if err := json.Unmarshal([]byte(strings.SplitN(strings.TrimSpace(string(b)), "\n", 2)[0]), &row); err != nil {
-		t.Fatalf("row: %v", err)
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("%d rows written, want the scored row and the fidelity one:\n%s", len(lines), b)
 	}
-	m, err := eval.LoadMachine(machine)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if row.Machine != m.Name {
-		t.Errorf("row names machine %q, want %q from %s", row.Machine, m.Name, machine)
+	for _, line := range lines {
+		var row eval.Row
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			t.Fatalf("row: %v", err)
+		}
+		if row.Machine != "testbox" {
+			t.Errorf("a %s row names machine %q, want testbox from %s", row.Kind, row.Machine, machine)
+		}
 	}
 }

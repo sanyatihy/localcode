@@ -1,6 +1,8 @@
 package eval
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sanyatihy/localcode/internal/build"
@@ -51,13 +53,48 @@ func TestEveryRowNamesTheBuildThatWroteIt(t *testing.T) {
 	}
 }
 
-// A row names its machine or it is the laptop's: the field was added once there was a
-// second machine, and every row written before it came off the first.
-func TestARowWithoutAMachineIsTheLaptops(t *testing.T) {
-	if got := (Row{}).MachineOrLegacy(); got != LegacyMachine {
-		t.Errorf("a row naming no machine reads as %q, want %q", got, LegacyMachine)
+// A row that names no machine takes it from the file's name, which is the only record of
+// which machine the rows written before the field came off — and they came off two.
+func TestTheMachineIsReadOffAResultsFileName(t *testing.T) {
+	for name, want := range map[string]string{
+		"2026-08-17-m2max-32gb-ceiling-ladder.jsonl":   "m2max-32gb",
+		"2026-09-14-m5max-36gb-tier1.jsonl":            "m5max-36gb",
+		"docs/data/2026-09-14-m5max-36gb-screen.jsonl": "m5max-36gb",
+		"2026-09-20-gb10-128gb-ladder.jsonl":           "gb10-128gb",
+	} {
+		got, ok := MachineFromFileName(name)
+		if !ok || got != want {
+			t.Errorf("%s names machine %q (read %v), want %q", name, got, ok, want)
+		}
 	}
-	if got := (Row{Machine: "gb10-128gb"}).MachineOrLegacy(); got != "gb10-128gb" {
-		t.Errorf("a row naming a machine reads as %q", got)
+	// A file nobody named after a machine says nothing about one, and a reader must refuse
+	// rather than assume: results/tier1.jsonl is written on whichever machine ran it.
+	for _, name := range []string{"results/tier1.jsonl", "rows.jsonl", "2026-09-14-tier1.jsonl",
+		"m5max-36gb-tier1.jsonl"} {
+		if got, ok := MachineFromFileName(name); ok {
+			t.Errorf("%s was read as machine %q", name, got)
+		}
+	}
+}
+
+// Every committed data file has to be readable by that rule, since none of their rows names
+// a machine: a file the rule cannot read is evidence the report would refuse to summarise.
+func TestEveryCommittedDataFileNamesItsMachine(t *testing.T) {
+	entries, err := os.ReadDir("../../docs/data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		seen++
+		if _, ok := MachineFromFileName(e.Name()); !ok {
+			t.Errorf("%s names no machine, so its rows belong to no envelope", e.Name())
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no data files were checked")
 	}
 }
