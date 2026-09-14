@@ -1651,6 +1651,12 @@ a cost of it: a key it can read is a key it can copy into the working tree.
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
 `-net` lifts it for one session and widens reachability, never the filesystem.
 
+**A model on another machine is the one host admitted beyond loopback.** The launcher
+resolves the endpoint's host at startup and the profile carries one
+`(allow network-outbound (remote ip "ADDR:PORT"))` per address, because seatbelt matches
+addresses rather than names. A host that does not resolve is refused before the session
+starts; nothing else is reachable, so the source still cannot leave the trusted pair.
+
 **An endpoint is this machine's or another machine's, and one rule decides which.**
 `localhost`, any `127.0.0.0/8` address and `::1` are this machine; anything else is
 another. A URL that does not parse, or that names no scheme and host, is refused before
