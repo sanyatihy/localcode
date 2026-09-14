@@ -99,3 +99,6 @@ access.
 - [ ] Four chains run at once from four clients against `PARALLEL="4"`, requests are attributed per client, and TECH records per-client decode, ingest, queue wait, failures, outcome and prefix survival, with the box's peak memory and swap
 - [ ] `config/gb10-agent.env` carries the per-slot window the ladder settled and `config/machine-gb10.json` its ceiling
 - [ ] README documents the GB10 server setup and points the client side at 0053
+
+## Log
+- 2026-09-14 — paused: the remaining boxes need the GB10
