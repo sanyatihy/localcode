@@ -88,7 +88,7 @@ access.
 ## Tasks
 
 - [x] `make check` passes on Arm Linux in CI beside the existing job, and every macOS-only probe records unknown rather than a wrong number
-- [ ] The memory probe reads `/proc/meminfo`, headroom is defined per platform, a sample missing a needed field is refused, and a test covers each platform's parser
+- [x] The memory probe reads `/proc/meminfo`, headroom is defined per platform, a sample missing a needed field is refused, and a test covers each platform's parser
 - [ ] Every results row names its machine, read from the machine file, and the report refuses to summarise rows from two machines as one
 - [ ] `rungs.sh` and `ladder.sh` read the machine through per-platform functions in `lib.sh`, the ladder fills every slot at once and reads `total_slots`, and a test covers the per-slot and total shapes of `/props`
 - [ ] `scripts/gb10/build-llama.sh` builds the pinned CUDA llama.cpp on the box, the `qwen35` check passes, `make smoke` passes over the LAN, and the banner and `nvidia-smi` show the CUDA backend serving

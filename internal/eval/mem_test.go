@@ -10,11 +10,11 @@ import (
 // The preflight is arithmetic on the sample, so both sides are testable without a machine
 // in either state: headroom above the floor carries, below it refuses.
 func TestPreflightCarriesAndRefuses(t *testing.T) {
-	carry := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61, OK: true}
+	carry := MemSample{Platform: platformDarwin, TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61, OK: true}
 	if p := Check(carry, 4); !p.Carries || p.HeadroomGB < 4.49 || p.HeadroomGB > 4.6 {
 		t.Errorf("32 GB machine with ~4.5 GB headroom refused or misread: %+v", p)
 	}
-	refuse := MemSample{TotalGB: 32, WiredGB: 28, AnonymousGB: 6, OK: true}
+	refuse := MemSample{Platform: platformDarwin, TotalGB: 32, WiredGB: 28, AnonymousGB: 6, OK: true}
 	if p := Check(refuse, 4); p.Carries {
 		t.Errorf("machine with 0 GB headroom carried a 4 GB floor: %+v", p)
 	}
@@ -76,13 +76,15 @@ func TestLoadMachineRefusesAFloorlessFile(t *testing.T) {
 // Neither side needs a server, and neither needs the machine to be in any particular state.
 func TestRefuseCoversBothSides(t *testing.T) {
 	// 0014's measured machine: 20.89 GB wired serving 32k, 6.61 GB of apps, 32 GB total.
-	carries := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61, FreeGB: 0.31, SwapUsedMB: 1631, OK: true}
+	carries := MemSample{Platform: platformDarwin, TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61,
+		FreeGB: 0.31, SwapUsedMB: 1631, OK: true}
 	if why := Check(carries, 4.0).Refuse(); why != "" {
 		t.Errorf("a machine with 4.5 GB headroom was refused: %s", why)
 	}
 
 	// The same machine with a browser open, which 0014 says does not fit beside the model.
-	cannot := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 9.5, FreeGB: 0.31, SwapUsedMB: 4096, OK: true}
+	cannot := MemSample{Platform: platformDarwin, TotalGB: 32, WiredGB: 20.89, AnonymousGB: 9.5,
+		FreeGB: 0.31, SwapUsedMB: 4096, OK: true}
 	why := Check(cannot, 4.0).Refuse()
 	if why == "" {
 		t.Fatal("a machine with 1.6 GB headroom was allowed to start")
@@ -104,8 +106,152 @@ func TestRefuseCoversBothSides(t *testing.T) {
 func TestSampleIsSubstitutable(t *testing.T) {
 	original := Sample
 	t.Cleanup(func() { Sample = original })
-	Sample = func() MemSample { return MemSample{TotalGB: 32, WiredGB: 30, AnonymousGB: 1, OK: true} }
+	Sample = func() MemSample {
+		return MemSample{Platform: platformDarwin, TotalGB: 32, WiredGB: 30, AnonymousGB: 1, OK: true}
+	}
 	if p := Check(Sample(), 4.0); p.Carries {
 		t.Errorf("substituted reading was ignored: %+v", p)
+	}
+}
+
+// One vm_stat, as a 32 GB M2 Max prints it: the labels this parser is keyed off sit in
+// different columns on different macOS versions, and the page size is 16384 here — it was
+// assumed to be 4096 once, and every figure taken then was four times too small.
+const vmStatFixture = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               20316.
+Pages active:                             655360.
+Pages inactive:                           131072.
+Pages speculative:                        12345.
+Pages throttled:                          0.
+Pages wired down:                         1369047.
+Pages purgeable:                          8192.
+"Translation faults":                     1234567890.
+Pages copy-on-write:                      12345678.
+Pages zero filled:                        987654321.
+Pages reactivated:                        123456.
+Pages purged:                             654321.
+File-backed pages:                        130432.
+Anonymous pages:                          433193.
+Pages stored in compressor:               262144.
+Pages occupied by compressor:             65536.
+`
+
+// One /proc/meminfo, as an Arm Ubuntu box with 128 GB prints it. Kept whole rather than cut
+// to the four fields read: the parser's job is to find them among the forty that are not,
+// and a fixture of only what it wants cannot show that it did.
+const procMeminfoFixture = `MemTotal:       131530240 kB
+MemFree:        118226944 kB
+MemAvailable:   127336448 kB
+Buffers:          210944 kB
+Cached:          9216000 kB
+SwapCached:            0 kB
+Active:          4194304 kB
+Inactive:        6291456 kB
+Active(anon):    1048576 kB
+Inactive(anon):   131072 kB
+Active(file):    3145728 kB
+Inactive(file):  6160384 kB
+Unevictable:       16384 kB
+Mlocked:           16384 kB
+SwapTotal:       8388608 kB
+SwapFree:        8126464 kB
+Dirty:              1024 kB
+Writeback:             0 kB
+AnonPages:       1179648 kB
+Mapped:           524288 kB
+Shmem:             65536 kB
+KReclaimable:     327680 kB
+Slab:             655360 kB
+SReclaimable:     327680 kB
+SUnreclaim:       327680 kB
+KernelStack:       32768 kB
+PageTables:        49152 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:    74153728 kB
+Committed_AS:    3145728 kB
+VmallocTotal:   133009506240 kB
+VmallocUsed:      131072 kB
+VmallocChunk:          0 kB
+Percpu:            65536 kB
+HugePages_Total:       0
+HugePages_Free:        0
+Hugepagesize:       2048 kB
+`
+
+func closeTo(got, want float64) bool { return got-want < 0.01 && want-got < 0.01 }
+
+// The macOS parser, on the state docs/TECH.md's envelope is stated in: 20.89 GB wired
+// serving at 32k, 6.61 GB of apps, free pinned near zero.
+func TestVMStatParserReadsTheLabels(t *testing.T) {
+	s := parseVMStat(vmStatFixture, 16384)
+	if !closeTo(s.WiredGB, 20.89) || !closeTo(s.AnonymousGB, 6.61) || !closeTo(s.FreeGB, 0.31) {
+		t.Fatalf("got %+v, want 20.89 wired, 6.61 anonymous, 0.31 free", s)
+	}
+	// Three numbers of the same shape sit on the swapusage line, and the one the run
+	// depended on is the one labelled used.
+	if got := parseSwapUsage("total = 4096.00M  used = 1465.44M  free = 2630.56M  (encrypted)"); got != 1465.44 {
+		t.Fatalf("swap used = %v, want 1465.44 — the used figure, not the total beside it", got)
+	}
+}
+
+// The Linux parser reads the fields its own headroom rule needs, and swap as total less
+// free, which is what macOS reports directly.
+func TestMeminfoParserReadsWhatTheLinuxRuleNeeds(t *testing.T) {
+	s := parseMeminfo(procMeminfoFixture)
+	if !s.OK || s.Platform != platformLinux {
+		t.Fatalf("got %+v, want an OK Linux sample", s)
+	}
+	if !closeTo(s.TotalGB, 125.4375) || !closeTo(s.AvailableGB, 121.4375) || !closeTo(s.FreeGB, 112.75) {
+		t.Fatalf("got %+v, want 125.4375 total, 121.4375 available, 112.75 free", s)
+	}
+	if !closeTo(s.SwapUsedMB, 256) {
+		t.Fatalf("swap used = %v MB, want 256 — SwapTotal less SwapFree", s.SwapUsedMB)
+	}
+	// No wired counter exists here, and the Linux rule does not want one. A sample read
+	// with the macOS arithmetic would report 125.44 GB of headroom on a full machine.
+	if !closeTo(s.Headroom(), s.AvailableGB) {
+		t.Fatalf("headroom = %v, want MemAvailable %v", s.Headroom(), s.AvailableGB)
+	}
+}
+
+// A kernel too old to report MemAvailable leaves the Linux rule with nothing to refuse a
+// sweep with, so the sample is not a reading and the preflight says so.
+func TestAMeminfoMissingAHeadroomFieldIsRefused(t *testing.T) {
+	var without []string
+	for _, line := range strings.Split(procMeminfoFixture, "\n") {
+		if !strings.HasPrefix(line, "MemAvailable:") {
+			without = append(without, line)
+		}
+	}
+	s := parseMeminfo(strings.Join(without, "\n"))
+	if s.OK || s.TotalGB != 0 {
+		t.Fatalf("got %+v, want an unanswered sample rather than a partial one", s)
+	}
+	if p := Check(s, 4); p.Carries {
+		t.Fatalf("a sample missing MemAvailable carried a sweep: %+v", p)
+	}
+	if why := Check(s, 4).Refuse(); !strings.Contains(why, "did not answer") {
+		t.Errorf("refusal %q does not say the machine was not read", why)
+	}
+}
+
+// Each platform's numbers under the other's rule are wrong by tens of gigabytes, so the
+// rule follows the sample rather than the machine the report is read on.
+func TestHeadroomFollowsThePlatformTheSampleWasTakenOn(t *testing.T) {
+	mac := parseVMStat(vmStatFixture, 16384)
+	mac.Platform, mac.TotalGB, mac.OK = platformDarwin, 32, true
+	if !closeTo(mac.Headroom(), 32-20.89-6.61) {
+		t.Errorf("macOS headroom = %v, want total less wired and anonymous", mac.Headroom())
+	}
+	linux := parseMeminfo(procMeminfoFixture)
+	if !closeTo(linux.Headroom(), 121.4375) {
+		t.Errorf("Linux headroom = %v, want MemAvailable", linux.Headroom())
+	}
+	// A sample that names no platform has no rule, and reporting one machine's arithmetic
+	// for the other is how a sweep starts on a box that cannot carry it.
+	unnamed := MemSample{TotalGB: 32, WiredGB: 20.89, AnonymousGB: 6.61, OK: true}
+	if unnamed.Headroom() != 0 || Check(unnamed, 4).Carries {
+		t.Errorf("a sample naming no platform was given one: %+v", Check(unnamed, 4))
 	}
 }

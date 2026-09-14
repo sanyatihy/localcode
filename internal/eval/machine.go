@@ -58,9 +58,9 @@ func (m Machine) DeskProfile(name string) (DeskProfile, error) {
 }
 
 // Preflight reports whether this machine can carry a sweep, with the numbers it read.
-// Headroom is total less wired and anonymous — what competes for the RAM — because free
-// memory is no pressure signal on macOS (see MemSample) and a floor on it would refuse
-// every sweep this project runs.
+// Headroom is MemSample.Headroom, which is one rule per platform — total less wired and
+// anonymous on macOS, MemAvailable on Linux — because free memory is a pressure signal on
+// neither, and a floor on it would refuse every sweep this project runs.
 type Preflight struct {
 	MemSample
 	HeadroomGB float64 `json:"headroom_gb"`
@@ -69,7 +69,8 @@ type Preflight struct {
 }
 
 // Check runs a sample against a headroom floor in GB. A sample the platform did not answer
-// is refused: no number is not a big number.
+// is refused, and so is one missing a field its headroom rule needs — the samplers return
+// those empty rather than partial. No number is not a big number.
 func Check(s MemSample, floorGB float64) Preflight {
 	h := s.Headroom()
 	return Preflight{MemSample: s, HeadroomGB: h, FloorGB: floorGB, Carries: s.OK && h >= floorGB}

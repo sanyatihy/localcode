@@ -340,6 +340,13 @@ competes for the 32 GB. The earlier version added a per-process RSS sum to the m
 which counts every shared page once per resident process and counts the model twice — once as
 resident, again as wired.
 
+**Headroom is one rule per platform, and a sample records which one it was read under.**
+On macOS it is total less wired and anonymous, the arithmetic restated above; on Linux it is
+`/proc/meminfo`'s `MemAvailable`, because nothing there corresponds to the wired count and
+`MemFree` excludes the page cache an allocation may reclaim. A sample missing a field its own
+rule needs is not a reading: the probe returns it empty and the preflight refuses the sweep
+rather than subtracting a zero.
+
 **The model lives in wired memory**, because Metal wires its buffers: with it loaded and
 serving, wired measures **20.89 GB** while the mmap'd GGUF holds only 1.99 GB of file-backed
 pages. Apps live in anonymous memory — 6.61 GB with an editor open and no browser.
