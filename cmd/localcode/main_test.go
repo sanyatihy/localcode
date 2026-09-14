@@ -1304,6 +1304,15 @@ func TestStatusReportsWhereTheEndpointCameFrom(t *testing.T) {
 	if !strings.Contains(out.String(), "from -endpoint") {
 		t.Errorf("a missing server must still say where the endpoint came from: %q", out.String())
 	}
+
+	// And while it loads, which is when this question is asked most often of all.
+	out.Reset()
+	if code, _ := status(&out, healthy(t, http.StatusServiceUnavailable), "from -endpoint"); code != 1 {
+		t.Fatalf("a loading server must answer 1, got %d", code)
+	}
+	if !strings.Contains(out.String(), "from -endpoint") {
+		t.Errorf("a loading server must still say where the endpoint came from: %q", out.String())
+	}
 }
 
 // The profile names no host. Seatbelt refuses one that does — `host must be * or localhost

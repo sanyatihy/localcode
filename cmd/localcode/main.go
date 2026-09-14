@@ -511,7 +511,7 @@ func status(w io.Writer, endpoint, from string) (int, error) {
 	p, err := readProps(endpoint)
 	switch {
 	case errors.Is(err, errNotReady):
-		_, _ = fmt.Fprintln(w, err)
+		_, _ = fmt.Fprintf(w, "%s (%s)\n", err, from)
 		return 1, nil
 	case err != nil:
 		return 2, err
