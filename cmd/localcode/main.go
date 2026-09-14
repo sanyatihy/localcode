@@ -28,6 +28,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,7 +63,8 @@ usage:
 flags:
   -checkout dir      the localcode checkout to read configuration from
   -harness name      which agent to run the sessions in (%s)
-  -endpoint url      the server to use
+  -endpoint url      the server to use (default ~/.config/localcode/endpoint, else
+                     http://127.0.0.1:8081)
   -config file       the serving config to start (default config/agent.env)
   -no-serve          refuse if no server is running, rather than starting one
   -net               allow outbound network for this session (loopback only by default)
@@ -81,7 +84,7 @@ func main() {
 	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, harness.Names()) }
 	checkoutFlag := fs.String("checkout", "", "the localcode checkout to read configuration from")
 	agentName := fs.String("harness", harness.DefaultAgent, "which agent to run the sessions in")
-	endpoint := fs.String("endpoint", "http://127.0.0.1:8081", "the server to use")
+	endpoint := fs.String("endpoint", "", "the server to use")
 	config := fs.String("config", "config/agent.env", "the serving config to start")
 	noServe := fs.Bool("no-serve", false, "refuse if no server is running")
 	net := fs.Bool("net", false, "allow outbound network for this session")
@@ -109,20 +112,28 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Before the checkout, the server and the sandbox: every rule below turns on what kind
+	// of endpoint this is, so one nothing can classify is refused before anything runs.
+	server, from, err := resolveEndpoint(*endpoint)
+	if err == nil {
+		_, err = loopback(server)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "localcode: "+err.Error())
+		os.Exit(2)
+	}
+
 	args := fs.Args()
-	var (
-		code int
-		err  error
-	)
+	var code int
 	switch {
 	case refusable(args):
 		code, err = 2, notACommand(args)
 	case len(args) > 0 && args[0] == "status":
-		code, err = status(*endpoint)
+		code, err = status(os.Stdout, server, from)
 	case len(args) > 0 && args[0] == "serve":
 		code, err = script(*checkoutFlag, "serve.sh", *config)
 	case len(args) > 0 && args[0] == "stop":
-		code, err = script(*checkoutFlag, "stop.sh")
+		code, err = stopServer(*checkoutFlag, server)
 	case len(args) > 1 && args[0] == "hook":
 		code, err = hook(args[1])
 	case len(args) > 0 && args[0] == "sessions":
@@ -133,7 +144,7 @@ func main() {
 		code, err = run(opts{
 			harness:  *agentName,
 			checkout: *checkoutFlag,
-			endpoint: *endpoint,
+			endpoint: server,
 			config:   *config,
 			noServe:  *noServe,
 			net:      *net,
@@ -177,12 +188,30 @@ func run(o opts) (int, error) {
 	if o.sessions < 1 {
 		return 2, fmt.Errorf("-sessions is %d: a bound below one runs nothing", o.sessions)
 	}
+	lo, err := loopback(o.endpoint)
+	if err != nil {
+		return 2, err
+	}
 	root, err := resolveCheckout(o.checkout)
 	if err != nil {
 		return 2, err
 	}
-	if err := ensureServer(root, o.endpoint, o.config, o.noServe); err != nil {
+	if err := ensureServer(root, o.endpoint, o.config, o.noServe, lo); err != nil {
 		return 2, err
+	}
+
+	// A model on another machine is reached through this one's loopback, because the
+	// sandbox cannot admit it directly: seatbelt takes no host but `*` or `localhost` in a
+	// network rule. The session is handed the address every config already names, so
+	// nothing below here knows which machine answered.
+	sessionEndpoint := o.endpoint
+	if !lo {
+		proxied, stop, err := serveRemote(o.endpoint)
+		if err != nil {
+			return 2, err
+		}
+		defer stop()
+		sessionEndpoint = proxied
 	}
 
 	// The agent runs the sessions, and everything that differs between agents is behind
@@ -193,7 +222,7 @@ func run(o opts) (int, error) {
 	if name == "" {
 		name = harness.DefaultAgent
 	}
-	agent, err := harness.NewAgent(name, root)
+	agent, err := harness.NewAgent(name, root, sessionEndpoint)
 	if err != nil {
 		return 2, err
 	}
@@ -363,6 +392,40 @@ func resolveCheckout(flagValue string) (string, error) {
 	return "", errors.New("no localcode checkout: install with `make install`, or pass -checkout")
 }
 
+// loopback reports whether the endpoint is this machine's own: `localhost`, any
+// 127.0.0.0/8 address, or `::1`. Anything else is another machine, and everything that
+// differs turns on this one answer — what the sandbox admits, whether a missing server may
+// be started from here, and which harnesses can be pointed at it.
+func loopback(endpoint string) (bool, error) {
+	u, err := parseEndpoint(endpoint)
+	if err != nil {
+		return false, err
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true, nil
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback(), nil
+	}
+	return false, nil
+}
+
+// parseEndpoint refuses a URL nothing here can act on. A scheme and a host are both
+// required rather than accepted from url.Parse: it reads `mac.local:8081` as a scheme and
+// an opaque path, which would leave another machine classified as this one.
+func parseEndpoint(endpoint string) (*url.URL, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("endpoint %q is not a URL: %w", endpoint, err)
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return nil, fmt.Errorf("endpoint %q is not a URL a server can be reached at: "+
+			"it needs a scheme and a host, as in http://127.0.0.1:8081", endpoint)
+	}
+	return u, nil
+}
+
 // serverUp reports whether the endpoint can serve, rather than whether something is
 // listening. llama-server answers 503 while it loads a model, and a session started then
 // spends its first turn on an error instead of the work.
@@ -382,6 +445,12 @@ func serverUp(endpoint string) error {
 	}
 	return nil
 }
+
+// serverReachable is the health check `ensureServer` decides on. A var so a test can
+// answer without a network: a probe of an address nothing answers still leaves the machine,
+// and an environment naming an HTTP proxy answers for it — which is not this machine's
+// answer about the endpoint.
+var serverReachable = serverUp
 
 // props is what the endpoint says it is serving. The served context is the number that
 // matters: it is the one limit a session hits without warning, and it is a property of the
@@ -438,19 +507,20 @@ var errNotReady = errors.New("not ready")
 
 // status reports what the endpoint is actually serving, rather than that something is
 // listening.
-func status(endpoint string) (int, error) {
+func status(w io.Writer, endpoint, from string) (int, error) {
 	p, err := readProps(endpoint)
 	switch {
 	case errors.Is(err, errNotReady):
-		fmt.Println(err)
+		_, _ = fmt.Fprintf(w, "%s (%s)\n", err, from)
 		return 1, nil
 	case err != nil:
 		return 2, err
 	case p == nil:
-		fmt.Printf("no server at %s\n", endpoint)
+		_, _ = fmt.Fprintf(w, "no server at %s (%s)\n", endpoint, from)
 		return 1, nil
 	}
-	fmt.Printf("serving %s at %d ctx on %s\n", filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint)
+	_, _ = fmt.Fprintf(w, "serving %s at %d ctx on %s (%s)\n",
+		filepath.Base(p.ModelPath), p.Settings.NCtx, endpoint, from)
 	return 0, nil
 }
 
@@ -458,9 +528,16 @@ func status(endpoint string) (int, error) {
 // the headache this command exists to remove. What it costs is printed before it is spent
 // rather than discovered afterwards: twenty seconds and most of the machine's memory are
 // not something to find out about by waiting.
-func ensureServer(root, endpoint, config string, noServe bool) error {
-	if serverUp(endpoint) == nil {
+func ensureServer(root, endpoint, config string, noServe, here bool) error {
+	if serverReachable(endpoint) == nil {
 		return nil
+	}
+	// A server on another machine is not this one's to start. Starting one here would
+	// answer a different URL on a laptop that was asked for the other machine's memory, and
+	// the command that fixes it has to be run where the model is.
+	if !here {
+		return fmt.Errorf("no server at %s, and it is not this machine's to start: "+
+			"run `HOST=0.0.0.0 make serve CONFIG=%s` on the machine that serves it", endpoint, config)
 	}
 	if noServe {
 		return fmt.Errorf("no server at %s, and -no-serve was given", endpoint)
@@ -558,6 +635,62 @@ func script(checkoutFlag, name string, args ...string) (int, error) {
 		return 2, fmt.Errorf("could not run %s: %w", name, err)
 	}
 	return 0, nil
+}
+
+// stopServer ends the server this machine is running. A remote endpoint is refused rather
+// than acted on: the process is not this machine's, stopping it would take the model from
+// whoever else is driving it, and nothing here can wait for that machine's memory back.
+func stopServer(checkoutFlag, endpoint string) (int, error) {
+	here, err := loopback(endpoint)
+	if err != nil {
+		return 2, err
+	}
+	if !here {
+		return 2, fmt.Errorf("%s is served by another machine, so it is not stopped from here: "+
+			"run `localcode stop` on that machine", endpoint)
+	}
+	return script(checkoutFlag, "stop.sh")
+}
+
+// proxyAddr is where a model on another machine is served on this one. It is the address
+// every committed config, provider file and harness environment already names, so a
+// session driven against another Mac needs no configuration of its own. A var so a test
+// can take an ephemeral port rather than the one a real server holds.
+var proxyAddr = "127.0.0.1:8081"
+
+// serveRemote puts a remote endpoint on this machine's loopback for the length of the run,
+// and returns the URL to hand the harness and the function that ends it.
+//
+// A proxy rather than a sandbox rule, because there is no such rule to write: seatbelt
+// refuses a profile naming any host but `*` or `localhost` in a network address, exiting 65
+// before the session starts. Admitting `*` would open the whole network, which is the one
+// property the sandbox exists to hold, so the address the session may reach stays loopback
+// and this is what crosses.
+func serveRemote(endpoint string) (string, func(), error) {
+	u, err := parseEndpoint(endpoint)
+	if err != nil {
+		return "", nil, err
+	}
+	ln, err := net.Listen("tcp", proxyAddr)
+	if err != nil {
+		return "", nil, fmt.Errorf("something on this machine already serves %s, which is where "+
+			"%s has to be served for a sandboxed session to reach it: stop the local server with "+
+			"`localcode stop` first", proxyAddr, endpoint)
+	}
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(u)
+			// The other machine's own name, not this one's loopback: a server that routes
+			// or logs by Host would otherwise see a request nobody sent it.
+			r.Out.Host = u.Host
+		},
+		// A reply arrives token by token over minutes on this model. Buffered, the session
+		// would see nothing until the turn ended.
+		FlushInterval: -1,
+	}
+	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 30 * time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	return "http://" + ln.Addr().String(), func() { _ = srv.Close() }, nil
 }
 
 // repoState is where one repository's session state lives — the handoff above all. Keyed
@@ -802,6 +935,43 @@ func sbplEscape(s string) string {
 func sbplString(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	return `"` + r.Replace(s) + `"`
+}
+
+// defaultEndpoint is what every committed config serves, and what this machine falls back
+// to when nothing names another.
+const defaultEndpoint = "http://127.0.0.1:8081"
+
+// endpointConfigPath is where this machine says which server it drives. A file rather than
+// a variable, and beside `writable` for the same reason: the sandbox strips the session's
+// environment, so a variable would not survive into the one place it matters.
+func endpointConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "endpoint"), nil
+}
+
+// resolveEndpoint settles which server this invocation talks to, and says where that came
+// from: the flag, the machine's file, or the default. `status` reports it, because an
+// endpoint nobody typed is one nobody can account for afterwards.
+func resolveEndpoint(flagValue string) (endpoint, from string, err error) {
+	if flagValue != "" {
+		return flagValue, "from -endpoint", nil
+	}
+	path, err := endpointConfigPath()
+	if err != nil {
+		return "", "", err
+	}
+	// Absent is the normal case, and so is a file holding nothing but a newline.
+	line := ""
+	if body, readErr := os.ReadFile(path); readErr == nil {
+		line = strings.TrimSpace(string(body))
+	}
+	if line != "" {
+		return line, "from " + path, nil
+	}
+	return defaultEndpoint, "from the built-in default", nil
 }
 
 // writableConfigPath is the one place a developer widens the policy. It is a list of

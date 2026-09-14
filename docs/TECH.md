@@ -75,6 +75,11 @@ unset, and that is a decision rather than an omission: see
 **The endpoint is `127.0.0.1:8081`.** Not 8080: that is the port everything else on a
 development machine takes first.
 
+**`HOST` from the environment wins over the config's**, and the banner prints what was
+bound. Every committed config keeps `HOST="127.0.0.1"`, so a machine serving the network
+says so where the server is started — `HOST=0.0.0.0 make serve CONFIG=...` — rather than by
+editing a file that records what a measurement was taken with.
+
 ### Baseline, as measured 2026-08-17
 
 | | |
@@ -1088,6 +1093,14 @@ plain HTTP. A local model therefore needs a public HTTPS tunnel, and the path be
 Cursor → its backend → tunnel → here. Code leaves the machine even though inference does
 not. The extension hosting Claude Code has none of that, because the agent runs locally.
 
+**The launcher hands the session the endpoint it verified.** `ANTHROPIC_BASE_URL` is set
+after the committed file, so `harness/claude-code/claude-code.env` keeps `127.0.0.1:8081`
+as the default for the flow it is sourced into by hand, and a session driven against
+another machine follows the URL the driver checked — `count_tokens` with it, because one
+base URL carries every call. Pi needs no such variable: it takes its base URL from its
+provider file, and the address that file names is where the driver serves a model on
+another machine.
+
 Client configuration lives in [`harness/claude-code/`](../harness/claude-code/) with the
 other harnesses, not here.
 
@@ -1642,6 +1655,36 @@ a cost of it: a key it can read is a key it can copy into the working tree.
 **The network is loopback-only**, so a repository's source cannot leave the machine and
 `curl | sh` fetches nothing — VISION's offline property enforced rather than configured.
 `-net` lifts it for one session and widens reachability, never the filesystem.
+
+**Seatbelt admits no host but `*` or `localhost` in a network rule.** A profile carrying
+`(allow network-outbound (remote ip "10.0.0.5:8081"))` is refused by `sandbox-exec -f` with
+`host must be * or localhost in network address` and exit 65, before the command runs; the
+bracketed IPv6 form fails the same way. There is therefore no rule that admits one other
+machine, and `*` would open the whole network, which is the property the sandbox exists to
+hold.
+
+**A model on another machine is served at `127.0.0.1:8081` by the launcher instead.** For
+the length of the run, a remote endpoint is reverse-proxied there — the address every
+committed config, provider file and harness environment already names — so the profile is
+unchanged, the session reaches loopback and nothing else, and no harness needs configuring
+for the second machine. A local server already holding that address is refused rather than
+worked around, because a session talking to it would produce a chain attributed to the
+machine that did not run it.
+
+**An endpoint is this machine's or another machine's, and one rule decides which.**
+`localhost`, any `127.0.0.0/8` address and `::1` are this machine; anything else is
+another. A URL that does not parse, or that names no scheme and host, is refused before
+anything runs, because everything that differs between the two cases reads that one answer.
+
+**A server on another machine is never started or stopped from the client.** A missing
+remote server is refused naming `HOST=0.0.0.0 make serve CONFIG=...` to run where the model
+is, and `localcode stop` against a remote endpoint refuses rather than killing a process
+this machine does not own. Neither refusal leaves anything running or stopped here.
+
+**`~/.config/localcode/endpoint` is this machine's default endpoint**, one URL in a file
+beside `writable`, and `-endpoint` wins over it. A file rather than a variable because the
+sandbox strips the session's environment. `localcode status` reports which of the three
+named the endpoint it asked — the flag, that file, or the built-in `127.0.0.1:8081`.
 
 **A denied write is explained by the session, not by the launcher.** claude gives a tool's
 stderr to the model rather than passing it through, so the process that could print a hint

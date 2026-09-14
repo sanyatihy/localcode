@@ -97,3 +97,74 @@ func TestASessionRefusesToStartWithoutItsGate(t *testing.T) {
 		t.Fatal("a session with no settings file must be refused")
 	}
 }
+
+// onPath puts an executable of that name where the adapter will look it up, so one can be
+// built without the real agent being installed on the machine running the tests.
+func onPath(t *testing.T, name string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// claudeCodeCheckout writes the committed environment file, keeping the loopback default
+// it carries: the point of the test below is that the launcher's endpoint replaces it.
+func claudeCodeCheckout(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "harness", "claude-code")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := `ANTHROPIC_BASE_URL="http://127.0.0.1:8081"` + "\n" +
+		`ANTHROPIC_AUTH_TOKEN="local"` + "\n" +
+		`CLAUDE_CODE_MAX_CONTEXT_TOKENS="45056"` + "\n" +
+		`CLAUDE_CODE_MAX_OUTPUT_TOKENS="4096"` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude-code.env"), []byte(env), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// The endpoint the launcher hands over is the one every model call goes to. Asserted on a
+// URL the committed file does not carry: one entry, the launcher's, and no other variable
+// naming a host — `count_tokens` follows the base URL, so a second one would send the count
+// somewhere the conversation did not go.
+func TestTheSessionTalksToTheEndpointTheLauncherVerified(t *testing.T) {
+	root := claudeCodeCheckout(t)
+	onPath(t, "claude")
+	// The port a remote endpoint is proxied onto is not the one the file names.
+	const remote = "http://127.0.0.1:9099"
+
+	a, err := newClaudeCodeAgent(root, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Prepare(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	_, _, env, err := a.Command(Session{StateDir: t.TempDir(), StableDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var base []string
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		if !isAgentVar(name) {
+			continue // the machine's own environment, which this adapter does not decide
+		}
+		if name == "ANTHROPIC_BASE_URL" {
+			base = append(base, value)
+			continue
+		}
+		if strings.Contains(value, "127.0.0.1") || strings.Contains(value, "localhost") {
+			t.Errorf("%s names a host of its own, so not every call follows the base URL", kv)
+		}
+	}
+	if len(base) != 1 || base[0] != remote {
+		t.Fatalf("the session must be given what the launcher passed, exactly once, got %q", base)
+	}
+}
