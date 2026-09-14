@@ -115,6 +115,8 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [ ] `config/machine-m5pro-24gb.json` holds the node's measured reserve, floor and one `headless` profile, and TECH records the idle reading the reserve came from
 - [ ] The ladder runs on the node from explicit `CELLS` and TECH records which of memory or time binds on 24 GB, with the ceiling written into the machine file
 - [ ] The tier-1 suite runs on the node under the laptop's settings and TECH records prefill, decode and peak wired beside the laptop's, head on and off
+- [ ] The node is driven from itself and from the laptop, three cold repetitions each, and TECH records chain wall, per-call latency and server rates side by side, per 0053's Design
 - [ ] README documents the node: `prepare.sh` and its check, the SSH-only access, the bridge and Wi-Fi addresses, the daemons, and a `smoke` from the laptop over the bridge
 
 ## Log
+- 2026-09-14 — took 0053's Mac-to-Mac measurement box: the second Mac is this node.
