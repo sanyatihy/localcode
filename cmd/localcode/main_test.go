@@ -335,7 +335,7 @@ func TestEnsureServerReportsAServerThatDiedInsteadOfWaiting(t *testing.T) {
 	srv.Close() // nothing is listening, so the only thing that can end the wait is the exit
 
 	done := make(chan error, 1)
-	go func() { done <- ensureServer(root, url, "config/driver-mtp-32k.env", false) }()
+	go func() { done <- ensureServer(root, url, "config/driver-mtp-32k.env", false, true) }()
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), "exited before it was ready") {
@@ -1159,5 +1159,72 @@ func TestAnUnparseableEndpointIsRefusedBeforeAnythingRuns(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mac.local:8081") {
 		t.Errorf("the refusal must name what it refused: %v", err)
+	}
+}
+
+// markedScripts writes serve.sh and stop.sh into the checkout, each recording that it ran.
+// The file's absence is the assertion: a refusal that started or killed something would be
+// a laptop taking a model away from the machine that serves it.
+func markedScripts(t *testing.T, root string) string {
+	t.Helper()
+	dir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	for _, name := range []string{"serve.sh", "stop.sh"} {
+		body := "#!/bin/sh\necho " + name + " >> " + marker + "\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return marker
+}
+
+// A remote endpoint that answers nothing is a machine to go to, not a model to load here:
+// the refusal names the command to run there, and this machine starts nothing.
+func TestAMissingRemoteServerIsRefusedRatherThanStartedHere(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+
+	// 192.0.2.0/24 is TEST-NET-1: reserved, routable-looking and never a real host, so
+	// nothing answers and no real machine is contacted.
+	err := ensureServer(root, "http://192.0.2.1:8081", "config/agent.env", false, false)
+	if err == nil {
+		t.Fatal("a remote server that is not there must be refused")
+	}
+	for _, want := range []string{"192.0.2.1:8081", "make serve", "config/agent.env"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal must name %q: %v", want, err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a remote endpoint must not start a server on this machine")
+	}
+}
+
+// The server on another machine is not this one's to stop: it is somebody else's process,
+// and nothing here can wait for that machine's memory back.
+func TestStopRefusesARemoteEndpointAndKillsNothing(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+
+	code, err := stopServer(root, "http://mac.local:8081")
+	if code != 2 || err == nil {
+		t.Fatalf("want a refusal, got code %d err %v", code, err)
+	}
+	if !strings.Contains(err.Error(), "mac.local:8081") {
+		t.Errorf("the refusal must name the endpoint: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a remote endpoint must not stop anything from here")
+	}
+
+	// This machine's own server is still stopped by the checkout's own script.
+	if code, err := stopServer(root, "http://127.0.0.1:8081"); err != nil || code != 0 {
+		t.Fatalf("stop: code %d err %v", code, err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("a loopback endpoint must still run stop.sh: %v", err)
 	}
 }
