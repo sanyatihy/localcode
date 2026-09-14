@@ -109,7 +109,7 @@ per `docs/data/README.md`, until 0054 puts it on the row.
 - [x] `scripts/node/prepare.sh` applies every OS lever, prints the idle anonymous and wired readings against the machine file's record, and exits nonzero when the node reads higher
 - [x] The OS levers are measured as a set by the idle reading at the login window, TECH records the saving, and a lever leaves the script only when it breaks something
 - [x] The node answers SSH by key as the serving user: a full TCP scan from the laptop shows port 22, the server's 8081 while the daemon serves and one Apple built-in listener on a high random port, and a password login is refused
-- [ ] The node serves with the lid closed on power and comes back serving after a power cut, each verified by a `smoke` over the link
+- [ ] The node serves with its own lid closed on power and comes back serving after a power cut and a login, each verified by a `smoke` over the link
 - [x] `reserve_gb` lives in each machine file, `gpuraise.sh` and `rungs.sh` read it from the file `MACHINE` names with `RESERVE_GB` still winning, and the laptop's 8 has one home
 - [x] `serve.sh` passes `--no-mmproj` when `NO_MMPROJ` is set and `--mlock` when `MLOCK` is set, covered by shellcheck and the gate
 - [x] `gpuraise.sh` treats a raise to the value already set as a no-op, covered by a test
@@ -165,3 +165,4 @@ per `docs/data/README.md`, until 0054 puts it on the row.
   completion per screened cell, which two settings-identical cells put a 5.9% spread on. The
   decode-by-depth curve 0017 measured the laptop's table with is what closes it — node.env
   against the draft head at ~200, 8k, 16k and 32k — and it is not run.
+- 2026-09-14 — the lid box says the node's own lid, and a login after a power cut: closing both lids showed the node stays awake but the USB link needs a login at its screen after the laptop sleeps or the node boots. TECH records it.
