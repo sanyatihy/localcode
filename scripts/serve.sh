@@ -69,11 +69,21 @@ add_opt --cache-ram "${CACHE_RAM:-}"
 # Speculative decoding, absent from every config that does not use it. The draft model and
 # the mechanism are part of how a measurement was produced, so they live in the config with
 # everything else rather than being passed at the call site.
-add_opt --spec-draft-hf "${SPEC_DRAFT_HF:-}"
-# The same drafter named by path instead of by repository tag. `-hf user/repo:quant`
+# The same drafter is named either by repository tag or by path. `-hf user/repo:quant`
 # resolves against whatever that repository's main is on the day it runs, and the node's
-# link cannot fetch a gigabyte when it moves; a path carries the revision it was taken
-# from and cannot silently become a different file. One of the two, never both.
+# link cannot fetch a gigabyte when it moves; a path carries the revision it was taken from
+# and cannot silently become a different file.
+#
+# One of the two, never both, and refused rather than resolved: the build this project
+# measures the drafter on feeds the path through as the Hugging Face filename as well, so
+# passing both does not mean "prefer one" — it means the two names are combined and what
+# served is neither of the things the config says. Either may arrive from the environment,
+# which is why the check is on the values and not on the config file.
+if [ -n "${SPEC_DRAFT_HF:-}" ] && [ -n "${SPEC_DRAFT_MODEL:-}" ]; then
+  echo "$CONFIG names the drafter twice: SPEC_DRAFT_HF=$SPEC_DRAFT_HF and SPEC_DRAFT_MODEL=$SPEC_DRAFT_MODEL. Set one" >&2
+  exit 2
+fi
+add_opt --spec-draft-hf "${SPEC_DRAFT_HF:-}"
 add_opt --spec-draft-model "${SPEC_DRAFT_MODEL:-}"
 add_opt --spec-type "${SPEC_TYPE:-}"
 add_opt --spec-draft-n-max "${SPEC_DRAFT_N_MAX:-}"
