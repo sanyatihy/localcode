@@ -1700,7 +1700,9 @@ harness draws its own screen there.
 
 **Claude Code's prompt budget is the declared window minus `max(MAX_OUTPUT, 4096)`.** It
 keeps 4,096 for a reply whatever it is told to keep, so `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
-below that buys nothing back. Bisected by padding a prompt to an exact token count — the
+below that buys nothing back. The committed file reserves 8,192 since 2026-09-15: a
+file-sized `Write` on the node was cut at 4,096 and retried three times to the same end, so
+the prompt budget at 49,152 is 40,960, which the launcher's arithmetic follows. Bisected by padding a prompt to an exact token count — the
 server's own `/tokenize`, not a character estimate — and reading whether it was refused
 before it was sent, which costs no model time at all. Against a declared 12,288: with 1,024
 reserved the boundary falls between 3,700 and 3,900 tokens of padding on top of a
