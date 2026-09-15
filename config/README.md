@@ -17,9 +17,10 @@ A variant is a new file, never an edit to an existing one.
 | [`driver-mtp-32k.env`](driver-mtp-32k.env) | 32 768 | `agent.env`'s served defaults at the context the MTP head is admissible at. A chain finished the same instruction 20% sooner here |
 | [`mtp-32k-stock.env`](mtp-32k-stock.env) | 32 768 | `mtp-32k.env` on the binary on PATH. **Use this one**: 0051 measured stock drafting with the same head, at 1.18x the fork's decode |
 | [`driver-mtp-32k-stock.env`](driver-mtp-32k-stock.env) | 32 768 | `driver-mtp-32k.env` on the binary on PATH, and the driver config to use for the same reason |
-| [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off, which the screen measured as the only lever that earns a setting there. The node's ladder reaches 163,840; this context is what a session needs, not what the machine allows |
+| [`node.env`](node.env) | 49 152 | the dedicated 36 GB node (0056): `agent.env` with the projector off, which the screen measured as the only lever that earns a setting there, plus the target's own MTP draft head at depth 3, which 0058 measured at 1.82x on decode for 1.20 GB. The node's ladder reaches 163,840; this context is what a session needs, not what the machine allows |
 | [`dflash2-32k.env`](dflash2-32k.env) | 32 768 | an external drafter, kept as the record of a candidate that never generated a token here |
 | [`dflash2-49k.env`](dflash2-49k.env) | 49 152 | the same, at the editor profile |
+| [`dflash2-node-49k.env`](dflash2-node-49k.env) | 49 152 | that drafter on the node, where it does generate: `config/node.env` plus the PR build, and the drafter named by path because its repository's tag has moved (0058) |
 
 The six speculative configs name a `SERVER_BIN` that is **not** the binary on `PATH`: the
 mechanism exists only in llama.cpp PR #27342, and the config says which build served it.

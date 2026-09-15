@@ -626,6 +626,309 @@ by the hop. Rows: `docs/data/2026-09-14-m5max-36gb-chain.jsonl`.
 | `laptop-chain-2` | the laptop, through 0053's proxy | 20/20 | 1 | 227 s | 12,531 | 164,607 | 3,625 |
 | `laptop-chain-3` | the laptop, through 0053's proxy | 20/20 | 2 | 300 s | 15,066 | 270,756 | 4,711 |
 
+### What the laptop refused for memory, re-screened here (0058)
+
+Four candidates lost on the laptop for memory and for nothing else. Each is re-run on this
+node against `config/node.env` at 49,152, headless with the daemon's server stopped, one
+machine state and one toggle at a time. Screens are in
+[data/2026-09-15-m5max-36gb-0058-screen.jsonl](data/2026-09-15-m5max-36gb-0058-screen.jsonl);
+the verdicts are gathered in [one table](#the-four-candidates-and-where-each-stops).
+
+**What fills a screen here is a prompt of 44,236 words, not 44,236 tokens.**
+`scripts/screen.sh` builds it by drawing that many words from a sixteen-word vocabulary and
+adding an instruction, and `SMOKE_TOKENS` — the count it writes to `smoke_prompt_tokens` — is
+the word count it was asked for rather than anything the server counted. What the servers
+then ingested is in their own logs and is close to it because those words are single tokens:
+44,260 on llama.cpp with the head, 44,258 with the DFlash2 drafter, 44,296 on MLX. The same
+figure in 0056's rows above is the same word count, and should be read the same way.
+
+**The native MTP head's draft depth was swept here, the way 0025 swept it at 32,768.** Three
+arms, `config/node.env` with `SPEC_TYPE="draft-mtp"` and `SPEC_DRAFT_N_MAX` as the only thing
+moved, each screened filled by `screen.sh`'s own request and then paired against the
+unmodified baseline on the ranking suite, three passes a side, one session per arm
+([rows](data/2026-09-15-m5max-36gb-0058-mtp.jsonl)):
+
+| draft depth | peak wired | headroom | fill | baseline decode | with the head | ratio | acceptance | pass | tool-call valid |
+|---|---|---|---|---|---|---|---|---|---|
+| 2 | 21.03 GB | 8.97 GB | 133 s | 0.0481 s/tok | 0.0368 | 1.31x | 2.94 | 23/27 against 23/27 | 12/12 |
+| **3** | **21.23** | **8.77** | **137** | **0.0523** | **0.0287** | **1.82x** | **3.84** | **24/27 against 25/27** | **12/12** |
+| 4 | 21.37 | 8.63 | 141 | 0.0534 | 0.0273 | **1.95x** | 4.99 | 22/27 against 23/27 | 12/12 |
+
+**Four is admissible on this node, and it is the depth the laptop's allocator refuses.** At
+32,768 on the laptop, depth 4 returns `kIOGPUCommandBufferCallbackErrorOutOfMemory` on every
+request; here it loads at 49,152, fills, commits five tokens a step and reads the fastest
+ratio of the three. What it costs over depth 2 is 0.34 GB of wired memory out of 8.6 GB of
+headroom, so on this machine the allocator is not what chooses the depth.
+
+**Every arm swaps 0.0 MB and hashes `0f4045cad664f4ac` on both sides** — the same hash the
+laptop's arms produced, on all six sides of the three pairs. The ratios are therefore of one
+decoder, which is what licenses reading them.
+
+**The shape matches the laptop's; the level moves in both directions**: 1.31x here against
+1.33x there at depth 2, 1.82x against 1.67x at depth 3, and a fourth arm the laptop has no
+row for. Depth 2 is the one that reads lower here, not higher. Acceptance matches within 0.13 tokens a step at depth 2 and 3. Read the depths
+against each other and not against the laptop's numbers directly: these are the ranking
+suite's ~200-token prompts on this node, where 0025's are `decode-32000` on that one.
+
+**Pass rate does not separate the arms, and the baseline moved as much as they did.** The
+three baseline sessions read 23, 25 and 23 of 27 against the same fixtures, so the head's
+24/27 at depth 3 is one task inside a baseline that spans two on its own. Every failure on
+every arm is one of the two tasks TECH already names as the only discriminating ones. Tool-call
+validity is 12/12 on all three heads; the one invalid call in the whole file is a baseline row.
+
+**Depth 3 is the setting, and the reason is not speed.** Depth 4 reads 1.95x against 1.82x,
+and 22/27 against depth 3's 24/27 is two tasks — but those are two different sessions with
+two different baselines, and against its own each arm is one task short: 22/27 against 23/27
+and 24/27 against 25/27. Pass rate separates them by nothing. What separates them is that
+depth 4's server aborts in `ggml_metal_buffer_free` while tearing the context down at the end
+of the screen, after the fill and the smoke had both passed. The row is
+admissible on what it measured and the abort is recorded rather than explained; a depth whose
+teardown crashes is not the one to serve from.
+
+**DFlash2 is admissible on this node, and it is the fastest decoder measured here.** The
+drafter loads at 49,152 where the laptop's allocator refused it at both contexts, fills to
+the same prompt and answers, at 23.59 GB of peak wired with 6.41 GB of headroom and a swap
+delta of 0.0 — 2.2 GB more than the draft head costs. Paired against `config/node.env` on
+the ranking suite, three passes a side, one session
+([rows](data/2026-09-15-m5max-36gb-0058-dflash2.jsonl)):
+
+| | baseline | DFlash2, `n_max` 7 |
+|---|---|---|
+| decode, client-side | 0.0474 s/tok | **0.0245 — 1.94x** |
+| acceptance | — | **6.74** |
+| peak wired | 19.91 GB (0056's screen) | 23.59 GB |
+| pass | 23/27 | 21/27 |
+| tool-call valid | 12/12 | 11/12 |
+| greedy fidelity hash | `0f4045cad664f4ac` | `0f4045cad664f4ac` |
+| swap Δ | 0.0 MB | 0.0 MB |
+
+**It is lossless.** The hash is the draft head's and the baseline's, so the drafter emits
+the same text. Pass rate reads 21/27 against 23/27 here and 25/27 against 22/27 in the
+control below, which is two tasks in each direction across two sessions: **pass rate does
+not separate this candidate from the baseline at this sample size**, and the earlier reading
+that it lost by two tasks was one session read alone.
+
+**The build is not the confound it looked like, and the control says so.** `--spec-type
+draft-dflash` exists only in PR #27342, so the pair above crosses two binaries: b10498 with
+its own `libggml-metal.0.20.2.dylib` against b10809 on ggml 0.23.0. Two further pairs, same
+machine state, one variable each
+([rows](data/2026-09-15-m5max-36gb-0058-dflash2-control.jsonl)):
+
+| session | held fixed | moved | decode | ratio | acceptance | pass |
+|---|---|---|---|---|---|---|
+| `0058-dflash2-build` | drafting off | the binary, b10809 → b10498 | 0.0487 → 0.0488 s/tok | **1.00x** | — | 25/27 → 26/27 |
+| `0058-dflash2-drafter` | the binary, b10498 | the drafter, off → on | 0.0471 → 0.0225 | **2.09x** | 6.95 | 22/27 → 25/27 |
+
+**The binary is worth nothing and the drafter is worth 2.09x.** 0017's 1.18x was a
+fork-against-stock pair on the laptop that moved a whole build at once — a different fork,
+a different backend version and a different machine — so it never quantified this gap and
+does not transfer to it. Here the two builds decode within 0.2% of each other, which is
+inside any spread these rows can resolve, and the whole of the 1.94x measured against the
+stock baseline is the drafter. All four probes in the control hash `0f4045cad664f4ac` and no
+row swapped.
+
+**The node cannot fetch its own weights.** The drafter is named by path rather than by
+`-hf` tag in [`config/dflash2-node-49k.env`](../config/dflash2-node-49k.env). That
+repository's main moved from 57ab3265 to 2d9571f8 after 0017, so the tag now resolves to a
+1.1 GB download, and this machine's route to the Hugging Face CDN runs at 8–130 KB/s
+against 142–263 ms of ping — 2.5 to 30 hours for that file, and it stalled twice at zero.
+Two `load_failed` rows in the screen file are that: 601 s of waiting on the download, and
+21 s to fail under `LLAMA_ARG_OFFLINE=1`, which resolves a cached target but not a cached
+`--spec-draft-hf`. **Every weight this feature measures was staged over the 0053 link
+instead**, which runs at 37 MB/s, and `LLAMA_ARG_OFFLINE=1` keeps both sides of the pair
+out of the metadata check that stalls the load.
+
+**MTPLX fits here, and what it spends is the free memory rather than the cap.** The
+checkpoint the laptop could not hold loads at 49,152 on this node, fills on the same prompt
+and answers in 249 s, at **28.32 GB of peak wired with 1.68 GB left under the 30,720 MiB
+cap** and a swap delta of 0.0. On the laptop the same config peaked at 25.5–25.7 GB and
+swapped both times, so both of those rows were void; raising the cap is what admits it, and
+0017's reading that the reserve rather than the route excludes it is confirmed from the
+other side. It logs its own `memory pressure guard` at `allocator_fraction` 1.02–1.06
+through the fill and completes anyway.
+
+Paired against `config/node.env` on the ranking suite, three passes a side, one session,
+`scripts/pair.sh` driving its serve script and its port
+([rows](data/2026-09-15-m5max-36gb-0058-mtplx.jsonl)):
+
+| | `config/node.env` | MTPLX, `mtp` on `sustained` |
+|---|---|---|
+| decode, client-side | 0.0477 s/tok | 0.0178 — 2.68x, **void as a ratio** |
+| acceptance | — | 3.80 |
+| peak wired | 19.91 GB (0056's screen) | **28.32 GB** |
+| minimum free memory | 4.97 GB | **0.056 GB** |
+| pass | 25/27 | 23/27 |
+| tool-call valid | 12/12 | 12/12 |
+| greedy fidelity hash | `0f4045cad664f4ac` | `5dd7fe3148350c3c` |
+| swap Δ | 0.0 MB | 0.0 MB |
+
+**The ratio is void and the tool voided it**, which is the point of hashing both sides: the
+probes disagree, so this is not one decoder run two ways. It cannot be — MTPLX serves an
+FP16 MLX conversion of its own where the baseline serves Q4_K_M, so the comparison is a
+runtime comparison like 0006's and not a speculative-decoding one. Read 56.8 tok/s against
+20.7 as two runtimes, with two task outcomes and 1.5 GB of weights between them.
+
+**It reports no served config**, exactly as `mlx_lm` does: `served_n_ctx` is 0 and
+`served_model` is `.` on every row, so a run cannot be checked against its label from the
+row alone. That is the second of the three things TECH already holds against MLX, and it
+holds here.
+
+**0.056 GB of free memory is the finding, not the 28.32.** The cap bounds llama.cpp's
+reservation; this runtime allocates per request and takes what is there, which is why one
+1.68 GB margin under the cap arrives with the machine's free pool at 56 MB. Nothing swapped,
+because wired pages cannot be paged out — the same reason 0006's unbounded `mlx_lm` stalled
+with swap flat rather than paging.
+
+**MLX no longer wins on memory, and that was the whole of its case.** 0006's comparison is
+re-run here with nothing changed but the endpoint and the machine — `runtimes/mlx/compare.sh`
+over the ranking suite and the depth suite, three passes each, `config/node.env` against
+`runtimes/mlx/config/mlx-4bit.env` with 0006's mandatory cache bounds unchanged
+([rows](data/2026-09-15-m5max-36gb-0058-mlx-runtime.jsonl)), plus a streamed pair for the
+decode column `mlx_lm` reports no timings for
+([rows](data/2026-09-15-m5max-36gb-0058-mlx.jsonl)):
+
+| | llama.cpp on the node | MLX on the node | the laptop's answer (0006) |
+|---|---|---|---|
+| pass | 51/54 | 51/54 | 40/42 against 39/42 |
+| tool-call validity | 12/12 | 12/12 | 12/12 both |
+| peak wired, filled screen | **19.91 GB** | 27.72 GB | MLX won, 18.02 against 20.89 |
+| headroom left under the cap | 10.09 GB | 2.28 GB | — |
+| minimum free memory | 0.068 GB | 0.121 GB | MLX won, 2.64 against 0.06 |
+| runs that swapped | **0** | **0** | 7 against 0 |
+| decode, client-side | 0.0480 s/tok | **0.0397 — 1.21x** | 8.89 against 10.35 tok/s, prefill included |
+| ranking fixtures, mean wall | **4.77 s** | 5.32 s | MLX won |
+| depth prompts, mean wall | **2.0–55 s** | 11–197 s | llama.cpp won by 3–9% |
+| repeating one 32k fixture, `decode-32000` | 115.4 s → **25.0 s (4.6x)**, 31,548 of 32,064 reused | 197.4 s → 196.8 s, no gain | 10x against 39x, a different instrument |
+
+**MLX's short-prompt win does not survive the whole suite.** It is faster on four of the
+five patch fixtures, by 1–11% of wall, and slower on all four tool-call fixtures, by 12% to
+96% — `toolcall-read-file` costs it 3.37 s against 1.72. Averaged over the nine it is the
+slower of the two, 5.32 s against 4.77. 0006's "short prompts: faster" was a reading of the
+laptop and does not hold here.
+
+**The laptop's decode figures in that last column are not the same measurement.** 8.89 and
+10.35 tok/s were taken client-side with prefill inside them, which is all 0006 could take;
+the 0.0480 and 0.0397 s/tok here are streamed, so prefill is out of them. They sit in one
+table because they answer one question, not because they may be divided.
+
+**Both runtimes score the same and neither swaps**, so quality and stability separate them
+by nothing here, and the three columns that decided 0006 have all moved. MLX's memory win
+is gone: 27.72 GB of peak wired against 19.91 leaves it 2.28 GB under the cap where
+llama.cpp keeps 10.09. Its warm-reuse win is gone too, and here it is inverted: asked the
+same 32k fixture three times, llama.cpp falls from 115.4 s to 25.0 s and reuses 31,548 of
+32,064 tokens, while MLX reads 197.4, 196.8 and 197.2 and gains nothing. Read that against
+0006's own warm-reuse row with care — the laptop's 10x and 39x were an identical request
+sent twice by hand, which is not this instrument, and the comparable figure here is the
+repeat structure the suite already has. What MLX gains is a decode column it did not have:
+1.21x client-side, which is not a speculative ratio and is void as one, since its greedy
+probes hash `5dd7fe3148350c3c` against the baseline's `0f4045cad664f4ac`. It serves
+different weights; that is the comparison.
+
+**The retrieval fixtures are where the gap is, and the cause is reuse rather than speed —
+but not the kind of reuse a session has.** `retrieval-32000` costs llama.cpp 2.94 s and MLX
+179.06, and the rows say why: llama.cpp has 31,548 of 32,055 tokens cached **on repeat 0**,
+before that fixture has ever been sent. What it is reusing is the prefix this suite's depth
+fixtures share with each other, so what the 61x measures is an interleaved suite of
+near-identical prompts and not a conversation growing turn by turn. **The suite cannot
+establish the session claim**, and `decode-32000` is the part of it that can: cold at 115.4 s
+with nothing cached, then 25.0 s twice with 31,548 reused. MLX re-ingests in both cases.
+
+**Nothing here reverses the decision to stay on llama.cpp**, and less of it is close than
+on the laptop. The two reasons 0006 gave that are not about memory both stand: MLX serves
+no `/v1/messages`, and it reports no served config — `served_n_ctx` is 0 and `served_model`
+is `.` on every row it wrote here, so a run cannot be checked against its label.
+
+**The caveat 0006 attached to its own benchmark stands, and it is why the session claim is
+left open here.** That suite interleaves fourteen prompts before repeating any, which 0006
+said understates MLX because a real session is one conversation resending a growing prefix.
+These rows show llama.cpp reusing a prefix the suite's own fixtures share rather than one a
+conversation built, so they are evidence that it reuses and not evidence of how much a
+session would save. 0018 and 0056's chains measure that, on llama.cpp; nothing here measures
+it on MLX.
+
+### The four candidates, and where each stops
+
+One table for 0058. Every row is the node, `config/node.env` at 49,152 as the baseline,
+headless with the daemon's server stopped, screened filled by that prompt and then paired
+on the ranking suite three passes a side. "Admissible" means loaded, generated, and swapped
+0.0 MB — all four do, where the laptop admitted none of them. Pass is that candidate's own
+session, and the baseline beside it is that session's own baseline, because the nine
+undrafted sides taken here span 22/27 to 26/27 — two of them the same config in two sessions,
+at 22/27 and 26/27 — and a one-task difference cannot be read across them. Every pass column is the same suite run the same way — the nine ranking
+fixtures, three passes, streamed — so MLX's row is its streamed pair and not the 51/54 its
+wider `compare.sh` run scored over the ranking and depth suites together, which no other
+candidate has a figure for.
+
+| candidate | admissible | peak wired | decode ratio | ranking suite, 3 passes: pass against its own session's baseline | where it stops |
+|---|---|---|---|---|---|
+| **native MTP head, depth 3** | yes | **21.23 GB** | **1.82x**, lossless | **24/27 against 25/27** | nowhere — it is adopted below |
+| native MTP head, depth 2 | yes | 21.03 | 1.31x, lossless | 23/27 against 23/27 | a token a step less than depth 3, for 0.20 GB less |
+| native MTP head, depth 4 | yes | 21.37 | 1.95x, lossless | 22/27 against 23/27 | its server aborts in `ggml_metal_buffer_free` tearing the context down |
+| DFlash2 drafter, PR #27342 | yes | 23.59 | **2.09x**, lossless, drafter isolated from its build | 21/27 against 23/27, and 25/27 against 22/27 in the control | nothing in these rows — it needs a binary from an open pull request, and a drafter this node cannot re-fetch |
+| MTPLX | yes | 28.32 | void — not lossless | 23/27 against 25/27 | 0.056 GB of free memory, and it reports no served config |
+| MLX 4bit | yes | 27.72 | void — not lossless | 24/27 against 22/27 | no `/v1/messages`, and it reports no served config |
+
+**Three of the four are admissible only because the cap is raised**, and the fourth — the
+draft head — is admissible only because of the cap too: 0042 measured the laptop's allocator
+refusing it at 49,152 at the cap Metal derives there. So the exclusion VISION said lifts on
+a machine with room did lift, for every one of them, and what replaced it is four different
+reasons.
+
+**The two that are not llama.cpp stop for the same two reasons they stopped for in 0006**,
+and memory is no longer either of them. Both hash their own text rather than the baseline's,
+so neither has a decode ratio that may be read as a speedup; both report no served config,
+so a run cannot be checked against its label; and MLX still serves no `/v1/messages`, which
+the editor flow needs. What changed is that MTPLX now fits and MLX no longer wins on memory.
+
+**DFlash2 also meets the rule, and what it is short of is not a measurement.** Its control
+pairs put 2.09x on the drafter alone and 1.00x on the build it needs, so its ratio is the
+drafter's and it is the fastest thing measured here; it hashes the baseline's text; and
+across two sessions its pass rate lands two tasks either side of its baseline, which at this
+sample size separates nothing. So the rule as the plan words it — beat the baseline on decode
+without losing pass rate — is satisfied by two candidates and ranks neither.
+
+**What it costs that the head does not is an artefact.** DFlash2 serves from a binary built
+out of a pull request that is open and unmerged, named in the config as a path under
+`$HOME`, and it needs a 1.1 GB drafter whose repository tag has already moved once and which
+this node's link cannot fetch again. The head is the same weights the server already loads,
+on the `llama-server` that is on `PATH`, for 2.4 GB less of wired memory. **Whether an
+endpoint four people are meant to rely on may depend on an open pull request is a decision
+about this project and not a reading of these rows**, so it is recorded here and the head
+stays adopted. What would settle it is that PR merging, or the owner saying the scratch
+build is acceptable — at which point the rows above are already the evidence.
+
+**`config/node.env` therefore serves the draft head at depth 3**, on the row marked above:
+1.82x on decode, `0f4045cad664f4ac` on both sides of the pair, 24/27 against its baseline's
+25/27, 21.23 GB of peak wired with 8.77 GB of headroom left, swap 0.0
+([rows](data/2026-09-15-m5max-36gb-0058-mtp.jsonl), session `0058-mtp-n3`).
+
+**What that adoption does not rest on, and the reason the config held out until now.** 0056
+declined the head because what the laptop's own adoption rests on is a whole chain, and no
+chain had been driven on this node with it. That is still true: 0034's chain figures are the
+laptop's, where the head paid 1.31–1.38x per generated token on real work against 1.67x on
+pure decode. So the expectation here is a chain gain below 1.82x and above 1, and **it is a
+hypothesis until a chain is driven both ways on this node**.
+
+**Every table above this subsection was taken against `config/node.env` as it was before
+this adoption**, which is to say without the head — including 0056's screen, its ladder, its
+tier-1 columns and the decode curve that pairs the file against itself with `draft-mtp`
+added. Those rows are not invalidated by the config moving under them; they are read with
+the settings they name, which is why the curve's own description spells that pair out.
+
+**Two limits every row in this subsection carries.** The baseline always runs first, which
+cancels the drift an unpaired before-and-after would measure but leaves time and heat
+uncontrolled in one direction — 0056's own re-walk showed this machine losing three to four
+times its ingest speed after an hour of prefill, and nothing here rested between sides. And
+the fidelity probes are short greedy prompts, so what they establish is that two decoders
+agree at the top of a context; no probe here compares them at a full window, which is the
+depth the adopted config actually serves.
+
+**The ladder's ceiling was walked without the head and is not re-walked here.** 163,840 in
+`config/machine-m5max-36gb.json` is a reading of the served config as it was; the MTP path
+builds a second context whose cache is sized at the context the target serves, which is what
+set the laptop's 38,912 ceiling. Nothing in this feature says where that ceiling now sits on
+this node. What is measured is the served window, 49,152, which the screen fills at 21.23 GB.
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,

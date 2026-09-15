@@ -1,9 +1,9 @@
 ---
 id: 0058
 title: Re-screen on the node every candidate the laptop refused for memory
-status: Draft
+status: Submitted
 created: 2026-09-14
-submitted:
+submitted: 2026-09-15
 needs: 0056
 ---
 
@@ -49,8 +49,27 @@ the baseline on decode without losing on pass rate, and that change is its own b
 
 ## Tasks
 
-- [ ] The native MTP head is screened and paired at the node's window with the draft depth swept, and TECH records its ratio and fidelity beside the laptop's 32k figures
-- [ ] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
-- [ ] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
-- [ ] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline
-- [ ] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
+- [x] The native MTP head is screened and paired at the node's window with the draft depth swept, and TECH records its ratio and fidelity beside the laptop's 32k figures
+- [x] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
+- [x] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
+- [x] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline
+- [x] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
+
+## Log
+
+- 2026-09-15: the drafter is named by path rather than by `-hf` tag. The plan assumed
+  `config/dflash2-49k.env` as written; that repository's main moved after 0017 and the tag
+  now resolves to a 1.1 GB download this node's link cannot deliver. `scripts/serve.sh`
+  gains `SPEC_DRAFT_MODEL` and `config/dflash2-node-49k.env` names the cached revision, so
+  what served is recorded rather than resolved at run time.
+- 2026-09-15: `scripts/pair.sh` takes the candidate's serve command and port. The plan has
+  every admissible candidate paired by that script, and two of the four are not llama.cpp;
+  `scripts/screen.sh` already took the serve command as arguments for the same reason.
+- 2026-09-15, review: DFlash2 gets two control pairs the plan did not ask for. The plan has
+  each candidate paired against `config/node.env`, which for this one crosses two binaries;
+  the controls split that, and they move the finding — the build is worth 1.00x and the
+  drafter 2.09x, so pass rate is all that is left between it and the head, and pass rate does
+  not separate them. The adoption does not move: what DFlash2 needs is a serving binary from
+  an open pull request, and that is a decision rather than a reading.
+- 2026-09-14 — paused: the remaining candidates wait for the owner's word
+- 2026-09-15 — reopen to Draft: review: script lifecycle for non-llama runtimes, and the write-up's claims held to the rows
