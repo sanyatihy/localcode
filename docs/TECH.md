@@ -756,6 +756,54 @@ reservation; this runtime allocates per request and takes what is there, which i
 because wired pages cannot be paged out — the same reason 0006's unbounded `mlx_lm` stalled
 with swap flat rather than paging.
 
+**MLX no longer wins on memory, and that was the whole of its case.** 0006's comparison is
+re-run here with nothing changed but the endpoint and the machine — `runtimes/mlx/compare.sh`
+over the ranking suite and the depth suite, three passes each, `config/node.env` against
+`runtimes/mlx/config/mlx-4bit.env` with 0006's mandatory cache bounds unchanged
+([rows](data/2026-09-15-m5max-36gb-0058-mlx-runtime.jsonl)), plus a streamed pair for the
+decode column `mlx_lm` reports no timings for
+([rows](data/2026-09-15-m5max-36gb-0058-mlx.jsonl)):
+
+| | llama.cpp on the node | MLX on the node | the laptop's answer (0006) |
+|---|---|---|---|
+| pass | 51/54 | 51/54 | 40/42 against 39/42 |
+| tool-call validity | 12/12 | 12/12 | 12/12 both |
+| peak wired, filled screen | **19.91 GB** | 27.72 GB | MLX won, 18.02 against 20.89 |
+| headroom left under the cap | 10.09 GB | 2.28 GB | — |
+| minimum free memory | 0.068 GB | 0.121 GB | MLX won, 2.64 against 0.06 |
+| runs that swapped | **0** | **0** | 7 against 0 |
+| decode, client-side | 0.0480 s/tok | **0.0397 — 1.21x** | 8.89 against 10.35 tok/s |
+| short prompts, mean wall | 5.3–7.2 s | **4.9–6.5 s** | MLX won |
+| depth prompts, mean wall | **2.0–55 s** | 11–197 s | llama.cpp won by 3–9% |
+| warm reuse, identical 16k request | 40.0 s → **0.175 s (229x)** | 84.8 s → 0.566 s (150x) | 10x against 39x |
+
+**Both runtimes score the same and neither swaps**, so quality and stability separate them
+by nothing here, and the three columns that decided 0006 have all moved. MLX's memory win
+is gone: 27.72 GB of peak wired against 19.91 leaves it 2.28 GB under the cap where
+llama.cpp keeps 10.09. Its warm-reuse win is gone too — 0041's prompt cache turned
+llama.cpp's 10x into 229x, against MLX's 150x. What it keeps is short prompts, by 5–12% of
+wall, and it gains a decode column it did not have: 1.21x client-side, which is not a
+speculative ratio and is void as one, since its greedy probes hash `5dd7fe3148350c3c`
+against the baseline's `0f4045cad664f4ac`. It serves different weights; that is the
+comparison.
+
+**The retrieval fixtures are where the gap is, and the cause is reuse rather than speed.**
+`retrieval-32000` costs llama.cpp 2.94 s and MLX 179.06 — 61x — because the suite sends
+each fixture three times and llama.cpp's cache answers the second and third from the prefix
+it kept. MLX re-ingests. That is the same mechanism 0018 measured and the reason a chain on
+this node reuses more tokens than it ingests.
+
+**Nothing here reverses the decision to stay on llama.cpp**, and less of it is close than
+on the laptop. The two reasons 0006 gave that are not about memory both stand: MLX serves
+no `/v1/messages`, and it reports no served config — `served_n_ctx` is 0 and `served_model`
+is `.` on every row it wrote here, so a run cannot be checked against its label.
+
+**The caveat 0006 attached to its own benchmark stands and now cuts the other way.** That
+suite interleaves fourteen prompts before repeating any, which 0006 said understates MLX
+because a real session is one conversation resending a growing prefix. On this machine the
+prefix is exactly what llama.cpp reuses and MLX does not, so the workload the project cares
+about is the one where the gap is widest.
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,
