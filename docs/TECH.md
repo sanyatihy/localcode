@@ -784,34 +784,42 @@ decode column `mlx_lm` reports no timings for
 | decode, client-side | 0.0480 s/tok | **0.0397 — 1.21x** | 8.89 against 10.35 tok/s |
 | short prompts, mean wall | 5.3–7.2 s | **4.9–6.5 s** | MLX won |
 | depth prompts, mean wall | **2.0–55 s** | 11–197 s | llama.cpp won by 3–9% |
-| warm reuse, identical 16k request | 40.0 s → **0.175 s (229x)** | 84.8 s → 0.566 s (150x) | 10x against 39x |
+| repeating one 32k fixture, `decode-32000` | 115.4 s → **25.0 s (4.6x)**, 31,548 of 32,064 reused | 197.4 s → 196.8 s, no gain | 10x against 39x, a different instrument |
 
 **Both runtimes score the same and neither swaps**, so quality and stability separate them
 by nothing here, and the three columns that decided 0006 have all moved. MLX's memory win
 is gone: 27.72 GB of peak wired against 19.91 leaves it 2.28 GB under the cap where
-llama.cpp keeps 10.09. Its warm-reuse win is gone too — 0041's prompt cache turned
-llama.cpp's 10x into 229x, against MLX's 150x. What it keeps is short prompts, by 5–12% of
-wall, and it gains a decode column it did not have: 1.21x client-side, which is not a
-speculative ratio and is void as one, since its greedy probes hash `5dd7fe3148350c3c`
-against the baseline's `0f4045cad664f4ac`. It serves different weights; that is the
-comparison.
+llama.cpp keeps 10.09. Its warm-reuse win is gone too, and here it is inverted: asked the
+same 32k fixture three times, llama.cpp falls from 115.4 s to 25.0 s and reuses 31,548 of
+32,064 tokens, while MLX reads 197.4, 196.8 and 197.2 and gains nothing. Read that against
+0006's own warm-reuse row with care — the laptop's 10x and 39x were an identical request
+sent twice by hand, which is not this instrument, and the comparable figure here is the
+repeat structure the suite already has. What MLX gains is a decode column it did not have:
+1.21x client-side, which is not a speculative ratio and is void as one, since its greedy
+probes hash `5dd7fe3148350c3c` against the baseline's `0f4045cad664f4ac`. It serves
+different weights; that is the comparison.
 
-**The retrieval fixtures are where the gap is, and the cause is reuse rather than speed.**
-`retrieval-32000` costs llama.cpp 2.94 s and MLX 179.06 — 61x — because the suite sends
-each fixture three times and llama.cpp's cache answers the second and third from the prefix
-it kept. MLX re-ingests. That is the same mechanism 0018 measured and the reason a chain on
-this node reuses more tokens than it ingests.
+**The retrieval fixtures are where the gap is, and the cause is reuse rather than speed —
+but not the kind of reuse a session has.** `retrieval-32000` costs llama.cpp 2.94 s and MLX
+179.06, and the rows say why: llama.cpp has 31,548 of 32,055 tokens cached **on repeat 0**,
+before that fixture has ever been sent. What it is reusing is the prefix this suite's depth
+fixtures share with each other, so what the 61x measures is an interleaved suite of
+near-identical prompts and not a conversation growing turn by turn. **The suite cannot
+establish the session claim**, and `decode-32000` is the part of it that can: cold at 115.4 s
+with nothing cached, then 25.0 s twice with 31,548 reused. MLX re-ingests in both cases.
 
 **Nothing here reverses the decision to stay on llama.cpp**, and less of it is close than
 on the laptop. The two reasons 0006 gave that are not about memory both stand: MLX serves
 no `/v1/messages`, and it reports no served config — `served_n_ctx` is 0 and `served_model`
 is `.` on every row it wrote here, so a run cannot be checked against its label.
 
-**The caveat 0006 attached to its own benchmark stands and now cuts the other way.** That
-suite interleaves fourteen prompts before repeating any, which 0006 said understates MLX
-because a real session is one conversation resending a growing prefix. On this machine the
-prefix is exactly what llama.cpp reuses and MLX does not, so the workload the project cares
-about is the one where the gap is widest.
+**The caveat 0006 attached to its own benchmark stands, and it is why the session claim is
+left open here.** That suite interleaves fourteen prompts before repeating any, which 0006
+said understates MLX because a real session is one conversation resending a growing prefix.
+These rows show llama.cpp reusing a prefix the suite's own fixtures share rather than one a
+conversation built, so they are evidence that it reuses and not evidence of how much a
+session would save. 0018 and 0056's chains measure that, on llama.cpp; nothing here measures
+it on MLX.
 
 ### The four candidates, and where each stops
 
