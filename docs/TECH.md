@@ -634,13 +634,21 @@ machine state and one toggle at a time. Screens are in
 [data/2026-09-15-m5max-36gb-0058-screen.jsonl](data/2026-09-15-m5max-36gb-0058-screen.jsonl);
 the verdicts are gathered in [one table](#the-four-candidates-and-where-each-stops).
 
+**What fills a screen here is a prompt of 44,236 words, not 44,236 tokens.**
+`scripts/screen.sh` builds it by drawing that many words from a sixteen-word vocabulary and
+adding an instruction, and `SMOKE_TOKENS` — the count it writes to `smoke_prompt_tokens` — is
+the word count it was asked for rather than anything the server counted. What the servers
+then ingested is in their own logs and is close to it because those words are single tokens:
+44,260 on llama.cpp with the head, 44,258 with the DFlash2 drafter, 44,296 on MLX. The same
+figure in 0056's rows above is the same word count, and should be read the same way.
+
 **The native MTP head's draft depth was swept here, the way 0025 swept it at 32,768.** Three
 arms, `config/node.env` with `SPEC_TYPE="draft-mtp"` and `SPEC_DRAFT_N_MAX` as the only thing
-moved, each screened filled to 44,236 tokens and then paired against the unmodified baseline
-on the ranking suite, three passes a side, one session per arm
+moved, each screened filled by `screen.sh`'s own request and then paired against the
+unmodified baseline on the ranking suite, three passes a side, one session per arm
 ([rows](data/2026-09-15-m5max-36gb-0058-mtp.jsonl)):
 
-| draft depth | peak wired | headroom | fill to 44,236 | baseline decode | with the head | ratio | acceptance | pass | tool-call valid |
+| draft depth | peak wired | headroom | fill | baseline decode | with the head | ratio | acceptance | pass | tool-call valid |
 |---|---|---|---|---|---|---|---|---|---|
 | 2 | 21.03 GB | 8.97 GB | 133 s | 0.0481 s/tok | 0.0368 | 1.31x | 2.94 | 23/27 against 23/27 | 12/12 |
 | **3** | **21.23** | **8.77** | **137** | **0.0523** | **0.0287** | **1.82x** | **3.84** | **24/27 against 25/27** | **12/12** |
@@ -677,7 +685,7 @@ teardown crashes is not the one to serve from.
 
 **DFlash2 is admissible on this node, and it is the fastest decoder measured here.** The
 drafter loads at 49,152 where the laptop's allocator refused it at both contexts, fills to
-44,236 tokens and answers, at 23.59 GB of peak wired with 6.41 GB of headroom and a swap
+the same prompt and answers, at 23.59 GB of peak wired with 6.41 GB of headroom and a swap
 delta of 0.0 — 2.2 GB more than the draft head costs. Paired against `config/node.env` on
 the ranking suite, three passes a side, one session
 ([rows](data/2026-09-15-m5max-36gb-0058-dflash2.jsonl)):
@@ -717,7 +725,7 @@ instead**, which runs at 37 MB/s, and `LLAMA_ARG_OFFLINE=1` keeps both sides of 
 out of the metadata check that stalls the load.
 
 **MTPLX fits here, and what it spends is the free memory rather than the cap.** The
-checkpoint the laptop could not hold loads at 49,152 on this node, fills to 44,236 tokens
+checkpoint the laptop could not hold loads at 49,152 on this node, fills on the same prompt
 and answers in 249 s, at **28.32 GB of peak wired with 1.68 GB left under the 30,720 MiB
 cap** and a swap delta of 0.0. On the laptop the same config peaked at 25.5–25.7 GB and
 swapped both times, so both of those rows were void; raising the cap is what admits it, and
@@ -808,7 +816,7 @@ about is the one where the gap is widest.
 ### The four candidates, and where each stops
 
 One table for 0058. Every row is the node, `config/node.env` at 49,152 as the baseline,
-headless with the daemon's server stopped, screened filled to 44,236 tokens and then paired
+headless with the daemon's server stopped, screened filled by that prompt and then paired
 on the ranking suite three passes a side. "Admissible" means loaded, generated, and swapped
 0.0 MB — all four do, where the laptop admitted none of them. Pass is that candidate's own
 session, and the baseline beside it is that session's own baseline, because the six baseline
