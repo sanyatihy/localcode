@@ -53,7 +53,7 @@ the baseline on decode without losing on pass rate, and that change is its own b
 - [x] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
 - [x] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
 - [x] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline
-- [ ] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
+- [x] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
 
 ## Log
 

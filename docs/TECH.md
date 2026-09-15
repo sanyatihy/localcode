@@ -631,7 +631,8 @@ by the hop. Rows: `docs/data/2026-09-14-m5max-36gb-chain.jsonl`.
 Four candidates lost on the laptop for memory and for nothing else. Each is re-run on this
 node against `config/node.env` at 49,152, headless with the daemon's server stopped, one
 machine state and one toggle at a time. Screens are in
-[data/2026-09-15-m5max-36gb-0058-screen.jsonl](data/2026-09-15-m5max-36gb-0058-screen.jsonl).
+[data/2026-09-15-m5max-36gb-0058-screen.jsonl](data/2026-09-15-m5max-36gb-0058-screen.jsonl);
+the verdicts are gathered in [one table](#the-four-candidates-and-where-each-stops).
 
 **The native MTP head's draft depth was swept here, the way 0025 swept it at 32,768.** Three
 arms, `config/node.env` with `SPEC_TYPE="draft-mtp"` and `SPEC_DRAFT_N_MAX` as the only thing
@@ -803,6 +804,66 @@ suite interleaves fourteen prompts before repeating any, which 0006 said underst
 because a real session is one conversation resending a growing prefix. On this machine the
 prefix is exactly what llama.cpp reuses and MLX does not, so the workload the project cares
 about is the one where the gap is widest.
+
+### The four candidates, and where each stops
+
+One table for 0058. Every row is the node, `config/node.env` at 49,152 as the baseline,
+headless with the daemon's server stopped, screened filled to 44,236 tokens and then paired
+on the ranking suite three passes a side. "Admissible" means loaded, generated, and swapped
+0.0 MB — all four do, where the laptop admitted none of them. Pass is that candidate's own
+session, and the baseline beside it is that session's own baseline, because the six baseline
+sides taken here span 22/27 to 25/27 and a one-task difference cannot be read across them.
+
+| candidate | admissible | peak wired | decode ratio | tier-1 pass | where it stops |
+|---|---|---|---|---|---|
+| **native MTP head, depth 3** | yes | **21.23 GB** | **1.82x**, lossless | **24/27 against 25/27** | nowhere — it is adopted below |
+| native MTP head, depth 2 | yes | 21.03 | 1.31x, lossless | 23/27 against 23/27 | a token a step less than depth 3, for 0.20 GB less |
+| native MTP head, depth 4 | yes | 21.37 | 1.95x, lossless | 22/27 against 23/27 | its server aborts in `ggml_metal_buffer_free` tearing the context down |
+| DFlash2 drafter, PR #27342 | yes | 23.59 | 1.94x, lossless | 21/27 against 23/27 | two tasks below its own baseline, and its build is its own |
+| MTPLX | yes | 28.32 | void — not lossless | 23/27 against 25/27 | 0.056 GB of free memory, and it reports no served config |
+| MLX 4bit | yes | 27.72 | void — not lossless | 51/54 against 51/54 | no `/v1/messages`, and it reports no served config |
+
+**Three of the four are admissible only because the cap is raised**, and the fourth — the
+draft head — is admissible only because of the cap too: 0042 measured the laptop's allocator
+refusing it at 49,152 at the cap Metal derives there. So the exclusion VISION said lifts on
+a machine with room did lift, for every one of them, and what replaced it is four different
+reasons.
+
+**The two that are not llama.cpp stop for the same two reasons they stopped for in 0006**,
+and memory is no longer either of them. Both hash their own text rather than the baseline's,
+so neither has a decode ratio that may be read as a speedup; both report no served config,
+so a run cannot be checked against its label; and MLX still serves no `/v1/messages`, which
+the editor flow needs. What changed is that MTPLX now fits and MLX no longer wins on memory.
+
+**DFlash2 is the close one, and pass rate is what it loses on.** It reads 1.94x against the
+head's 1.82x, hashes the baseline's text, and costs 2.4 GB more of wired memory. Its 21/27
+is two tasks below the 23/27 its own baseline read in the same session, which is outside the
+one task the adoption rule allows, and 0017's 1.18x fork-against-stock pair says an unknown
+part of its ratio is the backend its build carries rather than the drafter.
+
+**`config/node.env` therefore serves the draft head at depth 3**, on the row marked above:
+1.82x on decode, `0f4045cad664f4ac` on both sides of the pair, 24/27 against its baseline's
+25/27, 21.23 GB of peak wired with 8.77 GB of headroom left, swap 0.0
+([rows](data/2026-09-15-m5max-36gb-0058-mtp.jsonl), session `0058-mtp-n3`).
+
+**What that adoption does not rest on, and the reason the config held out until now.** 0056
+declined the head because what the laptop's own adoption rests on is a whole chain, and no
+chain had been driven on this node with it. That is still true: 0034's chain figures are the
+laptop's, where the head paid 1.31–1.38x per generated token on real work against 1.67x on
+pure decode. So the expectation here is a chain gain below 1.82x and above 1, and **it is a
+hypothesis until a chain is driven both ways on this node**.
+
+**Every table above this subsection was taken against `config/node.env` as it was before
+this adoption**, which is to say without the head — including 0056's screen, its ladder, its
+tier-1 columns and the decode curve that pairs the file against itself with `draft-mtp`
+added. Those rows are not invalidated by the config moving under them; they are read with
+the settings they name, which is why the curve's own description spells that pair out.
+
+**The ladder's ceiling was walked without the head and is not re-walked here.** 163,840 in
+`config/machine-m5max-36gb.json` is a reading of the served config as it was; the MTP path
+builds a second context whose cache is sized at the context the target serves, which is what
+set the laptop's 38,912 ceiling. Nothing in this feature says where that ceiling now sits on
+this node. What is measured is the served window, 49,152, which the screen fills at 21.23 GB.
 
 ## The prefill batch was swept, and the default kept
 
