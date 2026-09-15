@@ -65,5 +65,11 @@ the baseline on decode without losing on pass rate, and that change is its own b
 - 2026-09-15: `scripts/pair.sh` takes the candidate's serve command and port. The plan has
   every admissible candidate paired by that script, and two of the four are not llama.cpp;
   `scripts/screen.sh` already took the serve command as arguments for the same reason.
+- 2026-09-15, review: DFlash2 gets two control pairs the plan did not ask for. The plan has
+  each candidate paired against `config/node.env`, which for this one crosses two binaries;
+  the controls split that, and they move the finding — the build is worth 1.00x and the
+  drafter 2.09x, so pass rate is all that is left between it and the head, and pass rate does
+  not separate them. The adoption does not move: what DFlash2 needs is a serving binary from
+  an open pull request, and that is a decision rather than a reading.
 - 2026-09-14 — paused: the remaining candidates wait for the owner's word
 - 2026-09-15 — reopen to Draft: review: script lifecycle for non-llama runtimes, and the write-up's claims held to the rows

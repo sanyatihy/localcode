@@ -702,18 +702,30 @@ the ranking suite, three passes a side, one session
 | greedy fidelity hash | `0f4045cad664f4ac` | `0f4045cad664f4ac` |
 | swap Δ | 0.0 MB | 0.0 MB |
 
-**It is lossless and it is not free.** The hash is the draft head's and the baseline's, so
-the drafter emits the same text; what moves is pass rate, by two tasks, and one of the
-twelve tool calls came back with no call at all. Two tasks is inside the spread the draft
-head's own three baseline sessions showed (23, 25, 23 of 27), so it is not a distribution
-this run can separate from noise — but it is the wrong side of the baseline where the head
-at depth 3 was on the same side of it.
+**It is lossless.** The hash is the draft head's and the baseline's, so the drafter emits
+the same text. Pass rate reads 21/27 against 23/27 here and 25/27 against 22/27 in the
+control below, which is two tasks in each direction across two sessions: **pass rate does
+not separate this candidate from the baseline at this sample size**, and the earlier reading
+that it lost by two tasks was one session read alone.
 
-**The build is the confound this pair cannot remove**, and it is the mechanism rather than
-an oversight: `--spec-type draft-dflash` exists only in PR #27342, so the candidate is
-b10498 with its own `libggml-metal.0.20.2.dylib` against the baseline's b10809 on ggml
-0.23.0. 0017's fork-against-stock pair measured that backend gap at 1.18x on the laptop,
-so part of the 1.94x is the binary and this pair cannot say how much.
+**The build is not the confound it looked like, and the control says so.** `--spec-type
+draft-dflash` exists only in PR #27342, so the pair above crosses two binaries: b10498 with
+its own `libggml-metal.0.20.2.dylib` against b10809 on ggml 0.23.0. Two further pairs, same
+machine state, one variable each
+([rows](data/2026-09-15-m5max-36gb-0058-dflash2-control.jsonl)):
+
+| session | held fixed | moved | decode | ratio | acceptance | pass |
+|---|---|---|---|---|---|---|
+| `0058-dflash2-build` | drafting off | the binary, b10809 → b10498 | 0.0487 → 0.0488 s/tok | **1.00x** | — | 25/27 → 26/27 |
+| `0058-dflash2-drafter` | the binary, b10498 | the drafter, off → on | 0.0471 → 0.0225 | **2.09x** | 6.95 | 22/27 → 25/27 |
+
+**The binary is worth nothing and the drafter is worth 2.09x.** 0017's 1.18x was a
+fork-against-stock pair on the laptop that moved a whole build at once — a different fork,
+a different backend version and a different machine — so it never quantified this gap and
+does not transfer to it. Here the two builds decode within 0.2% of each other, which is
+inside any spread these rows can resolve, and the whole of the 1.94x measured against the
+stock baseline is the drafter. All four probes in the control hash `0f4045cad664f4ac` and no
+row swapped.
 
 **The node cannot fetch its own weights.** The drafter is named by path rather than by
 `-hf` tag in [`config/dflash2-node-49k.env`](../config/dflash2-node-49k.env). That
@@ -852,7 +864,7 @@ candidate has a figure for.
 | **native MTP head, depth 3** | yes | **21.23 GB** | **1.82x**, lossless | **24/27 against 25/27** | nowhere — it is adopted below |
 | native MTP head, depth 2 | yes | 21.03 | 1.31x, lossless | 23/27 against 23/27 | a token a step less than depth 3, for 0.20 GB less |
 | native MTP head, depth 4 | yes | 21.37 | 1.95x, lossless | 22/27 against 23/27 | its server aborts in `ggml_metal_buffer_free` tearing the context down |
-| DFlash2 drafter, PR #27342 | yes | 23.59 | 1.94x, lossless | 21/27 against 23/27 | two tasks below its own baseline, and its build is its own |
+| DFlash2 drafter, PR #27342 | yes | 23.59 | **2.09x**, lossless, drafter isolated from its build | 21/27 against 23/27, and 25/27 against 22/27 in the control | nothing in these rows — it needs a binary from an open pull request, and a drafter this node cannot re-fetch |
 | MTPLX | yes | 28.32 | void — not lossless | 23/27 against 25/27 | 0.056 GB of free memory, and it reports no served config |
 | MLX 4bit | yes | 27.72 | void — not lossless | 24/27 against 22/27 | no `/v1/messages`, and it reports no served config |
 
@@ -868,12 +880,22 @@ so neither has a decode ratio that may be read as a speedup; both report no serv
 so a run cannot be checked against its label; and MLX still serves no `/v1/messages`, which
 the editor flow needs. What changed is that MTPLX now fits and MLX no longer wins on memory.
 
-**DFlash2 is the close one, and pass rate is what it loses on.** It reads 1.94x against the
-head's 1.82x, hashes the baseline's text, and costs 2.4 GB more of wired memory. Its 21/27
-is two tasks below the 23/27 its own baseline read in the same session, which is outside the
-one task the adoption rule allows. The head at depth 3 is one below its own baseline too, so
-what divides them is how far and not which way. And 0017's 1.18x fork-against-stock pair says an unknown
-part of its ratio is the backend its build carries rather than the drafter.
+**DFlash2 also meets the rule, and what it is short of is not a measurement.** Its control
+pairs put 2.09x on the drafter alone and 1.00x on the build it needs, so its ratio is the
+drafter's and it is the fastest thing measured here; it hashes the baseline's text; and
+across two sessions its pass rate lands two tasks either side of its baseline, which at this
+sample size separates nothing. So the rule as the plan words it — beat the baseline on decode
+without losing pass rate — is satisfied by two candidates and ranks neither.
+
+**What it costs that the head does not is an artefact.** DFlash2 serves from a binary built
+out of a pull request that is open and unmerged, named in the config as a path under
+`$HOME`, and it needs a 1.1 GB drafter whose repository tag has already moved once and which
+this node's link cannot fetch again. The head is the same weights the server already loads,
+on the `llama-server` that is on `PATH`, for 2.4 GB less of wired memory. **Whether an
+endpoint four people are meant to rely on may depend on an open pull request is a decision
+about this project and not a reading of these rows**, so it is recorded here and the head
+stays adopted. What would settle it is that PR merging, or the owner saying the scratch
+build is acceptable — at which point the rows above are already the evidence.
 
 **`config/node.env` therefore serves the draft head at depth 3**, on the row marked above:
 1.82x on decode, `0f4045cad664f4ac` on both sides of the pair, 24/27 against its baseline's
