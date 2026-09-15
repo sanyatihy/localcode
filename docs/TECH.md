@@ -852,9 +852,9 @@ One table for 0058. Every row is the node, `config/node.env` at 49,152 as the ba
 headless with the daemon's server stopped, screened filled by that prompt and then paired
 on the ranking suite three passes a side. "Admissible" means loaded, generated, and swapped
 0.0 MB — all four do, where the laptop admitted none of them. Pass is that candidate's own
-session, and the baseline beside it is that session's own baseline, because the seven
-baseline sides taken here span 22/27 to 25/27 and a one-task difference cannot be read
-across them. Every pass column is the same suite run the same way — the nine ranking
+session, and the baseline beside it is that session's own baseline, because the nine
+undrafted sides taken here span 22/27 to 26/27 — two of them the same config in two sessions,
+at 22/27 and 26/27 — and a one-task difference cannot be read across them. Every pass column is the same suite run the same way — the nine ranking
 fixtures, three passes, streamed — so MLX's row is its streamed pair and not the 51/54 its
 wider `compare.sh` run scored over the ranking and depth suites together, which no other
 candidate has a figure for.
