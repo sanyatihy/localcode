@@ -819,17 +819,21 @@ One table for 0058. Every row is the node, `config/node.env` at 49,152 as the ba
 headless with the daemon's server stopped, screened filled by that prompt and then paired
 on the ranking suite three passes a side. "Admissible" means loaded, generated, and swapped
 0.0 MB — all four do, where the laptop admitted none of them. Pass is that candidate's own
-session, and the baseline beside it is that session's own baseline, because the six baseline
-sides taken here span 22/27 to 25/27 and a one-task difference cannot be read across them.
+session, and the baseline beside it is that session's own baseline, because the seven
+baseline sides taken here span 22/27 to 25/27 and a one-task difference cannot be read
+across them. Every pass column is the same suite run the same way — the nine ranking
+fixtures, three passes, streamed — so MLX's row is its streamed pair and not the 51/54 its
+wider `compare.sh` run scored over the ranking and depth suites together, which no other
+candidate has a figure for.
 
-| candidate | admissible | peak wired | decode ratio | tier-1 pass | where it stops |
+| candidate | admissible | peak wired | decode ratio | ranking suite, 3 passes: pass against its own session's baseline | where it stops |
 |---|---|---|---|---|---|
 | **native MTP head, depth 3** | yes | **21.23 GB** | **1.82x**, lossless | **24/27 against 25/27** | nowhere — it is adopted below |
 | native MTP head, depth 2 | yes | 21.03 | 1.31x, lossless | 23/27 against 23/27 | a token a step less than depth 3, for 0.20 GB less |
 | native MTP head, depth 4 | yes | 21.37 | 1.95x, lossless | 22/27 against 23/27 | its server aborts in `ggml_metal_buffer_free` tearing the context down |
 | DFlash2 drafter, PR #27342 | yes | 23.59 | 1.94x, lossless | 21/27 against 23/27 | two tasks below its own baseline, and its build is its own |
 | MTPLX | yes | 28.32 | void — not lossless | 23/27 against 25/27 | 0.056 GB of free memory, and it reports no served config |
-| MLX 4bit | yes | 27.72 | void — not lossless | 51/54 against 51/54 | no `/v1/messages`, and it reports no served config |
+| MLX 4bit | yes | 27.72 | void — not lossless | 24/27 against 22/27 | no `/v1/messages`, and it reports no served config |
 
 **Three of the four are admissible only because the cap is raised**, and the fourth — the
 draft head — is admissible only because of the cap too: 0042 measured the laptop's allocator
