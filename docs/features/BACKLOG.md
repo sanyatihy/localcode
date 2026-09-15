@@ -152,4 +152,9 @@ trigger nobody watches is not an idea, it is a hedge.
   where the sandbox had dropped `~/.claude`; that cause is fixed, the silence is not). Promote
   when: the next launcher change touches the gate — a missing transcript should end the
   session with a named reason, not a zero.
+- **A killed launcher orphans its Claude Code child** — the launcher runs the agent in its own
+  session so the terminal's Ctrl-C reaches it, but a `kill` of the launcher from elsewhere
+  leaves the agent running against the endpoint; on 2026-09-15 that orphan shared the node's
+  one slot with the next run and halved it. Promote when: the launcher gains any lifecycle
+  change — it should end its process group on any exit, not only on SIGINT.
 
