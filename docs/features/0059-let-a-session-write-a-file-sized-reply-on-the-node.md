@@ -1,9 +1,9 @@
 ---
 id: 0059
 title: Let a session write a file-sized reply on the node
-status: Draft
+status: Submitted
 created: 2026-09-15
-submitted:
+submitted: 2026-09-15
 needs:
 ---
 
