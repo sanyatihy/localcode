@@ -893,6 +893,14 @@ tier-1 columns and the decode curve that pairs the file against itself with `dra
 added. Those rows are not invalidated by the config moving under them; they are read with
 the settings they name, which is why the curve's own description spells that pair out.
 
+**Two limits every row in this subsection carries.** The baseline always runs first, which
+cancels the drift an unpaired before-and-after would measure but leaves time and heat
+uncontrolled in one direction — 0056's own re-walk showed this machine losing three to four
+times its ingest speed after an hour of prefill, and nothing here rested between sides. And
+the fidelity probes are short greedy prompts, so what they establish is that two decoders
+agree at the top of a context; no probe here compares them at a full window, which is the
+depth the adopted config actually serves.
+
 **The ladder's ceiling was walked without the head and is not re-walked here.** 163,840 in
 `config/machine-m5max-36gb.json` is a reading of the served config as it was; the MTP path
 builds a second context whose cache is sized at the context the target serves, which is what
