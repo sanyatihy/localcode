@@ -1,10 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sanyatihy/localcode/internal/eval"
 )
 
 // eval's refusals are the contract a sweep script branches on, and every one of them exists
@@ -76,5 +81,53 @@ func TestParseThinkingKeepsUnsetDistinctFromOff(t *testing.T) {
 	}
 	if _, err := parseThinking("yes"); err == nil {
 		t.Error("a value that is not on, off or empty must be refused rather than guessed")
+	}
+}
+
+// Every row names the machine it was measured on, and it reads the name off the machine
+// file rather than off the host: the file is what declares an envelope, and two envelopes
+// are never compared. The name under test is one no machine here is called, so a row
+// carrying it cannot have come from anywhere but that file. `-force` is set so the row is
+// written whatever state this machine happens to be in — what is under test is the name on
+// the row, not the preflight.
+func TestEveryRowNamesTheMachineTheFileDeclares(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/props") {
+			_, _ = w.Write([]byte(`{"model_path":"/m/Qwen.gguf","default_generation_settings":{"n_ctx":32768}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"no tool call"}}]}`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	machine := filepath.Join(dir, "machine.json")
+	if err := os.WriteFile(machine, []byte(`{"machine":"testbox","min_headroom_gb":0.5,`+
+		`"desk_profiles":[{"name":"attended","ceiling_tokens":57344}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	results := filepath.Join(dir, "rows.jsonl")
+	// The task fails against this stub, which is a scored outcome and still writes a row.
+	// The fidelity probes write a second, and it is a results row like any other.
+	_ = runEval(t, "-task", repo("tasks", "toolcall-read-file.json"), "-endpoint", srv.URL,
+		"-machine", machine, "-model-profile", repo("config", "profiles", "qwen3.8.json"),
+		"-results", results, "-fidelity", "-force")
+
+	b, err := os.ReadFile(results)
+	if err != nil {
+		t.Fatalf("no row was written: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("%d rows written, want the scored row and the fidelity one:\n%s", len(lines), b)
+	}
+	for _, line := range lines {
+		var row eval.Row
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			t.Fatalf("row: %v", err)
+		}
+		if row.Machine != "testbox" {
+			t.Errorf("a %s row names machine %q, want testbox from %s", row.Kind, row.Machine, machine)
+		}
 	}
 }

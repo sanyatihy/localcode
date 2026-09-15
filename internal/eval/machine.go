@@ -14,6 +14,10 @@ import (
 // Anything derived from the machine belongs here or in scripts/rungs.sh, which computes
 // the rest from what the machine reports about itself.
 type Machine struct {
+	// Name is what a row taken here says it was measured on. VISION keeps the envelopes
+	// apart — a finding from one is not evidence about the other — and a row that cannot
+	// say which one it came from cannot be held to that.
+	Name          string        `json:"machine"`
 	MinHeadroomGB float64       `json:"min_headroom_gb"`
 	DeskProfiles  []DeskProfile `json:"desk_profiles"`
 }
@@ -28,6 +32,9 @@ func LoadMachine(path string) (Machine, error) {
 	var m Machine
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Machine{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if m.Name == "" {
+		return Machine{}, fmt.Errorf("%s: no machine name, so a row measured here could not say which envelope it belongs to", path)
 	}
 	if m.MinHeadroomGB <= 0 {
 		return Machine{}, fmt.Errorf("%s: min_headroom_gb must be above zero", path)
@@ -58,9 +65,9 @@ func (m Machine) DeskProfile(name string) (DeskProfile, error) {
 }
 
 // Preflight reports whether this machine can carry a sweep, with the numbers it read.
-// Headroom is total less wired and anonymous — what competes for the RAM — because free
-// memory is no pressure signal on macOS (see MemSample) and a floor on it would refuse
-// every sweep this project runs.
+// Headroom is MemSample.Headroom, which is one rule per platform — total less wired and
+// anonymous on macOS, MemAvailable on Linux — because free memory is a pressure signal on
+// neither, and a floor on it would refuse every sweep this project runs.
 type Preflight struct {
 	MemSample
 	HeadroomGB float64 `json:"headroom_gb"`
@@ -69,7 +76,8 @@ type Preflight struct {
 }
 
 // Check runs a sample against a headroom floor in GB. A sample the platform did not answer
-// is refused: no number is not a big number.
+// is refused, and so is one missing a field its headroom rule needs — the samplers return
+// those empty rather than partial. No number is not a big number.
 func Check(s MemSample, floorGB float64) Preflight {
 	h := s.Headroom()
 	return Preflight{MemSample: s, HeadroomGB: h, FloorGB: floorGB, Carries: s.OK && h >= floorGB}

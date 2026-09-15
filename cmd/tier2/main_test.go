@@ -128,3 +128,17 @@ func TestSplitNonEmpty(t *testing.T) {
 		t.Error("a list of separators names no drivers")
 	}
 }
+
+// A tier-2 row names its machine like any other results row: it goes into the same file, and
+// the report refuses to average two machines whichever command wrote them.
+func TestATier2RowNamesTheMachineTheRunWasGiven(t *testing.T) {
+	cfg := config{label: "tuned", machine: "testbox", desk: eval.DeskProfile{Name: "attended"}}
+	row := resultRow(cfg, 0, "pi", eval.ServerProps{}, eval.Result{TaskID: "t"},
+		eval.ServerMetrics{}, 3)
+	if row.Machine != "testbox" {
+		t.Errorf("row names machine %q, want the one the machine file declared", row.Machine)
+	}
+	if row.Harness != "pi" || row.Profile != "attended" || row.Turns != 3 {
+		t.Errorf("the rest of the row did not survive the move: %+v", row)
+	}
+}

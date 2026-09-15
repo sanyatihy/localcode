@@ -340,6 +340,13 @@ competes for the 32 GB. The earlier version added a per-process RSS sum to the m
 which counts every shared page once per resident process and counts the model twice — once as
 resident, again as wired.
 
+**Headroom is one rule per platform, and a sample records which one it was read under.**
+On macOS it is total less wired and anonymous, the arithmetic restated above; on Linux it is
+`/proc/meminfo`'s `MemAvailable`, because nothing there corresponds to the wired count and
+`MemFree` excludes the page cache an allocation may reclaim. A sample missing a field its own
+rule needs is not a reading: the probe returns it empty and the preflight refuses the sweep
+rather than subtracting a zero.
+
 **The model lives in wired memory**, because Metal wires its buffers: with it loaded and
 serving, wired measures **20.89 GB** while the mmap'd GGUF holds only 1.99 GB of file-backed
 pages. Apps live in anonymous memory — 6.61 GB with an editor open and no browser.
@@ -402,6 +409,28 @@ That reserve is `reserve_gb` in the machine file `MACHINE` names, default
 leaves the system under the same number, and `RESERVE_GB` in the environment still wins over
 the file. It is a judgement about what else runs on the machine, not a reading, which is why
 a machine that only serves declares its own.
+
+**The readings those scripts take off the machine are per platform, and each has one home
+in `scripts/lib.sh`**: total memory is `sysctl hw.memsize` on macOS and `/proc/meminfo`'s
+`MemTotal` on Linux, the weights size `stat -L -f%z` against `stat -L -c%s`, and every memory
+sample `memprobe_json`, which runs `scripts/memprobe.sh` on macOS and builds the same keys
+from `/proc/meminfo` on Linux. The desk baseline and the compositor probe are macOS only — a
+headless box has no compositor to lose, so the baseline records `not_applicable`, the value an
+unattended cell's verdict already carries, and the sampler does not call `deskprobe.sh` at all.
+
+**A Linux ladder row carries `null` where a macOS one carries a Metal reading**, and the
+scripts are portable only that far: the compressor is macOS's, and wired memory, the GPU wired
+cap and the headroom against it are Metal's. A zero there would read as a machine holding
+nothing against a ceiling of nothing, so the row says `null` and `wired_limit_source` says
+`not_applicable`. `available_gb` is the figure the Linux headroom rule uses in their place, and
+what stands in for the cap on the GB10 — whether CUDA allocations on unified memory show in
+`/proc/meminfo` at all — is measured when the box arrives, not assumed here.
+
+**The ladder fills every slot at once**, reading `total_slots` from `/props`: four slots
+holding one filled context is not the state four developers put a server in, and the KV of
+all four is what has to fit. `n_ctx` there is one slot's share on one build and the whole
+server's on another, and the response cannot say which — so the context asked for breaks the
+tie, and a reply that is neither shape is refused rather than measured on.
 
 On this machine it derives 8k/16k/32k/64k — the same rungs that were first written by
 hand — and reports ingest time as the binding constraint. Modelling 128 GB with `TOTAL_GB=128`
@@ -1123,6 +1152,15 @@ close.
 - **A row records what the server reported serving** — `n_ctx`, model file, and the
   `reasoning_effort` sent — not the label a human typed. A label is a claim; a restart that
   did not take would otherwise attribute one config's numbers to another.
+- **A row names the machine it was measured on**, read from the `machine` field of the
+  machine file the run was given rather than from the host, and `cmd/report` refuses to
+  summarise rows from two machines as one — they are separate envelopes, and an average over
+  both is a number about neither. **Rows written before 2026-09-15 carry no `machine`, and
+  they did not all come off one machine**: the laptop's files and the node's sit in
+  `docs/data` together. Such a row takes its machine from the file's name, which
+  [docs/data/README](data/README.md) fixes as `<date>-<machine>-<what>.jsonl`, and a file
+  that names no machine holding rows that name none either is refused rather than attributed
+  to a guess — `results/tier1.jsonl` is written on whichever machine ran the sweep.
 - **Spread is min–max over three passes, never a standard deviation**, which would claim
   precision three samples do not have. Runs are sequential: the server has one slot.
 - **A tier-1 task must have exactly one defensible action.** A task that scores a style

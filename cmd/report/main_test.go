@@ -62,6 +62,7 @@ func TestBothHalvesOfTheReportVoidASwappedRunAtOneThreshold(t *testing.T) {
 	results := filepath.Join(dir, "rows.jsonl")
 	for _, r := range []eval.Row{slack, past} {
 		r.Config, r.TaskID, r.Kind, r.Outcome = "c", "t", "toolcall", eval.Pass
+		r.Machine = "m2max-32gb" // a row written today names its machine; this is not that test
 		if err := eval.AppendRow(results, r); err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +198,8 @@ func TestReportSaysWhenNothingMatched(t *testing.T) {
 // results file accumulates across features, and one bad line must not hide the rest.
 func TestReportSurvivesAnUnparseableRow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "r.jsonl")
-	if err := eval.AppendRow(path, eval.Row{Config: "a", Kind: "toolcall", Outcome: eval.Pass}); err != nil {
+	if err := eval.AppendRow(path, eval.Row{Config: "a", Kind: "toolcall", Outcome: eval.Pass,
+		Machine: "m2max-32gb"}); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
@@ -214,5 +216,81 @@ func TestReportSurvivesAnUnparseableRow(t *testing.T) {
 	}
 	if !strings.Contains(out, "1/1") {
 		t.Errorf("the readable row is missing from:\n%s", out)
+	}
+}
+
+// Two envelopes are not one measurement. The laptop and the GB10 differ in memory,
+// bandwidth and slot count, so a pass rate or a decode mean over both is a number about
+// neither, and nothing in the table would show that it had happened.
+func TestReportRefusesRowsFromTwoMachines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "r.jsonl")
+	for _, machine := range []string{"m2max-32gb", "gb10-128gb"} {
+		row := eval.Row{Config: "tuned", Kind: "toolcall", Outcome: eval.Pass, Machine: machine}
+		if err := eval.AppendRow(path, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := runReport(t, "-results", path)
+	if err == nil {
+		t.Fatal("rows from two machines were summarised as one")
+	}
+	for _, want := range []string{"m2max-32gb", "gb10-128gb", "envelopes"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not name %q", err, want)
+		}
+	}
+}
+
+// fieldless writes rows exactly as every committed data file carries them: no `machine` key
+// at all, which is what predates the field. eval.Row cannot express that, since it writes
+// the key whatever it holds.
+func fieldless(t *testing.T, path string, n int) {
+	t.Helper()
+	line := `{"config":"tuned","kind":"toolcall","outcome":"pass","mem_measured":true}` + "\n"
+	if err := os.WriteFile(path, []byte(strings.Repeat(line, n)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Rows written before the field name no machine, and they did not all come off one: the
+// laptop's files and the node's sit in docs/data together. The file's name is the record,
+// and docs/data/README is what fixes it.
+func TestReportReadsTheMachineOffTheFileName(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "2026-09-14-m5max-36gb-tier1.jsonl")
+	fieldless(t, path, 2)
+	out, err := runReport(t, "-results", path)
+	if err != nil {
+		t.Fatalf("a file naming its machine was refused: %v", err)
+	}
+	if !strings.Contains(out, "machine: m5max-36gb") || !strings.Contains(out, "2/2") {
+		t.Errorf("the summary does not name the machine the file was taken on:\n%s", out)
+	}
+
+	// A row that names its own machine is that machine's, whatever the file is called; the
+	// laptop's rows and the node's are not one average because they share a directory.
+	mixed := filepath.Join(t.TempDir(), "2026-09-14-m5max-36gb-tier1.jsonl")
+	fieldless(t, mixed, 1)
+	row := eval.Row{Config: "tuned", Kind: "toolcall", Outcome: eval.Pass, Machine: "m2max-32gb"}
+	if err := eval.AppendRow(mixed, row); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runReport(t, "-results", mixed); err == nil {
+		t.Error("a file whose name and whose rows name different machines was summarised as one")
+	}
+}
+
+// A file nobody named after a machine, holding rows that name none either, is not the
+// laptop's by default: results/tier1.jsonl is written on whichever machine ran the sweep.
+func TestReportRefusesRowsNoFileNameCanAttribute(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tier1.jsonl")
+	fieldless(t, path, 1)
+	_, err := runReport(t, "-results", path)
+	if err == nil {
+		t.Fatal("rows belonging to no envelope were summarised")
+	}
+	for _, want := range []string{"tier1.jsonl", "<date>-<machine>-<what>"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not name %q", err, want)
+		}
 	}
 }

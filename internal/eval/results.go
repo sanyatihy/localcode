@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/sanyatihy/localcode/internal/build"
@@ -18,6 +19,11 @@ type Row struct {
 	RunAt  string `json:"run_at"`
 	Config string `json:"config"` // human label for the serving config under test
 	Repeat int    `json:"repeat"`
+
+	// Machine names the hardware the row was measured on, from the `machine` field of the
+	// machine file the run was given. VISION fixes two envelopes and refuses to conflate
+	// them, so the report will not summarise rows from two machines as one.
+	Machine string `json:"machine"`
 
 	// Harness names the agent loop a tier-2 row measured, Profile the desk profile it was
 	// scored under. Empty on tier-1 rows. Two harnesses scored under different profiles
@@ -119,6 +125,25 @@ type Row struct {
 	// before-and-after measures host drift as well as the change; rows sharing a session
 	// were measured on one machine state, back to back, and only those may be divided.
 	Session string `json:"session,omitempty"`
+}
+
+// machineInFileName matches the machine token docs/data/README fixes in a results file's
+// name, `<date>-<machine>-<what>.jsonl`. The size is what ends the token: both the machine
+// name and the description after it carry hyphens of their own, so `m5max-36gb` can only be
+// told from `tier1-matrix` by the shape of its second half.
+var machineInFileName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-([a-z0-9]+-\d+gb)-`)
+
+// MachineFromFileName reads the machine a file's rows were measured on out of its name, and
+// false when the name does not say. Rows written before the `machine` field existed carry
+// none, and they did not all come off one machine — the laptop's and the node's sit in
+// docs/data together — so the name is the only record of which, and guessing would put two
+// envelopes in one average. A reader that needs the machine passes the file name in.
+func MachineFromFileName(path string) (string, bool) {
+	m := machineInFileName.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 // ToolCallValid reports whether the model produced a syntactically valid, schema-

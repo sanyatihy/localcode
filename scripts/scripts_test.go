@@ -1,12 +1,18 @@
 package scripts
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // stubPATH writes a `sysctl` reporting totalBytes of memory and a GPU cap of capMB, and a
@@ -156,5 +162,226 @@ func TestServeHostFromTheEnvironmentWinsOverTheConfig(t *testing.T) {
 	}
 	if !strings.Contains(out, "on 0.0.0.0:8081") {
 		t.Errorf("the banner does not say what was bound: %s", out)
+	}
+}
+
+// propsEndpoint serves one /props body and nothing else, which is all the slot readings ask
+// of a server.
+func propsEndpoint(t *testing.T, body string) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/props") {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// lib calls one function from scripts/lib.sh against that endpoint and returns what it
+// printed. Sourced rather than executed, which is how every script here uses it.
+func lib(t *testing.T, endpoint, call string) string {
+	t.Helper()
+	cmd := exec.Command("bash", "-c", ". ./lib.sh; "+call)
+	cmd.Env = append(os.Environ(), "ENDPOINT="+endpoint)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%s: %v", call, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// llama-server reports n_ctx as one slot's share on one build and as the whole server's on
+// another, and both sit beside the same total_slots. A ladder that reads the wrong one fills
+// a quarter of the context it believes it is measuring, or refuses a server that is serving
+// exactly what it was asked for — so the request breaks the tie, and a reply that is neither
+// shape is refused rather than guessed at.
+func TestPerSlotContextResolvesBothPropsShapes(t *testing.T) {
+	for _, c := range []struct{ name, props, want string }{
+		{"a per-slot n_ctx beside four slots",
+			`{"default_generation_settings":{"n_ctx":12288},"total_slots":4}`, "12288"},
+		{"a total n_ctx beside four slots",
+			`{"default_generation_settings":{"n_ctx":49152},"total_slots":4}`, "12288"},
+		{"one slot, where the two shapes are the same number",
+			`{"default_generation_settings":{"n_ctx":49152},"total_slots":1}`, "49152"},
+		{"a server that does not say how many slots it has",
+			`{"default_generation_settings":{"n_ctx":49152}}`, "49152"},
+		{"a served context that is neither shape",
+			`{"default_generation_settings":{"n_ctx":32768},"total_slots":4}`, "ambiguous"},
+		{"one slot serving something else, which the caller compares for itself",
+			`{"default_generation_settings":{"n_ctx":8192},"total_slots":1}`, "8192"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := lib(t, propsEndpoint(t, c.props), "per_slot_ctx 49152"); got != c.want {
+				t.Errorf("per_slot_ctx 49152 = %s, want %s", got, c.want)
+			}
+		})
+	}
+
+	// The slot count is read off the same response, and a backend that does not report one
+	// is not a backend serving none.
+	four := propsEndpoint(t, `{"default_generation_settings":{"n_ctx":12288},"total_slots":4}`)
+	if got := lib(t, four, "served_slots"); got != "4" {
+		t.Errorf("served_slots = %s, want 4", got)
+	}
+	silent := propsEndpoint(t, `{"default_generation_settings":{"n_ctx":49152}}`)
+	if got := lib(t, silent, "served_slots"); got != "null" {
+		t.Errorf("served_slots = %s, want null", got)
+	}
+	// An endpoint nothing answers on is not a server serving zero context.
+	if got := lib(t, "http://127.0.0.1:1", "per_slot_ctx 49152"); got != "null" {
+		t.Errorf("an unanswered endpoint resolved to %s, want null", got)
+	}
+}
+
+// ladderStub is the server a ladder cell talks to: health, /props reporting two slots, and a
+// completions endpoint that holds each request until both have arrived. Holding them is the
+// assertion — a ladder that filled one slot at a time could never get past it. The second
+// request to arrive is answered with an empty HTTP 500, which is the failure a check for the
+// word "error" cannot see.
+type ladderStub struct {
+	mu      sync.Mutex
+	prompts []string
+	both    chan struct{}
+	arrived int
+}
+
+func (s *ladderStub) handler(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/health"):
+			w.WriteHeader(http.StatusOK)
+		case strings.HasSuffix(r.URL.Path, "/props"):
+			_, _ = io.WriteString(w, `{"model_path":"/m/Qwen.gguf","total_slots":2,`+
+				`"default_generation_settings":{"n_ctx":2048}}`)
+		default:
+			body, _ := io.ReadAll(r.Body)
+			var req struct {
+				Messages []struct{ Content string } `json:"messages"`
+			}
+			if err := json.Unmarshal(body, &req); err != nil || len(req.Messages) == 0 {
+				t.Errorf("a fill request that is not one: %v", err)
+				return
+			}
+			s.mu.Lock()
+			s.prompts = append(s.prompts, req.Messages[0].Content)
+			s.arrived++
+			mine := s.arrived
+			if s.arrived == 2 {
+				close(s.both)
+			}
+			s.mu.Unlock()
+
+			select {
+			case <-s.both:
+			case <-time.After(30 * time.Second):
+				t.Error("only one request was ever in flight: the slots were not filled at once")
+			}
+			if mine == 2 {
+				// No body at all, which is what a server out of memory answers with.
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"content":"OK"}}],`+
+				`"timings":{"prompt_per_second":42.5}}`)
+		}
+	}
+}
+
+// One ladder cell against that stub. What is under test is the fill loop and the pass rule:
+// a server reporting two slots is filled at both at once, each from its own prompt, and one
+// slot that did not fill is the whole rung's answer.
+func TestLadderFillsEverySlotAtOnceAndOneFailureFailsTheRung(t *testing.T) {
+	stub := &ladderStub{both: make(chan struct{})}
+	srv := httptest.NewServer(stub.handler(t))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	// A server process that stays up and is not llama-server: stop_server and the liveness
+	// check go through PROC, so nothing on the machine running this can be killed by it.
+	proc := "ladder-stub-server"
+	stubBin := filepath.Join(dir, proc)
+	// No `exec`: the shell has to stay in the process table under its own name, which is
+	// what PROC matches and what the liveness check asks about.
+	if err := os.WriteFile(stubBin, []byte("#!/bin/sh\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = exec.Command("pkill", "-f", proc).Run() })
+
+	out := filepath.Join(dir, "ceiling.jsonl")
+	script, err := filepath.Abs("ladder.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(script)
+	cmd.Env = append(os.Environ(),
+		"CELLS=4096:q8_0", "BASE="+serveConfig(t, dir, ""), "OUT="+out,
+		"ENDPOINT="+srv.URL, "SERVER_BIN="+stubBin, "PROC="+proc,
+		// The node's serving daemon is not this machine's business: naming one that is
+		// loaded nowhere keeps stop_server off launchctl.
+		"SERVE_DAEMON=com.localcode.absent", "CONDITION=unattended", "HEALTH_GRACE=60")
+	if got, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("ladder.sh: %v\n%s", err, got)
+	}
+
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if len(stub.prompts) != 2 {
+		t.Fatalf("%d slots were filled, want 2", len(stub.prompts))
+	}
+	if stub.prompts[0] == stub.prompts[1] {
+		t.Error("both slots were sent the same prompt: one could be served from what the other ingested")
+	}
+	// 2,048 per slot at the default fill fraction. A ladder sizing the fill against the
+	// config's 4,096 would send twice this.
+	for i, p := range stub.prompts {
+		if words := len(strings.Fields(p)); words < 1800 || words > 1900 {
+			t.Errorf("slot %d was sent %d words, want ~1,843 — one slot's share of 4,096", i+1, words)
+		}
+	}
+
+	rows, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row struct {
+		Outcome      string   `json:"outcome"`
+		Slots        int      `json:"slots"`
+		PerSlotCtx   int      `json:"per_slot_ctx"`
+		SlotOutcomes []string `json:"slot_outcomes"`
+	}
+	cell := ""
+	for _, line := range strings.Split(strings.TrimSpace(string(rows)), "\n") {
+		if strings.Contains(line, `"cell"`) {
+			cell = line
+		}
+	}
+	if cell == "" {
+		t.Fatalf("no cell row was written:\n%s", rows)
+	}
+	if err := json.Unmarshal([]byte(cell), &row); err != nil {
+		t.Fatalf("cell row: %v\n%s", err, cell)
+	}
+	if row.Slots != 2 || row.PerSlotCtx != 2048 {
+		t.Errorf("row says %d slots at %d per slot, want 2 at 2048", row.Slots, row.PerSlotCtx)
+	}
+	if row.Outcome != "http_500" {
+		t.Errorf("outcome is %q; one slot that did not fill is the whole rung's answer", row.Outcome)
+	}
+	// Which slot the stub failed is a race it does not control, so the row is read for one
+	// of each rather than for an order.
+	ok, failed := 0, 0
+	for _, o := range row.SlotOutcomes {
+		switch o {
+		case "ok":
+			ok++
+		case "http_500":
+			failed++
+		}
+	}
+	if ok != 1 || failed != 1 {
+		t.Errorf("slot outcomes %v do not say which slot filled and which did not", row.SlotOutcomes)
 	}
 }

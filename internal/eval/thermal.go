@@ -1,7 +1,6 @@
 package eval
 
 import (
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -19,17 +18,6 @@ type ThermalSample struct {
 	// is the same state and is recorded as 100.
 	SpeedLimit int  `json:"speed_limit"`
 	OK         bool `json:"-"` // false when the platform did not answer
-}
-
-// sampleThermal reads `pmset -g therm`, which needs no privileges. powermetrics reports
-// more and requires sudo, and a measurement gate that cannot run without a password is a
-// gate that will be skipped.
-func sampleThermal() ThermalSample {
-	out, err := exec.Command("pmset", "-g", "therm").Output()
-	if err != nil {
-		return ThermalSample{}
-	}
-	return parseThermal(string(out))
 }
 
 func parseThermal(s string) ThermalSample {

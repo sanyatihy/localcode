@@ -64,6 +64,7 @@ type config struct {
 	fixture     string // one fixture directory
 	fixtures    string // directory of them, scanned for what tier 2 can drive
 	desk        eval.DeskProfile
+	machine     string // the machine file's own name, written onto every row
 	endpoint    string
 	piExtension string
 	ocConfig    string
@@ -126,7 +127,7 @@ func run(args []string, stdout, stderr *os.File) error {
 	cfg := config{
 		forced:  *force,
 		drivers: splitNonEmpty(*drivers), fixture: *fixture, fixtures: *fixtures,
-		desk: desk, endpoint: *endpoint,
+		desk: desk, machine: machineCfg.Name, endpoint: *endpoint,
 		piExtension: *piExt, ocConfig: *ocCfg, ccEnv: *ccEnv, hermesCfg: *hermes, model: *model,
 		results: *results, label: *label, repeats: *repeats, budget: *budget, keep: *keep,
 	}
@@ -254,11 +255,24 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 	if cfg.results == "" {
 		return failed, nil
 	}
+	if err := eval.AppendRow(cfg.results, resultRow(cfg, rep, d.Name(), props, res, spent, turnCount)); err != nil {
+		return failed, fmt.Errorf("append result: %w", err)
+	}
+	return failed, nil
+}
+
+// resultRow is one tier-2 observation as it reaches the file. Apart from runOne so that what
+// a row carries can be checked without a harness, a fixture and a scratch checkout: the
+// machine it names is the one thing no reader can recover if it is wrong.
+func resultRow(cfg config, rep int, harness string, props eval.ServerProps,
+	res eval.Result, spent eval.ServerMetrics, turnCount int) eval.Row {
+
 	// Empty effort, and honestly so: tier-2 drives an external harness that builds its own
 	// requests, so what it asked for is the harness's business and not something this
 	// process can claim to have set.
 	row := eval.NewRow(cfg.label, rep, "", "", eval.Sampling{}, props, "tier2", res)
-	row.Harness, row.Profile = d.Name(), cfg.desk.Name
+	row.Harness, row.Profile = harness, cfg.desk.Name
+	row.Machine = cfg.machine
 	row.Forced = cfg.forced
 	row.Offline = cfg.sandbox != ""
 	// What the run cost the server: ingested, reused from a held prefix, generated. Tier 1
@@ -270,10 +284,7 @@ func runOne(ctx context.Context, stdout *os.File, client *eval.Client, d eval.Dr
 		row.CompletionTokens = spent.PredictedTokens
 	}
 	row.Turns = turnCount
-	if err := eval.AppendRow(cfg.results, row); err != nil {
-		return failed, fmt.Errorf("append result: %w", err)
-	}
-	return failed, nil
+	return row
 }
 
 // loadTasks resolves what will be run. A fixture describes itself — what the bug is, which

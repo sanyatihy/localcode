@@ -68,7 +68,7 @@ APPARATUS=$(ps -Ao rss,comm | awk '$1 > 102400 && $2 !~ /llama-server/ && $2 != 
 # overstates the footprint — by about 1.5x on a state measured both ways. Anonymous memory
 # is what actually competes with the model for the 32 GB, and is the one to read.
 APPARATUS_TOTAL=$(ps -Ao rss,comm | awk '$2 !~ /llama-server/ {s+=$1} END {printf "%.2f", s/1048576}')
-APPARATUS_ANON=$(./scripts/memprobe.sh | python3 -c "import sys,json;print(json.load(sys.stdin)['anonymous_gb'])")
+APPARATUS_ANON=$(apparatus_anonymous_gb)
 # The compositor's rate before any model is loaded. Recorded per run so a verdict carries
 # the basis it was judged against, rather than inheriting a number measured once by hand
 # and quoted thereafter — the machine's baseline is not a constant.
@@ -79,13 +79,18 @@ export APPARATUS APPARATUS_TOTAL APPARATUS_ANON CONDITION DESK_BASELINE
 set -- $CELLS
 echo "walking $# cell(s) from $BASE: $*" >&2
 echo "apparatus before any cell: ${APPARATUS_ANON} GB anonymous (summed RSS says ${APPARATUS_TOTAL}, which overcounts shared pages)" >&2
-echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
+if [ "$DESK_BASELINE" = "not_applicable" ]; then
+  echo "desktop baseline before any cell: not_applicable — no compositor on this machine" >&2
+else
+  echo "desktop baseline before any cell: ${DESK_BASELINE} cores" >&2
+fi
 python3 -c '
 import json, os
 print(json.dumps({"condition": os.environ["CONDITION"], "record": "apparatus",
                   "anonymous_gb": float(os.environ["APPARATUS_ANON"]),
                   "resident_gb": float(os.environ["APPARATUS_TOTAL"]),
-                  "desktop_baseline_cores": float(os.environ["DESK_BASELINE"]),
+                  "desktop_baseline_cores": (None if os.environ["DESK_BASELINE"] == "not_applicable"
+                                             else float(os.environ["DESK_BASELINE"])),
                   "processes": os.environ["APPARATUS"]}))' >> "$OUT"
 
 # shellcheck disable=SC2086
@@ -109,7 +114,7 @@ for cell in $CELLS; do
 
   echo "=== $name  ctx=$ctx kv=$kv  filling to ~$target tokens ===" >&2
   stop_server
-  before=$(./scripts/memprobe.sh)
+  before=$(memprobe_json)
 
   nohup ./scripts/serve.sh "$cfg" >"/tmp/ladder-$name.log" 2>&1 &
   if ! wait_healthy 300; then
@@ -121,64 +126,88 @@ print(json.dumps({'condition':'$CONDITION','cell':'$name','ctx':$ctx,'kv':'$kv',
     continue
   fi
   actual=$(served_ctx)
-  if [ "$actual" != "$ctx" ]; then
-    echo "  ABORT: server reports n_ctx=$actual, expected $ctx — refusing to measure the wrong config" >&2
-    python3 -c "
+  slots=$(served_slots); [ "$slots" = "null" ] && slots=1
+  per_slot=$(per_slot_ctx "$ctx")
+  if [ "$slots" -le 1 ]; then
+    if [ "$actual" != "$ctx" ]; then
+      echo "  ABORT: server reports n_ctx=$actual, expected $ctx — refusing to measure the wrong config" >&2
+      python3 -c "
 import json
 print(json.dumps({'condition':'$CONDITION','cell':'$name','ctx':$ctx,'kv':'$kv',
  'outcome':'wrong_config_served','served_n_ctx':$actual}))" >> "$OUT"
+      continue
+    fi
+  elif [ "$per_slot" = "ambiguous" ] || [ "$per_slot" = "null" ]; then
+    echo "  ABORT: server reports n_ctx=$actual over $slots slots, which is neither $ctx per slot nor $ctx in total — refusing to measure a context it cannot name" >&2
+    python3 -c "
+import json
+print(json.dumps({'condition':'$CONDITION','cell':'$name','ctx':$ctx,'kv':'$kv','slots':$slots,
+ 'outcome':'wrong_config_served','served_n_ctx':'$actual'}))" >> "$OUT"
     continue
   fi
-  loaded=$(./scripts/memprobe.sh)
+  # The fill is sized against what one slot holds, which is what the server just said rather
+  # than what the config asked for. On one slot they are the same number.
+  target=$(python3 -c "print(int($per_slot * $FILL_FRACTION))")
+  [ "$slots" -gt 1 ] && echo "  $slots slots, filling each to ~$target tokens" >&2
+  loaded=$(memprobe_json)
 
-  # One request whose prompt genuinely occupies the context.
-  python3 - "$target" > /tmp/ladder-fill.json <<'PY'
+  # One request per slot, each whose prompt genuinely occupies that slot's context. The
+  # seeds differ so no two slots send the same prefix: a server that served the second from
+  # what the first ingested would report a rung nobody paid for. Slot 1 keeps seed 11, so a
+  # one-slot machine sends exactly the prompt every earlier ladder sent.
+  slot=1
+  while [ "$slot" -le "$slots" ]; do
+    python3 - "$target" "$slot" > "/tmp/ladder-fill-$slot.json" <<'PY'
 import json, random, sys
-random.seed(11)
+n, slot = int(sys.argv[1]), int(sys.argv[2])
+random.seed(10 + slot)
 vocab = ["session","token","refresh","handler","request","context","buffer","index",
          "commit","parser","value","result","config","client","server","stream"]
-n = int(sys.argv[1])
 body = " ".join(random.choice(vocab) for _ in range(n))
 json.dump({"messages":[{"role":"user","content":body+"\n\nReply with the single word OK."}],
            "max_tokens":8,"temperature":0,
            "chat_template_kwargs":{"enable_thinking":False}}, open('/dev/stdout','w'))
 PY
+    slot=$(( slot + 1 ))
+  done
   # A detached sampler for the duration of the request. Two seconds costs a vm_stat and a
   # ps; a short cell still yields a few samples and a 64k cell yields hundreds.
   samples="/tmp/ladder-wired-$name.jsonl"
   desk="/tmp/ladder-desk-$name.jsonl"
   : > "$samples"; : > "$desk"
   ( while :; do
-      ./scripts/memprobe.sh >> "$samples"
-      ./scripts/deskprobe.sh >> "$desk"
+      memprobe_json >> "$samples"
+      # The compositor is macOS's, and its probe shells out to tools a headless box does not
+      # have: sampling it there would kill this loop rather than record a verdict.
+      if darwin; then ./scripts/deskprobe.sh >> "$desk"; fi
       sleep 2
     done ) 2>/dev/null &
   sampler=$!
 
+  # Every slot at once, because a server with four slots holding one filled context is not
+  # the state four developers put it in: the KV of all four is what has to fit.
   fill_start=$SECONDS
-  http=$(curl -s -m 3600 -o /tmp/ladder-fill-resp.json -w '%{http_code}' \
+  pids=""
+  slot=1
+  while [ "$slot" -le "$slots" ]; do
+    ( curl -s -m 3600 -o "/tmp/ladder-fill-resp-$slot.json" -w '%{http_code}' \
         "$ENDPOINT/v1/chat/completions" \
-        -H 'Content-Type: application/json' -d @/tmp/ladder-fill.json || echo 000)
+        -H 'Content-Type: application/json' -d @"/tmp/ladder-fill-$slot.json" \
+        > "/tmp/ladder-fill-http-$slot" || echo 000 > "/tmp/ladder-fill-http-$slot" ) &
+    pids="$pids $!"
+    slot=$(( slot + 1 ))
+  done
+  for pid in $pids; do wait "$pid" || true; done
   fill_seconds=$((SECONDS - fill_start))
+  http=$(cat "/tmp/ladder-fill-http-1")
   kill "$sampler" 2>/dev/null || true
   wait "$sampler" 2>/dev/null || true
-  filled=$(./scripts/memprobe.sh)
+  filled=$(memprobe_json)
 
-  # Prompt throughput is the discriminator. Under memory pressure `ps rss` is clamped by
-  # what physically fits rather than by what the config wants, so it stops distinguishing
-  # configs exactly when the answer matters. Time to ingest a full context does not.
-  prompt_rate=$(python3 -c "
-import json
-try:
-    d=json.load(open('/tmp/ladder-fill-resp.json'))
-    print(d.get('timings',{}).get('prompt_per_second',0))
-except Exception:
-    print(0)")
-
-  outcome=ok
-  grep -q '"error"' /tmp/ladder-fill-resp.json 2>/dev/null && outcome=rejected
-  [ "$http" = "000" ] && outcome=request_failed
-  pgrep -f llama-server >/dev/null || outcome=died
+  # Whether the server is still there at all. The rest of the verdict is arithmetic over the
+  # replies and the swap delta, and is applied where those are read.
+  alive=True
+  server_alive || alive=False
 
   python3 - <<PY >> "$OUT"
 import json, sys
@@ -191,9 +220,14 @@ try:
     series += [json.loads(x) for x in open("$samples") if x.strip()]
 except (OSError, ValueError):
     pass
-wired_peak=max(p["wired_gb"] for p in series)
+# Both are Metal's and both are None off macOS, so the series is filtered rather than
+# reduced over: a cell that reports no wired figure has no wired peak, which is not a peak
+# of zero.
+peaks=[p["wired_gb"] for p in series if p["wired_gb"] is not None]
+wired_peak=max(peaks) if peaks else None
 room=[p["wired_headroom_gb"] for p in series if p["wired_headroom_gb"] is not None]
 wired_headroom_min=min(room) if room else None
+gb=lambda v: "unknown" if v is None else "%.2f GB" % v
 
 # WindowServer's progress while the model was under load. Rates are derived from the
 # series rather than in the probe, so the sampling interval stays visible in the raw data.
@@ -204,25 +238,77 @@ desk=deskverdict.load("$desk")
 desktop=deskverdict.verdict(desk, "$CONDITION", $DESK_SATURATED, $DESK_STALLED,
                             $DESK_SUSTAIN_SECONDS)
 
+# Prompt throughput is the discriminator. Under memory pressure a process's resident size is
+# clamped by what physically fits rather than by what the config wants, so it stops
+# distinguishing configs exactly when the answer matters; time to ingest a full context does
+# not. One figure per slot: what a slot was charged is what a developer on it waited for.
+rates=[]
+for i in range(1, $slots + 1):
+    try:
+        rates.append(json.load(open("/tmp/ladder-fill-resp-%d.json" % i))
+                     .get("timings", {}).get("prompt_per_second", 0))
+    except (OSError, ValueError):
+        rates.append(0)
+
+# The pass rule, applied rather than implied. A slot filled only if it answered HTTP 200 with
+# a body that parses and has content in it: a 500 with an empty body is a failure the status
+# line alone reports as one and a check for the word "error" does not see at all. A rung is
+# every slot filling, with no failed request and no swap growth — a run that swapped measured
+# the pager, which the vision calls void rather than slow, and is scored here exactly as
+# scripts/screen.sh scores it.
+def slot_outcome(i):
+    try:
+        code=open("/tmp/ladder-fill-http-%d" % i).read().strip()
+    except OSError:
+        code="000"
+    try:
+        body=json.load(open("/tmp/ladder-fill-resp-%d.json" % i))
+    except (OSError, ValueError):
+        body=None
+    if code == "000":
+        return "request_failed"
+    if body is not None and "error" in body:
+        return "rejected"
+    if code != "200":
+        return "http_" + code
+    if body is None:
+        return "unparseable_reply"
+    choices=body.get("choices") or [{}]
+    if not (choices[0].get("message") or {}).get("content"):
+        return "empty_reply"
+    return "ok"
+
+slot_outcomes=[slot_outcome(i) for i in range(1, $slots + 1)]
+swap_delta_total=round(f["swap_used_mb"]-b["swap_used_mb"], 1)
+outcome=next((o for o in slot_outcomes if o != "ok"), "ok")
+if not $alive:
+    outcome="died"
+elif outcome == "ok" and swap_delta_total > 0:
+    outcome="void_swapped"
+
 print(json.dumps({
   "condition": "$CONDITION", "cell": "$name", "ctx": $ctx, "kv": "$kv",
+  "slots": $slots, "per_slot_ctx": $per_slot,
   "ubatch": ${ubatch:-None}, "batch": ${batch:-None},
-  "fill_target_tokens": $target, "outcome": "$outcome", "http": "$http",
-  "fill_seconds": $fill_seconds, "prompt_per_second": $prompt_rate,
+  "fill_target_tokens": $target, "outcome": outcome, "http": "$http",
+  **({"slot_outcomes": slot_outcomes} if len(slot_outcomes) > 1 else {}),
+  "fill_seconds": $fill_seconds, "prompt_per_second": rates[0],
+  **({"prompt_per_second_slots": rates} if len(rates) > 1 else {}),
   "before": b, "loaded": l, "filled": f,
   "swap_delta_load_mb": round(l["swap_used_mb"]-b["swap_used_mb"], 1),
   "swap_delta_fill_mb": round(f["swap_used_mb"]-l["swap_used_mb"], 1),
-  "swap_delta_total_mb": round(f["swap_used_mb"]-b["swap_used_mb"], 1),
+  "swap_delta_total_mb": swap_delta_total,
   "peak_rss_gb": max(l["llama_rss_gb"], f["llama_rss_gb"]),
   "free_at_peak_gb": min(l["free_gb"], f["free_gb"]),
-  "wired_peak_gb": round(wired_peak, 3),
+  "wired_peak_gb": (round(wired_peak, 3) if wired_peak is not None else None),
   "wired_headroom_min_gb": (round(wired_headroom_min, 3) if wired_headroom_min is not None else None),
   "wired_limit_gb": f["wired_limit_gb"], "wired_limit_source": f["wired_limit_source"],
   "wired_samples": len(series) - 2,
   **desktop,
 }))
-print("  -> $outcome  desktop=%s  peak_rss=%.2f GB  wired_peak=%.2f GB  headroom_min=%.2f GB"
-      % (desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]), wired_peak, wired_headroom_min),
+print("  -> %s  desktop=%s  peak_rss=%.2f GB  wired_peak=%s  headroom_min=%s"
+      % (outcome, desktop["desktop_verdict"], max(l["llama_rss_gb"], f["llama_rss_gb"]),
+         gb(wired_peak), gb(wired_headroom_min)),
       file=sys.stderr)
 PY
 done

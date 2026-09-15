@@ -43,3 +43,22 @@ jobs:
       - run: sudo apt-get install -y --no-install-recommends shellcheck
 
       - run: make check
+
+  # The same gate on Arm Linux, beside the x86_64 job rather than instead of it. The GB10
+  # (0054) is Arm Linux and headless, so every probe that shells out to a macOS tool has to
+  # record unknown there rather than a number; a gate that has only ever run on macOS and
+  # x86_64 Linux cannot see that, and the box is not reachable to find out on.
+  check-arm:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: sudo apt-get install -y --no-install-recommends shellcheck
+
+      - run: make check
