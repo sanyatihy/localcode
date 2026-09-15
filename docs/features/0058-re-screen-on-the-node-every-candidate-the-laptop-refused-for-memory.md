@@ -1,9 +1,9 @@
 ---
 id: 0058
 title: Re-screen on the node every candidate the laptop refused for memory
-status: Draft
+status: Submitted
 created: 2026-09-14
-submitted: 
+submitted: 2026-09-15
 needs: 0056
 ---
 
