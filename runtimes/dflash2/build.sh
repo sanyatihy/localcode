@@ -26,6 +26,16 @@ if [ ! -d "$SRC/.git" ]; then
   git clone --filter=blob:none "$REPO" "$SRC"
 fi
 git -C "$SRC" fetch origin "$REF"
+
+# A dirty scratch tree is refused rather than built over. The build directory is reused
+# across runs, so an edit left in this checkout produces a binary the recorded commit does
+# not describe — and a row naming a commit that did not produce it is worse than no row.
+dirty=$(git -C "$SRC" status --porcelain)
+if [ -n "$dirty" ]; then
+  echo "$SRC has uncommitted changes, so the build would not be $COMMIT:" >&2
+  echo "$dirty" >&2
+  exit 2
+fi
 git -C "$SRC" checkout --detach "$COMMIT"
 
 # Metal on, shared backends, and libcurl so `-hf` can fetch the drafter the config names.
@@ -37,5 +47,7 @@ cmake -S "$SRC" -B "$SRC/build" \
   -DLLAMA_CURL=ON
 cmake --build "$SRC/build" --target llama-server --config Release -j "$(sysctl -n hw.ncpu)"
 
-echo "built:"
+# The revision is read back from the tree rather than echoed from COMMIT: what was built is
+# what the checkout is at, and those are the same thing only if nothing moved in between.
+echo "built from $(git -C "$SRC" rev-parse HEAD) in $SRC:"
 "$SRC/build/bin/llama-server" --version 2>&1 | head -2
