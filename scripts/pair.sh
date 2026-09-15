@@ -32,21 +32,38 @@ ENDPOINT="http://127.0.0.1:$PORT"
 THINKING="${THINKING:-off}"
 SAMPLING="${SAMPLING:-nonthinking}"
 
+# A candidate that is not llama.cpp is started by a script of its own and answers on a port
+# of its own. `scripts/screen.sh` takes the serve command as arguments for exactly this
+# reason; here the baseline is always this project's server, so only the candidate side
+# needs the override. It is tracked by pid because a runtime that sets its own process
+# title cannot be found by the library's pgrep.
+CANDIDATE_SERVE="${CANDIDATE_SERVE:-./scripts/serve.sh}"
+CANDIDATE_PORT="${CANDIDATE_PORT:-$PORT}"
+
 # The side with the mechanism off runs first, so a candidate never benefits from a
 # machine the baseline warmed and the caches it left behind.
 for side in "$BASELINE" "$CANDIDATE"; do
   label=$(basename "$side" .env)
+  serve="./scripts/serve.sh"; port="$PORT"
+  if [ "$side" = "$CANDIDATE" ]; then serve="$CANDIDATE_SERVE"; port="$CANDIDATE_PORT"; fi
+  ENDPOINT="http://127.0.0.1:$port"
   echo "=== $label ===" >&2
   stop_server
-  nohup ./scripts/serve.sh "$side" > "/tmp/pair-$label.log" 2>&1 &
+  # shellcheck disable=SC2086
+  nohup $serve "$side" > "/tmp/pair-$label.log" 2>&1 &
+  server_pid=$!
   if ! wait_healthy 600; then
     echo "  LOAD FAILED — see /tmp/pair-$label.log" >&2
+    kill "$server_pid" 2>/dev/null || true
     exit 2
   fi
   if [ -n "$TASK" ]; then set -- -task "$TASK"; else set -- -tasks "$TASKS"; fi
-  "$(built eval)" "$@" -n "$REPEATS" -config "$label" -session "$SESSION" \
+  "$(built eval)" "$@" -n "$REPEATS" -config "$label" -session "$SESSION" -endpoint "$ENDPOINT" \
     -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
+  # By pid as well as by pattern: the next side must not measure this one's memory, and
+  # stop_server's pgrep cannot see a runtime whose command line is just its interpreter.
+  kill "$server_pid" 2>/dev/null || true
+  stop_server
 done
-stop_server
 
 "$(built report)" -results "$RESULTS" -baseline "$(basename "$BASELINE" .env)"

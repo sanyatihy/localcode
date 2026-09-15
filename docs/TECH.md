@@ -715,6 +715,47 @@ Two `load_failed` rows in the screen file are that: 601 s of waiting on the down
 instead**, which runs at 37 MB/s, and `LLAMA_ARG_OFFLINE=1` keeps both sides of the pair
 out of the metadata check that stalls the load.
 
+**MTPLX fits here, and what it spends is the free memory rather than the cap.** The
+checkpoint the laptop could not hold loads at 49,152 on this node, fills to 44,236 tokens
+and answers in 249 s, at **28.32 GB of peak wired with 1.68 GB left under the 30,720 MiB
+cap** and a swap delta of 0.0. On the laptop the same config peaked at 25.5–25.7 GB and
+swapped both times, so both of those rows were void; raising the cap is what admits it, and
+0017's reading that the reserve rather than the route excludes it is confirmed from the
+other side. It logs its own `memory pressure guard` at `allocator_fraction` 1.02–1.06
+through the fill and completes anyway.
+
+Paired against `config/node.env` on the ranking suite, three passes a side, one session,
+`scripts/pair.sh` driving its serve script and its port
+([rows](data/2026-09-15-m5max-36gb-0058-mtplx.jsonl)):
+
+| | `config/node.env` | MTPLX, `mtp` on `sustained` |
+|---|---|---|
+| decode, client-side | 0.0477 s/tok | 0.0178 — 2.68x, **void as a ratio** |
+| acceptance | — | 3.80 |
+| peak wired | 19.91 GB (0056's screen) | **28.32 GB** |
+| minimum free memory | 4.97 GB | **0.056 GB** |
+| pass | 25/27 | 23/27 |
+| tool-call valid | 12/12 | 12/12 |
+| greedy fidelity hash | `0f4045cad664f4ac` | `5dd7fe3148350c3c` |
+| swap Δ | 0.0 MB | 0.0 MB |
+
+**The ratio is void and the tool voided it**, which is the point of hashing both sides: the
+probes disagree, so this is not one decoder run two ways. It cannot be — MTPLX serves an
+FP16 MLX conversion of its own where the baseline serves Q4_K_M, so the comparison is a
+runtime comparison like 0006's and not a speculative-decoding one. Read 56.8 tok/s against
+20.7 as two runtimes, with two task outcomes and 1.5 GB of weights between them.
+
+**It reports no served config**, exactly as `mlx_lm` does: `served_n_ctx` is 0 and
+`served_model` is `.` on every row, so a run cannot be checked against its label from the
+row alone. That is the second of the three things TECH already holds against MLX, and it
+holds here.
+
+**0.056 GB of free memory is the finding, not the 28.32.** The cap bounds llama.cpp's
+reservation; this runtime allocates per request and takes what is there, which is why one
+1.68 GB margin under the cap arrives with the machine's free pool at 56 MB. Nothing swapped,
+because wired pages cannot be paged out — the same reason 0006's unbounded `mlx_lm` stalled
+with swap flat rather than paging.
+
 ## The prefill batch was swept, and the default kept
 
 `--ubatch-size` is the physical batch: it sizes the compute buffer and the Metal dispatch,

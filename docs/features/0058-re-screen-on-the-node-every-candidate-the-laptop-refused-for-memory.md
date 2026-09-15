@@ -51,7 +51,7 @@ the baseline on decode without losing on pass rate, and that change is its own b
 
 - [x] The native MTP head is screened and paired at the node's window with the draft depth swept, and TECH records its ratio and fidelity beside the laptop's 32k figures
 - [x] The DFlash2 build is produced on the node by a committed script and the drafter is screened; if admissible, paired and scored
-- [ ] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
+- [x] MTPLX is set up from its venv on the node and screened; if admissible, paired and scored
 - [ ] MLX is set up from its venv on the node with bounded caches and scored through `runtimes/mlx/compare.sh` against the baseline
 - [ ] TECH carries the one table, and `config/node.env` changes only if a candidate beats the baseline on decode without losing pass rate, with the row that decided it cited
 
@@ -62,4 +62,7 @@ the baseline on decode without losing on pass rate, and that change is its own b
   now resolves to a 1.1 GB download this node's link cannot deliver. `scripts/serve.sh`
   gains `SPEC_DRAFT_MODEL` and `config/dflash2-node-49k.env` names the cached revision, so
   what served is recorded rather than resolved at run time.
+- 2026-09-15: `scripts/pair.sh` takes the candidate's serve command and port. The plan has
+  every admissible candidate paired by that script, and two of the four are not llama.cpp;
+  `scripts/screen.sh` already took the serve command as arguments for the same reason.
 - 2026-09-14 — paused: the remaining candidates wait for the owner's word

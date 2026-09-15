@@ -18,7 +18,7 @@ All run under `bash` via shebang, from the repo root, and write their rows to
 | [`batchsweep.sh`](batchsweep.sh) | walk `--ubatch-size` up from llama.cpp's default until this machine refuses, screening each cell |
 | [`batchfidelity.sh`](batchfidelity.sh) | hash fixed greedy prompts at every admissible `--ubatch-size`, and refuse the depth sweep if the batch size moves the answer |
 | [`batchdepth.sh`](batchdepth.sh) | score cold ingest at depth for each admissible `--ubatch-size`, at the profile's own context |
-| [`pair.sh`](pair.sh) | run a candidate and its baseline back to back on one machine state, then report the ratio |
+| [`pair.sh`](pair.sh) | run a candidate and its baseline back to back on one machine state, then report the ratio; `CANDIDATE_SERVE` and `CANDIDATE_PORT` pair a runtime that is not llama.cpp |
 | [`prefixrun.sh`](prefixrun.sh) | walk one config through the prefix-cache conditions, restarting the server between them |
 | [`chainfixture.py`](chainfixture.py) | write the twenty-bug repository a chain is measured on, buggy or repaired, so two runs start identical by construction |
 | [`chainrun.sh`](chainrun.sh) | drive one instruction to completion on one serving config, and score it by the fixture's own tests |
