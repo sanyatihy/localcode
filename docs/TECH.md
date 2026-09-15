@@ -664,9 +664,9 @@ headroom, so on this machine the allocator is not what chooses the depth.
 laptop's arms produced, on all six sides of the three pairs. The ratios are therefore of one
 decoder, which is what licenses reading them.
 
-**The ratios sit above the laptop's at the same depths**, and the shape is the same: 1.31x
-against 1.33x at depth 2, 1.82x against 1.67x at depth 3, and a fourth arm the laptop has no
-row for. Acceptance matches within 0.13 tokens a step at depth 2 and 3. Read the depths
+**The shape matches the laptop's; the level moves in both directions**: 1.31x here against
+1.33x there at depth 2, 1.82x against 1.67x at depth 3, and a fourth arm the laptop has no
+row for. Depth 2 is the one that reads lower here, not higher. Acceptance matches within 0.13 tokens a step at depth 2 and 3. Read the depths
 against each other and not against the laptop's numbers directly: these are the ranking
 suite's ~200-token prompts on this node, where 0025's are `decode-32000` on that one.
 
@@ -676,10 +676,12 @@ three baseline sessions read 23, 25 and 23 of 27 against the same fixtures, so t
 every arm is one of the two tasks TECH already names as the only discriminating ones. Tool-call
 validity is 12/12 on all three heads; the one invalid call in the whole file is a baseline row.
 
-**Depth 3 is the setting, and the reason is not speed.** Depth 4 reads 1.95x against 1.82x
-and scores 22/27 against 24/27 — one task, which is inside the baseline's own spread and so
-decides nothing — but its server aborts in `ggml_metal_buffer_free` while tearing the context
-down at the end of the screen, after the fill and the smoke had both passed. The row is
+**Depth 3 is the setting, and the reason is not speed.** Depth 4 reads 1.95x against 1.82x,
+and 22/27 against depth 3's 24/27 is two tasks — but those are two different sessions with
+two different baselines, and against its own each arm is one task short: 22/27 against 23/27
+and 24/27 against 25/27. Pass rate separates them by nothing. What separates them is that
+depth 4's server aborts in `ggml_metal_buffer_free` while tearing the context down at the end
+of the screen, after the fill and the smoke had both passed. The row is
 admissible on what it measured and the abort is recorded rather than explained; a depth whose
 teardown crashes is not the one to serve from.
 
@@ -781,10 +783,21 @@ decode column `mlx_lm` reports no timings for
 | headroom left under the cap | 10.09 GB | 2.28 GB | — |
 | minimum free memory | 0.068 GB | 0.121 GB | MLX won, 2.64 against 0.06 |
 | runs that swapped | **0** | **0** | 7 against 0 |
-| decode, client-side | 0.0480 s/tok | **0.0397 — 1.21x** | 8.89 against 10.35 tok/s |
-| short prompts, mean wall | 5.3–7.2 s | **4.9–6.5 s** | MLX won |
+| decode, client-side | 0.0480 s/tok | **0.0397 — 1.21x** | 8.89 against 10.35 tok/s, prefill included |
+| ranking fixtures, mean wall | **4.77 s** | 5.32 s | MLX won |
 | depth prompts, mean wall | **2.0–55 s** | 11–197 s | llama.cpp won by 3–9% |
 | repeating one 32k fixture, `decode-32000` | 115.4 s → **25.0 s (4.6x)**, 31,548 of 32,064 reused | 197.4 s → 196.8 s, no gain | 10x against 39x, a different instrument |
+
+**MLX's short-prompt win does not survive the whole suite.** It is faster on four of the
+five patch fixtures, by 1–11% of wall, and slower on all four tool-call fixtures, by 12% to
+96% — `toolcall-read-file` costs it 3.37 s against 1.72. Averaged over the nine it is the
+slower of the two, 5.32 s against 4.77. 0006's "short prompts: faster" was a reading of the
+laptop and does not hold here.
+
+**The laptop's decode figures in that last column are not the same measurement.** 8.89 and
+10.35 tok/s were taken client-side with prefill inside them, which is all 0006 could take;
+the 0.0480 and 0.0397 s/tok here are streamed, so prefill is out of them. They sit in one
+table because they answer one question, not because they may be divided.
 
 **Both runtimes score the same and neither swaps**, so quality and stability separate them
 by nothing here, and the three columns that decided 0006 have all moved. MLX's memory win
@@ -858,7 +871,8 @@ the editor flow needs. What changed is that MTPLX now fits and MLX no longer win
 **DFlash2 is the close one, and pass rate is what it loses on.** It reads 1.94x against the
 head's 1.82x, hashes the baseline's text, and costs 2.4 GB more of wired memory. Its 21/27
 is two tasks below the 23/27 its own baseline read in the same session, which is outside the
-one task the adoption rule allows, and 0017's 1.18x fork-against-stock pair says an unknown
+one task the adoption rule allows. The head at depth 3 is one below its own baseline too, so
+what divides them is how far and not which way. And 0017's 1.18x fork-against-stock pair says an unknown
 part of its ratio is the backend its build carries rather than the drafter.
 
 **`config/node.env` therefore serves the draft head at depth 3**, on the row marked above:
