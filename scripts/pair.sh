@@ -40,6 +40,16 @@ SAMPLING="${SAMPLING:-nonthinking}"
 CANDIDATE_SERVE="${CANDIDATE_SERVE:-./scripts/serve.sh}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-$PORT}"
 
+# Readiness is judged by the pid this script started, not by lib.sh's pgrep for
+# llama-server. MTPLX's command line is just its interpreter and mlx_lm's is just python,
+# so the pattern finds nothing: past the health grace every such load was being called dead
+# while its process was alive and still loading, which made the 600 s timeout unreachable.
+# screen.sh overrides this for the same reason. Unconditional, because the override is also
+# stricter for llama.cpp — a stray server somebody else left running satisfies the pattern
+# and says nothing about the one this run launched.
+server_pid=""
+server_alive() { [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; }
+
 # The side with the mechanism off runs first, so a candidate never benefits from a
 # machine the baseline warmed and the caches it left behind.
 for side in "$BASELINE" "$CANDIDATE"; do
