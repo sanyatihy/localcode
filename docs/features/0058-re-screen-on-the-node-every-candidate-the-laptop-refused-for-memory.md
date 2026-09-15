@@ -1,9 +1,9 @@
 ---
 id: 0058
 title: Re-screen on the node every candidate the laptop refused for memory
-status: Submitted
+status: Draft
 created: 2026-09-14
-submitted: 2026-09-15
+submitted: 
 needs: 0056
 ---
 
@@ -66,3 +66,4 @@ the baseline on decode without losing on pass rate, and that change is its own b
   every admissible candidate paired by that script, and two of the four are not llama.cpp;
   `scripts/screen.sh` already took the serve command as arguments for the same reason.
 - 2026-09-14 — paused: the remaining candidates wait for the owner's word
+- 2026-09-15 — reopen to Draft: review: script lifecycle for non-llama runtimes, and the write-up's claims held to the rows
