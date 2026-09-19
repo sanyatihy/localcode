@@ -1,9 +1,9 @@
 ---
 id: 0062
 title: Prove Splash on real work before the node serves it
-status: Draft
+status: Submitted
 created: 2026-09-20
-submitted: 
+submitted: 2026-09-19
 needs:
 ---
 
