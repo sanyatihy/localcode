@@ -1432,3 +1432,41 @@ func TestARemoteEndpointIsRefusedWhenTheLocalAddressIsBusy(t *testing.T) {
 		}
 	}
 }
+
+// On the node the server belongs to launchd, and a second one started from here would bind
+// nothing and load the weights for nothing. `serve` creates the switch the daemon is gated
+// on (0061) and waits for that server instead.
+func TestServeCreatesTheSwitchWhereTheDaemonHoldsTheServer(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+	old := serveDaemonLoaded
+	serveDaemonLoaded = func() bool { return true }
+	t.Cleanup(func() { serveDaemonLoaded = old })
+
+	if code, err := serveServer(root, healthy(t, http.StatusOK), "config/node.env"); err != nil || code != 0 {
+		t.Fatalf("serve: code %d err %v", code, err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a machine whose daemon serves must not start a second server here")
+	}
+	path, err := serveSwitch()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the switch the daemon is gated on was not created: %v", err)
+	}
+
+	// Everywhere else the server is this machine's own, started in the foreground.
+	serveDaemonLoaded = func() bool { return false }
+	if code, err := serveServer(root, healthy(t, http.StatusOK), "config/agent.env"); err != nil || code != 0 {
+		t.Fatalf("serve: code %d err %v", code, err)
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("serve.sh must have run: %v", err)
+	}
+	if !strings.Contains(string(got), "serve.sh") {
+		t.Errorf("serve.sh must have run: %s", got)
+	}
+}

@@ -76,7 +76,7 @@ while stopped comes up not serving.
 - [x] `scripts/node/serve.sh` serves `config/node.env` when the switch exists and exits 0 when it does not, the plist keeps the job alive on `PathState` alone, and a test renders the plist and lints it with `plutil`
 - [x] `scripts/node/install.sh` creates the switch on a first install only and replaces an installed plist that predates it, and a rerun restarts nothing
 - [x] `stop_server` stops a switched daemon as the serving user and still waits for the memory back, the bootout route stays for an older plist, and tests cover both
-- [ ] `localcode serve` on a machine whose daemon is loaded creates the switch and waits for health, covered by a test
+- [x] `localcode serve` on a machine whose daemon is loaded creates the switch and waits for health, covered by a test
 - [ ] `localcode stop` and `localcode serve` against a remote endpoint run the node's launcher over SSH to the destination in `~/.config/localcode/ssh`, refuse by name when that file is absent, and a test covers both with a stub `ssh`
 - [ ] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
 - [ ] README's node runbook gives the laptop commands and the `ssh` file, and TECH's daemon paragraph says what the switch is and why `SuccessfulExit` left

@@ -131,7 +131,7 @@ func main() {
 	case len(args) > 0 && args[0] == "status":
 		code, err = status(os.Stdout, server, from)
 	case len(args) > 0 && args[0] == "serve":
-		code, err = script(*checkoutFlag, "serve.sh", *config)
+		code, err = serveServer(*checkoutFlag, server, *config)
 	case len(args) > 0 && args[0] == "stop":
 		code, err = stopServer(*checkoutFlag, server)
 	case len(args) > 1 && args[0] == "hook":
@@ -634,6 +634,50 @@ func script(checkoutFlag, name string, args ...string) (int, error) {
 		}
 		return 2, fmt.Errorf("could not run %s: %w", name, err)
 	}
+	return 0, nil
+}
+
+// serveSwitch is the file the node's serving daemon is gated on (0061). Its directory is
+// the state directory this binary already owns, which is the one scripts/node/install.sh
+// writes into the plist as the serving user's home.
+func serveSwitch() (string, error) {
+	dir, err := stateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "serve.on"), nil
+}
+
+// serveDaemonLoaded reports whether launchd holds this machine's server (0056). A var so a
+// test can answer without launchctl, which answers about the machine the test runs on.
+var serveDaemonLoaded = func() bool {
+	return exec.Command("launchctl", "print", "system/com.localcode.serve").Run() == nil
+}
+
+// serveServer starts what this machine serves. Where the serving daemon is loaded the
+// server is launchd's to start: a second one from here would find the port taken and load
+// 17 GB for nothing, so what this does is create the switch and wait for the daemon's own
+// server to answer.
+func serveServer(checkoutFlag, endpoint, config string) (int, error) {
+	if !serveDaemonLoaded() {
+		return script(checkoutFlag, "serve.sh", config)
+	}
+	path, err := serveSwitch()
+	if err != nil {
+		return 2, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return 2, fmt.Errorf("could not make %s: %w", filepath.Dir(path), err)
+	}
+	// Empty: launchd's PathState asks whether the file is there and reads nothing in it.
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		return 2, fmt.Errorf("could not create %s: %w", path, err)
+	}
+	fmt.Fprintf(os.Stderr, "the serving daemon has this machine: created %s\n", path)
+	if err := waitHealthy(endpoint, 20*time.Minute, nil); err != nil {
+		return 2, err
+	}
+	fmt.Fprintln(os.Stderr, "server ready")
 	return 0, nil
 }
 
