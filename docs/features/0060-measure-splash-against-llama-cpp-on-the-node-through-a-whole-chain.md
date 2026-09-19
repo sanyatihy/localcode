@@ -89,7 +89,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 - [x] `scripts/pair.sh` passes scorer flags a runtime forces on a pair, `EVAL_ARGS` to both sides and `CANDIDATE_EVAL_ARGS` to the candidate, since Splash refuses `presence_penalty` and spells thinking off as `reasoning_effort`
 - [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
 - [ ] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
-- [ ] `scripts/chainrun.sh` takes the serve command, and if Splash reports no context the launcher gains `-context`, refused whenever `/props` answers, covered by a test on both branches
+- [ ] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
 - [ ] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
 
 ## Log
