@@ -1514,6 +1514,47 @@ Splash reports no served config, build or server-side rate, so `served_n_ctx` is
 `served_model` is `.` on its rows, the second thing TECH holds against MLX; its context is on
 `/status`, which the scorer does not read.
 
+**At depth the gap widens on decode and holds on prefill**
+([rows](data/2026-09-19-m5max-36gb-0060-runtime.jsonl)): `runtimes/mlx/compare.sh` over the
+ranking and depth suites, three passes, streamed so the client sees where prefill ends, the
+same flags to both runtimes and `config/node.env` as the llama.cpp side:
+
+| | llama.cpp, draft head | Splash | ratio |
+|---|---|---|---|
+| decode at ~200 tokens of prompt | 0.0226 s/tok | 0.0080 | 2.8x |
+| decode at 8,000 | 0.0293 | 0.0085 | 3.4x |
+| decode at 16,000 | 0.0299 | 0.0088 | 3.4x |
+| decode at 32,000 | 0.0355 | **0.0092** | **3.9x** |
+| cold prefill, 2,000 to 8,000 tokens | 414–428 tok/s | 598–684 tok/s | 1.5x |
+| cold prefill at 16,000 | 465 tok/s | 628–731 tok/s | 1.4–1.6x |
+| cold prefill at 32,000 | 358 tok/s | 567–647 tok/s | 1.6–1.8x |
+| `decode-32000` cold, whole request | 102.9 s | 52.9 s | 1.9x |
+| `decode-32000` repeated | 16.3 s, 31,548 of 32,064 reused | **3.9 s**, 32,032 reused | 4.2x |
+| depth fixtures passed | 27/27 | 27/27 | |
+| ranking fixtures passed | 25/27 | 22/27 | |
+
+**Splash's decode barely falls with depth**, 0.0080 to 0.0092 s/tok from 200 to 32,000 tokens
+where llama.cpp's falls from 0.0226 to 0.0355, so the ratio grows with the depth a session
+works at, which is where a session spends its time (0034). Prefill is a steadier 1.5 to 1.8
+times. Prefill rates are prompt tokens over the client's time to first token on rows with
+nothing cached.
+
+**The two prefix caches fail in different places.** Splash reuses a repeated prompt almost
+whole and answers `retrieval-32000` in 0.4 s on a repeat, but the first time it saw that
+fixture it reused nothing and ingested for 56.7 s, where llama.cpp had 31,548 tokens of it
+cached from `decode-32000`, which shares its prefix, and answered in 2.7 s. llama.cpp in turn
+reused nothing on any repeat of `decode-8000` or `retrieval-distractor-8000`, 30 s and 20 s
+every time, where Splash took 3.6 s and 0.2 s. An interleaved suite of near-identical prompts
+is not a conversation (0058 says the same of this suite), so which failure a chain meets is
+the chains' reading and not this table's.
+
+**Ranking pass rate moved against Splash here and not in the pairs**: 22/27 against 25/27 in
+this session, 23/27 on every side of both pairs. All eight failures in the file are the two
+discriminating tasks. Across the three sessions Splash reads 68/81 and llama.cpp 71/81 over
+its three sides, which is one task a session and inside the spread TECH already records for
+one config against itself. No row swapped. The llama.cpp depth half ran under `-force`, for
+the reason the second pair's baseline did.
+
 **The package is one repository, and the Hub cache is the only copy of it.**
 `incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
 under `draft/`, a vision tower and the tokeniser — so there is no separate drafter
