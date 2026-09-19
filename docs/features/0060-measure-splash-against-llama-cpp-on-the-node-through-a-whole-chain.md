@@ -1,9 +1,9 @@
 ---
 id: 0060
 title: Measure Splash against llama.cpp on the node, through a whole chain
-status: Draft
+status: Submitted
 created: 2026-09-19
-submitted:
+submitted: 2026-09-19
 needs:
 ---
 
