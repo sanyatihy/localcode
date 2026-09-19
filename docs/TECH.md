@@ -183,13 +183,13 @@ password typed: `serve` created the switch and the model answered at 49,152 with
 a warm page cache; `stop` returned in under 4 s with the process gone, and seven status reads
 over the next minute found no server, no restart and wired memory back at 1.4 GB; the node
 was then rebooted stopped and came up not serving. The reboot itself and `install.sh` are
-the owner's, under `sudo`. **Every script sources `scripts/lib.sh` under `set -u`, and a
+the owner's, under `sudo`. **`cap.sh` and most scripts here source `scripts/lib.sh` under `set -u`, and a
 LaunchDaemon run as root has no `HOME`**: a default that read `$HOME` bare ended `cap.sh` at
 that boot and left the node at Metal's derived cap until it was fixed, which no test or
 review had caught and a test now holds. **`install.sh` creates the switch before it writes
 any plist**, because a run that wrote the new plist and then failed at the bootstrap left a
 rerun reading the node as already installed, and a node with no switch does not serve; it
-also waits for a booted-out service to be gone before bootstrapping over it.
+also waits up to 30 s for a booted-out service to be gone before bootstrapping over it.
 
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
