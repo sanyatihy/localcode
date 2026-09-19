@@ -1,9 +1,9 @@
 ---
 id: 0061
 title: Stop and start the node's server from the laptop without a password
-status: Draft
+status: Submitted
 created: 2026-09-19
-submitted:
+submitted: 2026-09-19
 needs:
 ---
 
