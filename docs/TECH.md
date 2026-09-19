@@ -96,6 +96,15 @@ laptop sleeps: both lids closed and reopened on 2026-09-14 left the node awake (
 log shows no sleep after preparation, and `disablesleep` held) but with no USB device
 presented until a login at its screen. A USB-linked node therefore survives its own lid
 closing and not the laptop's; a Thunderbolt bridge is what removes the login.
+
+**The Thunderbolt bridge needs no session, measured 2026-09-20.** A Thunderbolt cable
+replaced the USB one on 2026-09-19, with a static address on each Mac's Thunderbolt Bridge
+service from `networksetup -setmanual`, which persists without a daemon. Rebooted to the
+login window, the node answered SSH by key over the bridge one minute after boot with no
+console user, the cap daemon had applied 30,720 MiB and the serving daemon's server was
+healthy, while the node's USB device side on the same cable stayed inactive. Every row 0062
+takes is therefore `headless`, the state 0056's floor and idle record were read in. The
+committed machine files and `com.localcode.link` still name the USB addresses.
 With its own lid closed and the laptop open, the node served and passed `smoke` over the
 cable on 2026-09-15. A pulled power cable does nothing to it: the node is a MacBook and
 runs on its battery, so `autorestart` covers only a battery that has drained, and the

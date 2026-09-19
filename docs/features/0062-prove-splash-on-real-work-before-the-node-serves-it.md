@@ -79,7 +79,7 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 
 ## Tasks
 
-- [ ] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
+- [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
 - [ ] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
 - [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings, and `runtimes/splash/config/splash-27b.env` takes the largest that leaves 1 GB free with nothing swapped, with decode read at each
 - [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
