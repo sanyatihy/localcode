@@ -39,6 +39,9 @@ PORT="${PORT:-8081}"
 # having been served by, and a chain that cannot name its config is not evidence.
 ENDPOINT="${ENDPOINT:-http://127.0.0.1:$PORT}"
 SERVE="${SERVE:-1}"
+# A runtime that is not llama.cpp is started by a script of its own, as in scripts/pair.sh,
+# and stopped through STOP_CMD, which stop_server runs before its own pkill.
+SERVE_CMD="${SERVE_CMD:-./scripts/serve.sh}"
 LOAD_TIMEOUT="${LOAD_TIMEOUT:-900}"
 
 # The bounds are deliberately far above what either side needs. A chain stopped by its
@@ -55,16 +58,18 @@ GOAL="Twenty tests in fixme_test.go fail, each caused by a bug in its own file. 
 metrics() { # prints "prompt cached predicted", or three zeroes for a server without --metrics
   curl -s -m 10 "$ENDPOINT/metrics" 2>/dev/null | python3 -c "
 import sys
-want = {'llamacpp:prompt_tokens_total': 0, 'llamacpp:prompt_tokens_cached_total': 0,
-        'llamacpp:tokens_predicted_total': 0}
+# Two vocabularies for the same three counters: llama.cpp's, and Splash's (0060).
+names = [('llamacpp:prompt_tokens_total', 'splash_prefill_input_tokens_total'),
+         ('llamacpp:prompt_tokens_cached_total', 'splash_cache_reused_tokens_total'),
+         ('llamacpp:tokens_predicted_total', 'splash_decode_output_tokens_total')]
+seen = {}
 for line in sys.stdin:
     if line.startswith('#'):
         continue
     parts = line.split()
-    if len(parts) == 2 and parts[0] in want:
-        want[parts[0]] = int(float(parts[1]))
-print(want['llamacpp:prompt_tokens_total'], want['llamacpp:prompt_tokens_cached_total'],
-      want['llamacpp:tokens_predicted_total'])" 2>/dev/null || echo "0 0 0"
+    if len(parts) == 2:
+        seen[parts[0]] = parts[1]
+print(*[int(float(next((seen[n] for n in pair if n in seen), 0))) for pair in names])" 2>/dev/null || echo "0 0 0"
 }
 
 # The launcher is built from this checkout rather than taken off PATH: an installed one is
@@ -92,7 +97,8 @@ rm -rf "$state"
 echo "=== chain $LABEL on $CONFIG at $ENDPOINT: $total bugs, up to $SESSIONS sessions ===" >&2
 if [ "$SERVE" = "1" ]; then
   stop_server
-  nohup ./scripts/serve.sh "$CONFIG" > "/tmp/chainrun-$LABEL-serve.log" 2>&1 &
+  # shellcheck disable=SC2086 # SERVE_CMD is a command line, split on purpose
+  nohup $SERVE_CMD "$CONFIG" > "/tmp/chainrun-$LABEL-serve.log" 2>&1 &
   trap 'stop_server' EXIT
   wait_healthy "$LOAD_TIMEOUT" || { echo "the server did not load — see /tmp/chainrun-$LABEL-serve.log" >&2; exit 2; }
 else

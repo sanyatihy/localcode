@@ -86,9 +86,13 @@ except (OSError, ValueError, KeyError) as e:
 # served_ctx asks the endpoint what it is serving, and prints `null` for a backend that does
 # not say. The guard against measuring one config under another's name, so a caller that
 # skips it is claiming rather than checking.
+#
+# llama.cpp says it on /props; Splash has no /props and says it on /status (0060).
 served_ctx() {
   curl -s -m 5 "$ENDPOINT/props" 2>/dev/null \
     | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null \
+    || curl -s -m 5 "$ENDPOINT/status" 2>/dev/null \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['maximum_context_tokens'])" 2>/dev/null \
     || echo null
 }
 

@@ -89,7 +89,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 - [x] `scripts/pair.sh` passes scorer flags a runtime forces on a pair, `EVAL_ARGS` to both sides and `CANDIDATE_EVAL_ARGS` to the candidate, since Splash refuses `presence_penalty` and spells thinking off as `reasoning_effort`
 - [x] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
 - [x] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
-- [ ] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
+- [x] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
 - [ ] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
 
 ## Log
@@ -128,3 +128,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
   `config/machine.json` and the node's file has to be passed.
 - 2026-09-19: the published pair rows have the home directory in `served_backend` written as
   `~`. The repository is public and the path names a user; no measurement is touched.
+- 2026-09-19: the chain box also passes the served model's id to the harness. Splash answers
+  404 to any model name but its own, and Claude Code asks by the name its committed file
+  carries, which llama.cpp ignores. The launcher reads the id from `/v1/models` beside the
+  context and the harness sets it; nothing is configured by hand.

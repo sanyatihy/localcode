@@ -65,6 +65,16 @@ func ClaudeCodeEnvFile(root string) string {
 
 func (c *claudeCodeAgent) Name() string { return "claude-code" }
 
+// ServedModel names the model every request asks for. llama.cpp answers to any name, so the
+// committed file's stands there; Splash answers 404 to any but its own (0060), and the
+// harness spreads its calls over four variables that all have to say it.
+func (c *claudeCodeAgent) ServedModel(id string) {
+	for _, name := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL"} {
+		c.env = setEnv(c.env, name, id)
+	}
+}
+
 // Window declares the whole of what the server serves, and keeps the file's output
 // reservation.
 //

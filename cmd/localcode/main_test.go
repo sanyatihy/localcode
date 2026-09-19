@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -1430,5 +1431,40 @@ func TestARemoteEndpointIsRefusedWhenTheLocalAddressIsBusy(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal must name %q: %v", want, err)
 		}
+	}
+}
+
+// A runtime with no /props says what it serves on /status (0060: Splash). The context a
+// session is budgeted against is still read off the running server, and `status` names the
+// model from /v1/models.
+func TestTheServedContextIsReadFromStatusWhereThereIsNoProps(t *testing.T) {
+	ready := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status":
+			_, _ = fmt.Fprintf(w, `{"ready":%v,"maximum_context_tokens":49152}`, ready)
+		case "/v1/models":
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"vendor/model-package"}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	got, model, err := servedContext(srv.URL)
+	if err != nil || got != 49152 || model != "vendor/model-package" {
+		t.Fatalf("served context: got %d %q err %v, want 49152 and the model's id", got, model, err)
+	}
+	var out strings.Builder
+	if code, err := status(&out, srv.URL, "from a test"); err != nil || code != 0 {
+		t.Fatalf("status: code %d err %v", code, err)
+	}
+	if !strings.Contains(out.String(), "model-package at 49152 ctx") {
+		t.Errorf("status must name the model and the context: %s", out.String())
+	}
+
+	ready = false
+	if _, _, err := servedContext(srv.URL); !errors.Is(err, errNotReady) {
+		t.Errorf("a server that says it is not ready must read as not ready: %v", err)
 	}
 }

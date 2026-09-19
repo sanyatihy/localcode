@@ -1455,12 +1455,25 @@ what Splash's own `splash claude` reads `maximum_context_tokens` from before it 
   supported", and so are `n` and `logprobs`. 0005's settled pair for thinking off carries
   `presence_penalty` 1.5, so it cannot be sent to this runtime.
 - **A prompt past the window is refused**, HTTP 400 `context_length_exceeded`, not truncated.
+- **It answers only to its own model id**: a request naming `Qwen3.8-27B-Q4_K_M.gguf`, which
+  is what `harness/claude-code/claude-code.env` carries and llama.cpp ignores, gets HTTP 404
+  on `/v1/messages` and on `count_tokens`. With its own id a Claude Code shaped request
+  works whole: system blocks with `cache_control`, tools, a `tool_result` turn, streaming and
+  `thinking`. Its `input_tokens` excludes `cache_read_input_tokens`, as Anthropic's does,
+  and the session gate already sums the two.
 - **A system message in the middle of a conversation is rendered in place**, so the template
   override llama.cpp needs for Claude Code is not needed here, and a tool call comes back as
   `tool_calls` with `finish_reason` `tool_calls`.
 - **It loads in 23 s from a warm page cache and does not wire its weights**: loaded and idle
   the node read 1.73 GB wired and 0.25 GB free, against 8.0 GB anonymous. Peak wired is
   It wires while it computes instead, which the filled screen below shows.
+
+**The launcher drives it with no configuration of its own.** Where `/props` answers 404 the
+launcher and `served_ctx` in `scripts/lib.sh` read `maximum_context_tokens` from `/status`,
+so a session's budget is still a reading off the running server; the launcher takes the
+model's id from `/v1/models` and the Claude Code harness asks by that name on all four of its
+model variables. `scripts/chainrun.sh` takes `SERVE_CMD` and stops it through `STOP_CMD`, as
+`scripts/pair.sh` does, and reads Splash's own names for the three token counters.
 
 **Screened filled at 49,152, Splash is admissible and fills in half the time**
 ([row](data/2026-09-19-m5max-36gb-0060-screen.jsonl)), by `scripts/screen.sh` unchanged, the
