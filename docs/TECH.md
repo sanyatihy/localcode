@@ -1640,6 +1640,28 @@ every time, where Splash took 3.6 s and 0.2 s. An interleaved suite of near-iden
 is not a conversation (0058 says the same of this suite), so which failure a chain meets is
 the chains' reading and not this table's.
 
+**A side call evicts the conversation's prefix on neither runtime, measured 2026-09-20
+(0062)** ([rows](data/2026-09-20-m5max-36gb-0062-prefix.jsonl)). `scripts/prefixrun.sh`
+walked both through `cmd/prefixprobe`'s two conditions headless, a five-turn conversation
+growing to 28,126 tokens, alone and then with a 5,531-token call between its turns, each
+condition on a server that had seen nothing:
+
+| | llama.cpp, `config/node.env` | Splash |
+|---|---|---|
+| conversation alone | 79.6 s | 41.7 s |
+| conversation with a call between turns | 84.2 s | 44.0 s |
+| what the calls cost the conversation | 4.6 s | 2.3 s |
+| the calls themselves, four of them | 51.7 s | 31.5 s |
+| prefix reused on turns 2 to 5, either condition | 61.5, 72.2, 78.3, 82.2% | 61.5, 72.2, 78.1, 82.0% |
+
+**Both keep the whole conversation cached across the interleaved call**: the hit share is
+the same to the token with the call and without it, on both. This is the session case 0018
+built the probe for, and it answers what 0060's depth suite could not, where each cache
+missed on prompts that shared a prefix without being one conversation. The small call is
+never reused by either, which is the probe's design: it shares nothing with the conversation.
+`prefixrun.sh` takes `SERVE_CMD` and judges its server alive by pid, as `pair.sh` and
+`chainrun.sh` do.
+
 **Ranking pass rate moved against Splash here and not in the pairs**: 22/27 against 25/27 in
 this session, 23/27 on every side of both pairs. All seven failures in the file are the two
 discriminating tasks. Across the three sessions Splash reads 68/81 and llama.cpp 71/81 over

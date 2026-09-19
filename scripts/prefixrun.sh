@@ -19,6 +19,9 @@ CONFIG="${1:-config/agent.env}"
 LABEL="${LABEL:-$(basename "$CONFIG" .env)}"
 OUT="${OUT:-results/0018-prefix.jsonl}"
 PROBE_ARGS="${PROBE_ARGS:-}"
+# A runtime that is not llama.cpp is started by a script of its own and stopped through
+# STOP_CMD, as in scripts/pair.sh and scripts/chainrun.sh.
+SERVE_CMD="${SERVE_CMD:-./scripts/serve.sh}"
 # Which conditions to walk, in order. A re-walk usually asks about one of them, and each
 # costs a server load and every turn's ingest.
 CONDITIONS="${CONDITIONS:-clean interleaved}"
@@ -33,7 +36,12 @@ for condition in $CONDITIONS; do
   echo "=== $LABEL: $condition ===" >&2
   stop_server
   log="results/serve-$LABEL-$condition.log"
-  nohup ./scripts/serve.sh "$CONFIG" >"$log" 2>&1 &
+  # shellcheck disable=SC2086 # SERVE_CMD is a command line, split on purpose
+  nohup $SERVE_CMD "$CONFIG" >"$log" 2>&1 &
+  # Alive is this pid: lib.sh's pgrep looks for llama-server and calls any other runtime dead
+  # once the health grace is past.
+  server_pid=$!
+  server_alive() { kill -0 "$server_pid" 2>/dev/null; }
   wait_healthy 300 || { echo "  server did not come up; see $log" >&2; exit 2; }
 
   case "$condition" in
@@ -44,6 +52,7 @@ for condition in $CONDITIONS; do
   esac
   # shellcheck disable=SC2086
   "$(built prefixprobe)" -endpoint "$ENDPOINT" -config "$LABEL" -results "$OUT" $flag $PROBE_ARGS
+  kill "$server_pid" 2>/dev/null || true
 done
 stop_server
 echo "=== rows in $OUT ===" >&2

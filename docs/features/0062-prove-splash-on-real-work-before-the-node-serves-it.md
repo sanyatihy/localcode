@@ -82,7 +82,7 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 - [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
 - [x] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
 - [x] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings with decode read at each, and TECH records where the node's memory sits under it and why the ceiling stays at the cap
-- [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
+- [x] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
 - [ ] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
 - [ ] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
 
@@ -98,3 +98,5 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
   or compressed, decode unchanged. `--max-memory` does not bind at this context, and free
   pages are low because the kernel keeps the 17 GB weights file it read as file cache, which
   it reclaims on demand. The config keeps the cap, and the box records the breakdown.
+- 2026-09-20: `scripts/prefixrun.sh` takes a serve command. The plan runs the probe against
+  both runtimes and the script that walks its conditions started `scripts/serve.sh` only.
