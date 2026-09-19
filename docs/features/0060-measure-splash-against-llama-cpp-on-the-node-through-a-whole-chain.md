@@ -91,6 +91,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 - [x] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
 - [x] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
 - [x] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
+- [x] The second external review's findings are closed: the launcher refuses a `/status` server that names no model, `served_ctx` goes to `/status` only on a 404 and only when it is ready, `chainrun.sh` judges its server alive by pid, the probe's raw output is published, and TECH's numbers and conclusions are held to the rows
 
 ## Log
 

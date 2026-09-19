@@ -99,7 +99,11 @@ if [ "$SERVE" = "1" ]; then
   stop_server
   # shellcheck disable=SC2086 # SERVE_CMD is a command line, split on purpose
   nohup $SERVE_CMD "$CONFIG" > "/tmp/chainrun-$LABEL-serve.log" 2>&1 &
-  trap 'stop_server' EXIT
+  # Alive is this pid, not lib.sh's pgrep for llama-server: past the health grace a runtime
+  # under another name was being called dead while it loaded, as scripts/pair.sh found.
+  server_pid=$!
+  server_alive() { kill -0 "$server_pid" 2>/dev/null; }
+  trap 'kill "$server_pid" 2>/dev/null || true; stop_server' EXIT
   wait_healthy "$LOAD_TIMEOUT" || { echo "the server did not load — see /tmp/chainrun-$LABEL-serve.log" >&2; exit 2; }
 else
   wait_healthy "$LOAD_TIMEOUT" || { echo "nothing is serving at $ENDPOINT, and SERVE=0 says this script must not start it" >&2; exit 2; }

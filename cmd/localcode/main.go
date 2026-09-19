@@ -497,8 +497,9 @@ func readProps(endpoint string) (*props, error) {
 
 // readStatus is the same reading off a server that reports it on /status instead. Still a
 // reading: the number comes from the running server, never from a flag or a file, which is
-// the rule servedContext exists to hold. The model's name is on /v1/models and is only what
-// `status` prints, so failing to read it is not an error.
+// the rule servedContext exists to hold. The model's id is on /v1/models and is not optional:
+// a server that reports itself this way answers 404 to any other name, so a session started
+// without it would spend a launch to be refused on its first call.
 func readStatus(client *http.Client, endpoint string) (*props, error) {
 	resp, err := client.Get(endpoint + "/status")
 	if err != nil {
@@ -521,17 +522,22 @@ func readStatus(client *http.Client, endpoint string) (*props, error) {
 	}
 	var p props
 	p.Settings.NCtx = st.NCtx
-	if models, err := client.Get(endpoint + "/v1/models"); err == nil {
-		defer models.Body.Close() //nolint:errcheck // decoded below, and optional
-		var list struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		if json.NewDecoder(models.Body).Decode(&list) == nil && len(list.Data) > 0 {
-			p.ModelPath, p.ModelID = list.Data[0].ID, list.Data[0].ID
-		}
+	models, err := client.Get(endpoint + "/v1/models")
+	if err != nil {
+		return nil, fmt.Errorf("could not read %s/v1/models: %w", endpoint, err)
 	}
+	defer models.Body.Close() //nolint:errcheck // the body is decoded below or the call failed
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if models.StatusCode != http.StatusOK || json.NewDecoder(models.Body).Decode(&list) != nil ||
+		len(list.Data) == 0 || list.Data[0].ID == "" {
+		return nil, fmt.Errorf("%s reports itself on /status and names no model on /v1/models "+
+			"(HTTP %d): it would refuse a request by any other name", endpoint, models.StatusCode)
+	}
+	p.ModelPath, p.ModelID = list.Data[0].ID, list.Data[0].ID
 	return &p, nil
 }
 

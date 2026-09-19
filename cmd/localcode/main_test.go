@@ -1468,3 +1468,37 @@ func TestTheServedContextIsReadFromStatusWhereThereIsNoProps(t *testing.T) {
 		t.Errorf("a server that says it is not ready must read as not ready: %v", err)
 	}
 }
+
+// Two ways the /status route could start a session that is refused on its first call, or
+// mistake a llama.cpp that is still loading for another runtime (0060, review).
+func TestTheStatusRouteRefusesWhatItCannotName(t *testing.T) {
+	var statusAsked bool
+	noModels := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status":
+			_, _ = fmt.Fprint(w, `{"ready":true,"maximum_context_tokens":49152}`)
+		case "/v1/models":
+			_, _ = fmt.Fprint(w, `{"data":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(noModels.Close)
+	if _, _, err := servedContext(noModels.URL); err == nil || !strings.Contains(err.Error(), "/v1/models") {
+		t.Errorf("a server that names no model must be refused, naming where it was asked: %v", err)
+	}
+
+	loading := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" {
+			statusAsked = true
+		}
+		http.Error(w, `{"error":"Loading model"}`, http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(loading.Close)
+	if _, _, err := servedContext(loading.URL); !errors.Is(err, errNotReady) {
+		t.Errorf("a loading llama.cpp must read as not ready: %v", err)
+	}
+	if statusAsked {
+		t.Error("only a 404 from /props may send the launcher to /status")
+	}
+}
