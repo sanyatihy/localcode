@@ -87,7 +87,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 - [x] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
 - [x] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
 - [x] `scripts/pair.sh` passes scorer flags a runtime forces on a pair, `EVAL_ARGS` to both sides and `CANDIDATE_EVAL_ARGS` to the candidate, since Splash refuses `presence_penalty` and spells thinking off as `reasoning_effort`
-- [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
+- [x] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
 - [ ] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
 - [ ] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
 - [ ] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
@@ -120,3 +120,11 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
   `logged-in`. 0058's state is nobody logged in, but the USB link needs a session on the node
   after a reboot and the owner is away, so logging out risks the link for the whole run. Both
   sides of every pair share the state; memory headroom reads about 3 GB worse than 0056's.
+- 2026-09-19: the DFlash2 baseline ran under the scorer's `-force`. With the node's machine
+  file the preflight refused it, 9.28 GB of headroom against the 10 GB floor, which a logged-in
+  session and a 23.6 GB config produce together. 0058 screened that config admissible on this
+  node with nothing swapped, and no row of the pair swapped. The first attempt at both pairs
+  is discarded and not published: its rows named the laptop, because the scorer defaults to
+  `config/machine.json` and the node's file has to be passed.
+- 2026-09-19: the published pair rows have the home directory in `served_backend` written as
+  `~`. The repository is public and the path names a user; no measurement is touched.

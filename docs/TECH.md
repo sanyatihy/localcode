@@ -1484,6 +1484,36 @@ are not one machine state: this one has a console session logged in, which holds
 more anonymous memory than the login window 0056's row was taken at, and its fill time
 includes eight generated tokens.
 
+**Paired on the ranking suite, Splash decodes 2.6 to 2.8 times faster than llama.cpp and
+scores the same** ([rows](data/2026-09-19-m5max-36gb-0060-pair.jsonl)). Two pairs by
+`scripts/pair.sh`, three passes a side, thinking off on both sides, `presence_penalty` 0 sent
+to both because Splash refuses the penalty:
+
+| | decode, client-side | acceptance | pass | tool-call valid | mean wall a task |
+|---|---|---|---|---|---|
+| `config/node.env`, the draft head at depth 3 | 0.0225 s/tok | 3.92 | 23/27 | 11/12 | 2.65 s |
+| Splash, in that session | **0.0079 — 2.85x** | not reported | 23/27 | 12/12 | 1.00 s |
+| `config/dflash2-node-49k.env`, DFlash2 on llama.cpp | 0.0209 s/tok | 6.84 | 23/27 | 12/12 | 2.65 s |
+| Splash, in that session | **0.0080 — 2.61x** | not reported | 23/27 | 12/12 | 1.01 s |
+
+**Both ratios are void as speculative ratios and the tool voided them**: Splash's greedy
+probes hash `b217bc2a13cf7769` against `0f4045cad664f4ac`, because it serves a 4-bit package
+of its own and not Q4_K_M. Read them as two runtimes, as 0058's MLX row is read.
+
+**The second pair is what says the runtime is the gain and not the drafter.** llama.cpp with
+the same DFlash2 drafter accepts 6.84 tokens a step and reads 0.0209 s/tok, 7% faster than
+the head that accepts 3.92, so on llama.cpp most of what the drafter proposes is spent
+verifying it. Splash with that drafter reads 0.0080. 0.0079 s/tok is about 127 tokens a
+second on a machine whose bandwidth bounds an undrafted Q4 decode near 28.
+
+**Pass rate does not separate them.** Every side reads 23/27, every failure is one of the two
+discriminating tasks, and the split differs: llama.cpp fails the contradicted specification
+three times in three and the read-only constraint once, and Splash the reverse. Splash's rows
+carry no reasoning, so `reasoning_effort` `none` did turn thinking off. No row swapped.
+Splash reports no served config, build or server-side rate, so `served_n_ctx` is 0 and
+`served_model` is `.` on its rows, the second thing TECH holds against MLX; its context is on
+`/status`, which the scorer does not read.
+
 **The package is one repository, and the Hub cache is the only copy of it.**
 `incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
 under `draft/`, a vision tower and the tokeniser — so there is no separate drafter
