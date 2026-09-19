@@ -1730,8 +1730,10 @@ through `ssh -L` to its loopback port:
 | node swap | 0 | 0 |
 
 **Both chains stalled, and these rows do not say why.** Every session ended at its ceiling,
-24,576 tokens of a 40,960 declared window, which the forked chain's settings carried, and
-handed off; the launcher's stall guards (0036) then ended both chains, each by a different
+24,576 tokens of a 40,960-token window, which is the launcher's default at a served 49,152:
+the window less the 16,384 it reserves for what lands after the gate's last reading. Peak
+context reached 37,055 on llama.cpp and 34,399 on Splash, so a session's last turns carried
+it up to 12,479 tokens past the ceiling, three quarters of that reserve, and handed off; the launcher's stall guards (0036) then ended both chains, each by a different
 rule. What the logs on the laptop show, and the published rows do not, is sessions re-reading
 a 32 KB report and the data, writing part of a generator and handing off a plan the next one
 began again. That the task outgrows a session at that ceiling is the likely cause and is a

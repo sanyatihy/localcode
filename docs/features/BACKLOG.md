@@ -168,6 +168,8 @@ trigger nobody watches is not an idea, it is a hedge.
   report and the data, wrote part of a generator, hit the ceiling and handed off a plan the
   next one began again, until the stall guards (0036) ended both chains; one Splash session
   changed five lines and no other session changed anything. Faster decode bought more such
-  sessions, not a result. Whether a higher ceiling would have finished it was not tried. Promote when: real work is next judged — a session should be told to
+  sessions, not a result. The ceiling is already all the launcher's arithmetic allows at a served 49,152, and the
+sessions' last turns used three quarters of the reserve above it, so the lever is a larger
+served context and not a smaller reserve; that was not tried. Promote when: real work is next judged — a session should be told to
   commit partial work to the repository before it plans, so the next one inherits files and
   not intentions.
