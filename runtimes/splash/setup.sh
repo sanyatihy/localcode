@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install Splash on the node from the vendor's tap, and print the version that is there.
-# Splash ships as a signed Homebrew formula rather than as a Python package, so there is no
+# Splash ships as a Homebrew formula rather than as a Python package, so there is no
 # venv here and nothing for runtimes/mlx/setup.sh's shape to mirror beyond the pins: what
 # pins this runtime is the version this prints, and a row that does not carry it is not a
 # reading of anything.
@@ -22,8 +22,13 @@ FORMULA="${FORMULA:-incoai/tap/splash}"
 # through it.
 eval "$("$BREW" shellenv)"
 
-if "$BREW" list --formula splash >/dev/null 2>&1; then
+# Absent and unreadable are told apart: `brew install` over a keg brew could not list would
+# upgrade it, and a version that moved is what this script exists to prevent.
+if [ -n "$("$BREW" list --versions splash 2>/dev/null)" ]; then
   echo "splash setup: already done — brew $FORMULA" >&2
+elif [ -e "$("$BREW" --prefix)/opt/splash" ] || [ -d "$("$BREW" --cellar)/splash" ]; then
+  echo "splash setup: a splash keg is installed and brew cannot list it; not installing over it" >&2
+  exit 1
 else
   "$BREW" install "$FORMULA"
   echo "splash setup: this run did — brew install $FORMULA" >&2
@@ -32,5 +37,8 @@ fi
 command -v splash >/dev/null 2>&1 || {
   echo "splash setup: the formula installed and no splash is on PATH under $("$BREW" --prefix)" >&2
   exit 1; }
+# Assigned first: inside an echo a splash that cannot start would still print "ready".
+VERSION=$(splash --version) || {
+  echo "splash setup: splash is installed and \`splash --version\` fails" >&2; exit 1; }
 echo "splash ready:"
-echo "  $(splash --version) at $(command -v splash)"
+echo "  $VERSION at $(command -v splash)"

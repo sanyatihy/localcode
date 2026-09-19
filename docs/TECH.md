@@ -1452,7 +1452,9 @@ links.
 0058 measured at 8–130 KB/s and watched stall twice at zero. Splash checks the Hub for
 `main` before every load and falls back to the cached snapshot only when the Hub raises
 `OfflineModeIsEnabled` or the transport fails; it verifies that snapshot against the
-manifest either way, so offline changes where the weights are found and not what is served.
+manifest either way, so for the same snapshot offline changes where the weights are found
+and not what is served; online, a `main` moved past the staged revision would be served
+instead, which is a second reason every row is taken offline.
 [`runtimes/splash/serve.sh`](../runtimes/splash/serve.sh) exports it, the way 0058's rows
 were taken under `LLAMA_ARG_OFFLINE=1`. The fallback resolves the snapshot through
 `refs/main`, so a cache staged at a pinned commit needs that ref file present.

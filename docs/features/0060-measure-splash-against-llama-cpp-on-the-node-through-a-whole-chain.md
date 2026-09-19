@@ -83,6 +83,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 ## Tasks
 
 - [x] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
+- [x] The external review's findings on the first box are closed: `setup.sh` tells an absent Splash from one brew cannot list and never installs over it, a Splash that cannot print its version is not reported ready, `serve.sh` reads a relative config from the checkout only, and the offline claim is held to one snapshot
 - [ ] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
 - [ ] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
 - [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons

@@ -41,8 +41,9 @@ the snapshot's own links alone, which is the layout every other model in that ca
 
 `serve.sh` then exports `HF_HUB_OFFLINE=1`, which is what makes Splash fall back to the
 staged snapshot instead of checking the Hub for the repository's `main` at every load. It
-verifies that snapshot against the package manifest either way, so offline changes where
-the weights are found and not what is served.
+verifies that snapshot against the package manifest either way, so for the same snapshot
+offline changes where the weights are found and not what is served. Online, a `main` that
+has moved past the staged revision would be downloaded and served instead.
 
 ## The config
 
