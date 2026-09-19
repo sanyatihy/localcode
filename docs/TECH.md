@@ -1460,8 +1460,29 @@ what Splash's own `splash claude` reads `maximum_context_tokens` from before it 
   `tool_calls` with `finish_reason` `tool_calls`.
 - **It loads in 23 s from a warm page cache and does not wire its weights**: loaded and idle
   the node read 1.73 GB wired and 0.25 GB free, against 8.0 GB anonymous. Peak wired is
-  therefore not a number the two runtimes share, and free memory and swap are what a screen
-  of this runtime is read by.
+  It wires while it computes instead, which the filled screen below shows.
+
+**Screened filled at 49,152, Splash is admissible and fills in half the time**
+([row](data/2026-09-19-m5max-36gb-0060-screen.jsonl)), by `scripts/screen.sh` unchanged, the
+same 44,236-word prompt and 180 s of sampling as 0056's baseline row:
+
+| | llama.cpp, `config/node.env` (0056) | Splash 1.0 |
+|---|---|---|
+| admissible | yes | yes |
+| load | about 20 s | 8 s |
+| cold fill of the 44,236-word prompt | 127 s | **67 s** |
+| peak wired | 19.91 GB | 19.83 GB |
+| headroom under the 30,720 MiB cap | 10.09 GB | 10.17 GB |
+| free memory after the window | 4.09 GB at load | **0.25 GB** |
+| swap delta | 0.0 MB | 0.0 MB |
+
+The two peaks agree to 0.08 GB, so holding Splash to `--max-memory 30720M` leaves it where
+the cap leaves llama.cpp. What differs is when: llama.cpp wires its weights at load and
+Splash wires only while it computes, 1.73 GB at load against 19.83 GB at the peak. **It spends
+the free pool as MTPLX did**, 0.25 GB free after the window with nothing swapped. The two rows
+are not one machine state: this one has a console session logged in, which holds about 2.5 GB
+more anonymous memory than the login window 0056's row was taken at, and its fill time
+includes eight generated tokens.
 
 **The package is one repository, and the Hub cache is the only copy of it.**
 `incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
