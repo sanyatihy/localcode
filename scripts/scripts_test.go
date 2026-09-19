@@ -532,7 +532,12 @@ func TestStopServerTakesTheSwitchRouteAndKeepsTheBootoutForAnOlderPlist(t *testi
 			cmd := exec.Command("bash", "-c", ". ./lib.sh; stop_server")
 			cmd.Env = append(os.Environ(),
 				"PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
-				"SERVE_SWITCH="+switchPath, "SERVE_PLIST="+plist,
+				// Wrong on purpose, as root's HOME makes it under sudo: the switch that is
+				// removed has to be the one the installed plist names.
+				"SERVE_SWITCH="+filepath.Join(dir, "roots-home", "serve.on"), "SERVE_PLIST="+plist,
+				// Inherited, this would be evaluated: a test run from a measurement shell
+				// must not stop that shell's server.
+				"STOP_CMD=",
 				// A name nothing on the machine running this answers to: what is under test
 				// is which route was taken, and nothing here may kill a real server.
 				"PROC=localcode-stop-test-no-such-process")

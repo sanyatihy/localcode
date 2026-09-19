@@ -37,8 +37,15 @@ SERVE_SWITCH="${SERVE_SWITCH:-$HOME/.local/state/localcode/serve.on}"
 # Which route stops that daemon, read from the plist that is installed rather than from the
 # switch itself: a switched node with the server already stopped has no switch either, and
 # a stop that asked for root there would refuse the second time it was run.
+#
+# The path comes out of the plist too, not out of $HOME: under sudo HOME can be root's, and a
+# stop that missed the switch would boot the daemon out and leave the node set to serve again
+# at the next boot.
 SERVE_PLIST="${SERVE_PLIST:-/Library/LaunchDaemons/$SERVE_DAEMON.plist}"
-serve_daemon_switched() { grep -qF "$SERVE_SWITCH" "$SERVE_PLIST" 2>/dev/null; }
+installed_switch() {
+  sed -n 's|.*<key>\(/[^<]*/serve\.on\)</key>.*|\1|p' "$SERVE_PLIST" 2>/dev/null | head -n 1
+}
+serve_daemon_switched() { [ -n "$(installed_switch)" ]; }
 
 # stop_server ends it and waits for the memory back. The trap: an 18 GB process does not
 # exit on a fixed sleep, and the next server binding while the old one still holds the port
@@ -54,7 +61,7 @@ stop_server() {
   # not happen.
   if serve_daemon_loaded; then
     if serve_daemon_switched; then
-      rm -f "$SERVE_SWITCH"
+      rm -f "$(installed_switch)"
     elif ! launchctl bootout "system/$SERVE_DAEMON" >/dev/null 2>&1; then
       echo "stop_server: $SERVE_DAEMON is loaded and booting it out failed — run this under sudo" >&2
       return 1

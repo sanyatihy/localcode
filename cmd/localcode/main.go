@@ -131,7 +131,9 @@ func main() {
 	case len(args) > 0 && args[0] == "status":
 		code, err = status(os.Stdout, server, from)
 	case len(args) > 0 && args[0] == "serve":
-		code, err = serveServer(*checkoutFlag, server, *config)
+		given := false
+		fs.Visit(func(f *flag.Flag) { given = given || f.Name == "config" })
+		code, err = serveServer(*checkoutFlag, server, *config, given)
 	case len(args) > 0 && args[0] == "stop":
 		code, err = stopServer(*checkoutFlag, server)
 	case len(args) > 1 && args[0] == "hook":
@@ -536,6 +538,11 @@ func ensureServer(root, endpoint, config string, noServe, here bool) error {
 	// answer a different URL on a laptop that was asked for the other machine's memory, and
 	// the command that fixes it has to be run where the model is.
 	if !here {
+		// Where a login is named, the machine has a daemon to start it by; `make serve`
+		// there would be a second, unmanaged server with the switch still absent.
+		if dest, _, _ := resolveSSHDest(); dest != "" {
+			return fmt.Errorf("no server at %s: start it with `localcode serve`, which runs on %s", endpoint, dest)
+		}
 		return fmt.Errorf("no server at %s, and it is not this machine's to start: "+
 			"run `HOST=0.0.0.0 make serve CONFIG=%s` on the machine that serves it", endpoint, config)
 	}
@@ -658,16 +665,23 @@ var serveDaemonLoaded = func() bool {
 // loaded the server is launchd's to start: a second one from here would find the port taken
 // and load 17 GB for nothing, so what this does is create the switch and wait for the
 // daemon's own server to answer. A remote endpoint is started where it serves.
-func serveServer(checkoutFlag, endpoint, config string) (int, error) {
+func serveServer(checkoutFlag, endpoint, config string, configGiven bool) (int, error) {
 	here, err := loopback(endpoint)
 	if err != nil {
 		return 2, err
 	}
+	if here && !serveDaemonLoaded() {
+		return script(checkoutFlag, "serve.sh", config)
+	}
+	// The daemon serves the one config its plist names. Refused rather than ignored: a
+	// "server ready" after `-config` reads as that config serving, and a measurement would
+	// carry the wrong label.
+	if configGiven {
+		return 2, fmt.Errorf("-config %s cannot be honoured: the serving daemon serves "+
+			"config/node.env and nothing else. Stop it and run scripts/serve.sh there to serve another", config)
+	}
 	if !here {
 		return remoteControl(endpoint, "serve")
-	}
-	if !serveDaemonLoaded() {
-		return script(checkoutFlag, "serve.sh", config)
 	}
 	path, err := serveSwitch()
 	if err != nil {
@@ -725,9 +739,14 @@ func remoteControl(endpoint, command string) (int, error) {
 			"write `user@host` there to drive it from here, or run `localcode %s` on that machine",
 			endpoint, path, command)
 	}
+	// ssh reads a leading dash as an option: `-V` there prints a version and exits 0, which
+	// would report a stop that never happened.
+	if strings.HasPrefix(dest, "-") {
+		return 2, fmt.Errorf("%s names %q, which ssh would read as an option, not a login", path, dest)
+	}
 	// BatchMode: a missing or locked key is an error rather than a password prompt nobody
 	// is watching for.
-	cmd := exec.Command(sshBin, "-o", "BatchMode=yes", dest, remoteLauncher+" "+command)
+	cmd := exec.Command(sshBin, "-o", "BatchMode=yes", "--", dest, remoteLauncher+" "+command)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError

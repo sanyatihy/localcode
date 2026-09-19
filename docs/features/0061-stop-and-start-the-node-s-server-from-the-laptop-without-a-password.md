@@ -79,6 +79,7 @@ while stopped comes up not serving.
 - [x] `localcode serve` on a machine whose daemon is loaded creates the switch and waits for health, covered by a test
 - [x] `localcode stop` and `localcode serve` against a remote endpoint run the node's launcher over SSH to the destination in `~/.config/localcode/ssh`, refuse by name when that file is absent, and a test covers both with a stub `ssh`
 - [x] README's node runbook gives the laptop commands and the `ssh` file, and TECH's daemon paragraph says what the switch is and why `SuccessfulExit` left
+- [x] The two reviews' findings are closed: a stop under `sudo` finds the switch because its path is read from the installed plist, a destination `ssh` would read as an option and a `-config` the daemon cannot honour are refused, the stop test inherits no `STOP_CMD`, the hint for a stopped node names `localcode serve`, and README and TECH say the node sequence is not yet driven
 - [ ] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
 
 ## Log

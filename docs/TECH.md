@@ -175,7 +175,11 @@ for health, rather than starting a second server against a port launchd's own al
 with no such file they refuse and name it. The launcher is named by path because the
 non-login shell ssh runs a command in reads no `~/.zprofile`. A destination is written down
 rather than inferred from the endpoint's host: naming it is the owner saying that machine is
-theirs to stop.
+theirs to stop. `serve` refuses a `-config` where the daemon or another machine serves, since
+the daemon serves `config/node.env` alone and a "server ready" would otherwise label a
+measurement with a config that never loaded. **None of this paragraph has been driven on the
+node**: the routes are covered by tests with stubs for `launchctl` and `ssh`, and stop,
+status, serve and a reboot while stopped are 0061's open box.
 
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only
