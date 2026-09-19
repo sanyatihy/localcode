@@ -81,7 +81,7 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 
 - [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
 - [x] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
-- [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings, and `runtimes/splash/config/splash-27b.env` takes the largest that leaves 1 GB free with nothing swapped, with decode read at each
+- [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings with decode read at each, and TECH records where the node's memory sits under it and why the ceiling stays at the cap
 - [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
 - [ ] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
 - [ ] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
@@ -92,3 +92,9 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
   read what is served; it did not know the Messages dialect sends the name `local`, which
   llama.cpp ignores and Splash answers 404 to, so `cmd/prefixprobe` could not have run
   against Splash at all. `Props` keeps the id on the client when it comes from `/v1/models`.
+- 2026-09-20: the memory box no longer picks a ceiling by free memory, because the criterion
+  was wrong. Design had the config take the largest `--max-memory` leaving 1 GB free. Three
+  ceilings read the same: about 20 GB peak wired, under 0.2 GB of free pages, nothing swapped
+  or compressed, decode unchanged. `--max-memory` does not bind at this context, and free
+  pages are low because the kernel keeps the 17 GB weights file it read as file cache, which
+  it reclaims on demand. The config keeps the cap, and the box records the breakdown.
