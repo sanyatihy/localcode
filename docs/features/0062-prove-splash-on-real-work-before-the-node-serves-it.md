@@ -80,8 +80,15 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 ## Tasks
 
 - [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
-- [ ] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
+- [x] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
 - [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings, and `runtimes/splash/config/splash-27b.env` takes the largest that leaves 1 GB free with nothing swapped, with decode read at each
 - [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
 - [ ] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
 - [ ] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
+
+## Log
+
+- 2026-09-20: the scorer also asks `/v1/messages` by the served model's id. The plan has it
+  read what is served; it did not know the Messages dialect sends the name `local`, which
+  llama.cpp ignores and Splash answers 404 to, so `cmd/prefixprobe` could not have run
+  against Splash at all. `Props` keeps the id on the client when it comes from `/v1/models`.

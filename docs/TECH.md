@@ -1575,9 +1575,11 @@ second on a machine whose bandwidth bounds an undrafted Q4 decode near 28.
 discriminating tasks, and the split differs: llama.cpp fails the contradicted specification
 three times in three and the read-only constraint once, and Splash the reverse. Splash's rows
 carry no reasoning, so `reasoning_effort` `none` did turn thinking off. No row swapped.
-Splash reports no served config, build or server-side rate, so `served_n_ctx` is 0 and
-`served_model` is `.` on its rows, the second thing TECH holds against MLX; its context is on
-`/status`, which the scorer does not read.
+Splash reports no server-side rate, and on 0060's rows `served_n_ctx` is 0 and `served_model`
+is `.`, because the scorer read `/props` alone. Since 0062 the scorer and `cmd/prefixprobe`
+read the context, the model id and the build id from `/status` and `/v1/models` where
+`/props` answers 404, and ask `/v1/messages` by that id, which Splash requires; the template
+hash stays empty, since the server shows none.
 
 **At depth the gap widens on decode and holds on prefill**
 ([rows](data/2026-09-19-m5max-36gb-0060-runtime.jsonl)): `runtimes/mlx/compare.sh` over the
