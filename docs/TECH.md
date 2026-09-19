@@ -1703,6 +1703,45 @@ call (0018). Prompt reuse per chain is of the same order on both, 46–265k toke
 against 11–25k ingested. The sampling differs between the arms as the Log says: llama.cpp
 serves `presence_penalty` 1.5 and Splash cannot take one, and no chain on either side looped.
 
+**On real work neither runtime finished the instruction, and Splash did three times the
+work in the time, measured 2026-09-20 (0062)**
+([rows](data/2026-09-20-m5max-36gb-0062-real-work.jsonl)). One instruction on a private
+real-work folder, five data files and a generated report, asking for a forecast recomputed,
+three forecast charts and the layout rechecked. Both runtimes started from one commit, the
+same copy of the scratch scripts an earlier chain had left, and the same inherited handoff,
+by `-fork` from that chain of 15 sessions. Driven from the laptop with
+`MAX_THINKING_TOKENS=0`, the node headless, llama.cpp through the node's endpoint and Splash
+through `ssh -L` to its loopback port:
+
+| | llama.cpp, `config/node.env` | Splash |
+|---|---|---|
+| how the chain ended | stopped by the launcher: a session planned what the last one did | stopped by the launcher: three sessions in a row left the repository as they found it |
+| sessions, each ending at its ceiling with a handoff | 5 of 5 | 12 of 12 |
+| sessions that changed the repository | 0 | 1, five lines of the report |
+| wall | 2,790 s | 2,337 s |
+| model calls | 55 | 140 |
+| tool calls | 44 | 122 |
+| generated | 57,182 tokens | 93,485 tokens |
+| ingested, and reused | 129k, 1,027k | 324k, 2,398k |
+| time inside model calls, per generated token | 2,786 s, 49 ms | 1,410 s, **15 ms** |
+| session length | 194 to 1,262 s | 123 to 319 s |
+| node swap | 0 | 0 |
+
+**The instruction defeats a 40,960-token session on either runtime.** Each session spends its
+window re-reading a 32 KB report and the data, writes part of a generator, reaches the
+ceiling and hands off a plan the next one starts again; the launcher's stall guards (0036)
+ended both chains. So the pass condition that Splash finish what llama.cpp finishes is met
+only because llama.cpp finished nothing, and what a finished real-work chain costs on Splash
+is still unmeasured. **What the run does establish is the rest**: twelve handoffs written and
+inherited through Splash with no empty or failed session, 140 calls over 39 minutes through
+an SSH forward with nothing in its log but the harness's own `HEAD /api/hello` probe answered
+404, no session ended on a timeout or a call budget, the node swapped nothing, and a
+generated token cost a third of the model time at the depth real sessions work at. The
+account's fitted decode rate for Splash, 403 tok/s, is an artefact of fitting a linear model
+to a drafted decoder and is not a reading; time per generated token is. The launcher treats
+the forwarded port as a local endpoint and needs `-no-serve`, and Splash accepts the
+forward's `127.0.0.1:8000` Host header as it is.
+
 **The one table**, the node, Qwen3.8-27B at 49,152, 2026-09-19, a console session logged in:
 
 | | llama.cpp b10809, `config/node.env` | Splash 1.0 |
