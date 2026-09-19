@@ -93,3 +93,4 @@ while stopped comes up not serving.
   either, so that rule would send a second stop to the bootout and refuse for want of root.
   `SERVE_PLIST` names the installed plist and the switch path in it is what says the daemon
   is switched. The two outcomes Design asked for are unchanged.
+- 2026-09-19 — paused: box 6 needs the owner's sudo on the node: install the new plist, then stop, status, serve and reboot from the laptop
