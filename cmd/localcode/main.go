@@ -52,7 +52,7 @@ const usage = `localcode — drive the local model in this repository
 
 usage:
   localcode [flags] [prompt]   run the agent here
-  localcode serve              start the server here, in the foreground
+  localcode serve              start the server the endpoint is served by
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
   localcode sessions           the chains this repository has run
@@ -654,11 +654,18 @@ var serveDaemonLoaded = func() bool {
 	return exec.Command("launchctl", "print", "system/com.localcode.serve").Run() == nil
 }
 
-// serveServer starts what this machine serves. Where the serving daemon is loaded the
-// server is launchd's to start: a second one from here would find the port taken and load
-// 17 GB for nothing, so what this does is create the switch and wait for the daemon's own
-// server to answer.
+// serveServer starts the server the endpoint is served by. Where the serving daemon is
+// loaded the server is launchd's to start: a second one from here would find the port taken
+// and load 17 GB for nothing, so what this does is create the switch and wait for the
+// daemon's own server to answer. A remote endpoint is started where it serves.
 func serveServer(checkoutFlag, endpoint, config string) (int, error) {
+	here, err := loopback(endpoint)
+	if err != nil {
+		return 2, err
+	}
+	if !here {
+		return remoteControl(endpoint, "serve")
+	}
 	if !serveDaemonLoaded() {
 		return script(checkoutFlag, "serve.sh", config)
 	}
@@ -681,19 +688,55 @@ func serveServer(checkoutFlag, endpoint, config string) (int, error) {
 	return 0, nil
 }
 
-// stopServer ends the server this machine is running. A remote endpoint is refused rather
-// than acted on: the process is not this machine's, stopping it would take the model from
-// whoever else is driving it, and nothing here can wait for that machine's memory back.
+// stopServer ends the server this machine is running, or the one the machine named in the
+// ssh file is. An endpoint with no destination named for it is still refused: the process is
+// not this machine's, and stopping it would take the model from whoever else is driving it.
 func stopServer(checkoutFlag, endpoint string) (int, error) {
 	here, err := loopback(endpoint)
 	if err != nil {
 		return 2, err
 	}
 	if !here {
-		return 2, fmt.Errorf("%s is served by another machine, so it is not stopped from here: "+
-			"run `localcode stop` on that machine", endpoint)
+		return remoteControl(endpoint, "stop")
 	}
 	return script(checkoutFlag, "stop.sh")
+}
+
+// remoteLauncher is the node's own launcher, named by path because ssh runs a command in a
+// non-login shell: it reads no ~/.zprofile, so ~/.local/bin is nowhere on its PATH.
+const remoteLauncher = "~/.local/bin/localcode"
+
+// sshBin is the client the remote route runs. A var so a test can put a recording stub in
+// its place rather than opening a connection.
+var sshBin = "ssh"
+
+// remoteControl runs one of this binary's own commands on the machine that serves the
+// endpoint, and streams what it says. The destination is one the owner wrote down rather
+// than the endpoint's own host: naming it is the owner saying that machine is theirs to
+// stop, where inferring it would let anyone who can log in take the model from everyone
+// else sharing it.
+func remoteControl(endpoint, command string) (int, error) {
+	dest, path, err := resolveSSHDest()
+	if err != nil {
+		return 2, err
+	}
+	if dest == "" {
+		return 2, fmt.Errorf("%s is served by another machine and %s names no login for it: "+
+			"write `user@host` there to drive it from here, or run `localcode %s` on that machine",
+			endpoint, path, command)
+	}
+	// BatchMode: a missing or locked key is an error rather than a password prompt nobody
+	// is watching for.
+	cmd := exec.Command(sshBin, "-o", "BatchMode=yes", dest, remoteLauncher+" "+command)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode(), nil
+		}
+		return 2, fmt.Errorf("could not run %s on %s: %w", command, dest, err)
+	}
+	return 0, nil
 }
 
 // proxyAddr is where a model on another machine is served on this one. It is the address
@@ -1027,6 +1070,32 @@ func resolveEndpoint(flagValue string) (endpoint, from string, err error) {
 		return line, "from " + path, nil
 	}
 	return defaultEndpoint, "from the built-in default", nil
+}
+
+// sshConfigPath is where this machine says which login drives the server at its endpoint.
+// Beside the endpoint file, because the two are one machine's answer to where its model is
+// and how it is reached.
+func sshConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "ssh"), nil
+}
+
+// resolveSSHDest reads that file and says where it looked. An absent or empty one is the
+// normal case rather than an error: it is this machine saying no server elsewhere is its to
+// start or stop. One line — a second would be a second machine, and which of them a stop
+// reached would be unsaid.
+func resolveSSHDest() (dest, path string, err error) {
+	path, err = sshConfigPath()
+	if err != nil {
+		return "", "", err
+	}
+	if body, readErr := os.ReadFile(path); readErr == nil {
+		dest = strings.TrimSpace(strings.SplitN(string(body), "\n", 2)[0])
+	}
+	return dest, path, nil
 }
 
 // writableConfigPath is the one place a developer widens the policy. It is a list of

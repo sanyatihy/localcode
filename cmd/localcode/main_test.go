@@ -1470,3 +1470,73 @@ func TestServeCreatesTheSwitchWhereTheDaemonHoldsTheServer(t *testing.T) {
 		t.Errorf("serve.sh must have run: %s", got)
 	}
 }
+
+// The node is stopped and started over the login the owner wrote down, and over nothing
+// else: an endpoint with no destination named for it is still somebody else's server.
+func TestStopAndServeDriveTheNodeOverSSHOrRefuseByName(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+	dir := t.TempDir()
+	argv := filepath.Join(dir, "argv")
+	stub := filepath.Join(dir, "ssh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> "+argv+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := sshBin
+	sshBin = stub
+	t.Cleanup(func() { sshBin = old })
+
+	const remote = "http://mac.local:8081"
+	commands := map[string]func() (int, error){
+		"stop":  func() (int, error) { return stopServer(root, remote) },
+		"serve": func() (int, error) { return serveServer(root, remote, "config/node.env") },
+	}
+
+	_, path, err := resolveSSHDest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, cmd := range commands {
+		code, err := cmd()
+		if code != 2 || err == nil {
+			t.Fatalf("%s with no destination named: code %d err %v", name, code, err)
+		}
+		if !strings.Contains(err.Error(), path) {
+			t.Errorf("%s must name the file that would name the login: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a refusal must not start or stop anything here")
+	}
+	if _, err := os.Stat(argv); err == nil {
+		t.Error("a refusal must not open a connection")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("server@mac.local\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, cmd := range commands {
+		if err := os.Remove(argv); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if code, err := cmd(); err != nil || code != 0 {
+			t.Fatalf("%s over ssh: code %d err %v", name, code, err)
+		}
+		got, err := os.ReadFile(argv)
+		if err != nil {
+			t.Fatalf("%s did not reach ssh: %v", name, err)
+		}
+		// BatchMode, the destination from the file, and the node's launcher by path: a
+		// non-login shell has no ~/.zprofile and so no ~/.local/bin on its PATH.
+		want := "-o\nBatchMode=yes\nserver@mac.local\n~/.local/bin/localcode " + name + "\n"
+		if string(got) != want {
+			t.Errorf("ssh was run with\n%q\nwant\n%q", got, want)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the remote route must run nothing on this machine")
+	}
+}
