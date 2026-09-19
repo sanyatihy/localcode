@@ -89,6 +89,18 @@ done
 mkdir -p /Library/Logs/localcode
 [ "$LINK_ONLY" = 1 ] || chown "$SERVE_USER" /Library/Logs/localcode
 
+# Whether the server is installed here for the first time, read before the plist is
+# rewritten. A node whose installed plist already names the switch (0061) has been through
+# this, so an absent switch there is the owner having stopped the server and creating one
+# would start a node that is stopped on purpose.
+SERVE_SWITCH=""
+FIRST_SERVE_INSTALL=0
+if [ "$LINK_ONLY" = 0 ]; then
+  SERVE_SWITCH="$SERVE_HOME/.local/state/localcode/serve.on"
+  grep -qF "$SERVE_SWITCH" /Library/LaunchDaemons/com.localcode.serve.plist 2>/dev/null ||
+    FIRST_SERVE_INSTALL=1
+fi
+
 # The link first: an address the laptop can reach is what makes a failure of either of the
 # others visible from anywhere but the node's own console, which it does not have.
 LABELS="com.localcode.link com.localcode.gpucap com.localcode.serve"
@@ -121,6 +133,17 @@ for label in $LABELS; do
   launchctl bootstrap system "$dst"
   echo "install: installed $dst" >&2
 done
+
+# After the bootstrap, because it is the switch that starts the server: the daemon is loaded
+# here whatever the switch says, and launchd runs it once at load either way.
+#
+# Created as the serving user rather than as root, even though this runs under sudo: what it
+# buys is a stop that needs no password, and a root-owned file is one only root can remove.
+if [ "$FIRST_SERVE_INSTALL" = 1 ]; then
+  sudo -u "$SERVE_USER" mkdir -p "$(dirname "$SERVE_SWITCH")"
+  sudo -u "$SERVE_USER" touch "$SERVE_SWITCH"
+  echo "install: the serving switch is $SERVE_SWITCH; removing it stops the server" >&2
+fi
 
 echo "install: the link is $LINK_IF at $LINK_ADDR, from $MACHINE; it reconciles every 30 s" >&2
 if [ "$LINK_ONLY" = 0 ]; then
