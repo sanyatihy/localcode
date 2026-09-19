@@ -52,7 +52,7 @@ const usage = `localcode — drive the local model in this repository
 
 usage:
   localcode [flags] [prompt]   run the agent here
-  localcode serve              start the server here, in the foreground
+  localcode serve              start the server the endpoint is served by
   localcode stop               stop it, waiting for the memory back
   localcode status             what is being served, if anything
   localcode sessions           the chains this repository has run
@@ -131,7 +131,9 @@ func main() {
 	case len(args) > 0 && args[0] == "status":
 		code, err = status(os.Stdout, server, from)
 	case len(args) > 0 && args[0] == "serve":
-		code, err = script(*checkoutFlag, "serve.sh", *config)
+		given := false
+		fs.Visit(func(f *flag.Flag) { given = given || f.Name == "config" })
+		code, err = serveServer(*checkoutFlag, server, *config, given)
 	case len(args) > 0 && args[0] == "stop":
 		code, err = stopServer(*checkoutFlag, server)
 	case len(args) > 1 && args[0] == "hook":
@@ -598,6 +600,11 @@ func ensureServer(root, endpoint, config string, noServe, here bool) error {
 	// answer a different URL on a laptop that was asked for the other machine's memory, and
 	// the command that fixes it has to be run where the model is.
 	if !here {
+		// Where a login is named, the machine has a daemon to start it by; `make serve`
+		// there would be a second, unmanaged server with the switch still absent.
+		if dest, _, _ := resolveSSHDest(); dest != "" {
+			return fmt.Errorf("no server at %s: start it with `localcode serve`, which runs on %s", endpoint, dest)
+		}
 		return fmt.Errorf("no server at %s, and it is not this machine's to start: "+
 			"run `HOST=0.0.0.0 make serve CONFIG=%s` on the machine that serves it", endpoint, config)
 	}
@@ -699,19 +706,118 @@ func script(checkoutFlag, name string, args ...string) (int, error) {
 	return 0, nil
 }
 
-// stopServer ends the server this machine is running. A remote endpoint is refused rather
-// than acted on: the process is not this machine's, stopping it would take the model from
-// whoever else is driving it, and nothing here can wait for that machine's memory back.
+// serveSwitch is the file the node's serving daemon is gated on (0061). Its directory is
+// the state directory this binary already owns, which is the one scripts/node/install.sh
+// writes into the plist as the serving user's home.
+func serveSwitch() (string, error) {
+	dir, err := stateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "serve.on"), nil
+}
+
+// serveDaemonLoaded reports whether launchd holds this machine's server (0056). A var so a
+// test can answer without launchctl, which answers about the machine the test runs on.
+var serveDaemonLoaded = func() bool {
+	return exec.Command("launchctl", "print", "system/com.localcode.serve").Run() == nil
+}
+
+// serveServer starts the server the endpoint is served by. Where the serving daemon is
+// loaded the server is launchd's to start: a second one from here would find the port taken
+// and load 17 GB for nothing, so what this does is create the switch and wait for the
+// daemon's own server to answer. A remote endpoint is started where it serves.
+func serveServer(checkoutFlag, endpoint, config string, configGiven bool) (int, error) {
+	here, err := loopback(endpoint)
+	if err != nil {
+		return 2, err
+	}
+	if here && !serveDaemonLoaded() {
+		return script(checkoutFlag, "serve.sh", config)
+	}
+	// The daemon serves the one config its plist names. Refused rather than ignored: a
+	// "server ready" after `-config` reads as that config serving, and a measurement would
+	// carry the wrong label.
+	if configGiven {
+		return 2, fmt.Errorf("-config %s cannot be honoured: the serving daemon serves "+
+			"config/node.env and nothing else. Stop it and run scripts/serve.sh there to serve another", config)
+	}
+	if !here {
+		return remoteControl(endpoint, "serve")
+	}
+	path, err := serveSwitch()
+	if err != nil {
+		return 2, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return 2, fmt.Errorf("could not make %s: %w", filepath.Dir(path), err)
+	}
+	// Empty: launchd's PathState asks whether the file is there and reads nothing in it.
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		return 2, fmt.Errorf("could not create %s: %w", path, err)
+	}
+	fmt.Fprintf(os.Stderr, "the serving daemon has this machine: created %s\n", path)
+	if err := waitHealthy(endpoint, 20*time.Minute, nil); err != nil {
+		return 2, err
+	}
+	fmt.Fprintln(os.Stderr, "server ready")
+	return 0, nil
+}
+
+// stopServer ends the server this machine is running, or the one the machine named in the
+// ssh file is. An endpoint with no destination named for it is still refused: the process is
+// not this machine's, and stopping it would take the model from whoever else is driving it.
 func stopServer(checkoutFlag, endpoint string) (int, error) {
 	here, err := loopback(endpoint)
 	if err != nil {
 		return 2, err
 	}
 	if !here {
-		return 2, fmt.Errorf("%s is served by another machine, so it is not stopped from here: "+
-			"run `localcode stop` on that machine", endpoint)
+		return remoteControl(endpoint, "stop")
 	}
 	return script(checkoutFlag, "stop.sh")
+}
+
+// remoteLauncher is the node's own launcher, named by path because ssh runs a command in a
+// non-login shell: it reads no ~/.zprofile, so ~/.local/bin is nowhere on its PATH.
+const remoteLauncher = "~/.local/bin/localcode"
+
+// sshBin is the client the remote route runs. A var so a test can put a recording stub in
+// its place rather than opening a connection.
+var sshBin = "ssh"
+
+// remoteControl runs one of this binary's own commands on the machine that serves the
+// endpoint, and streams what it says. The destination is one the owner wrote down rather
+// than the endpoint's own host: naming it is the owner saying that machine is theirs to
+// stop, where inferring it would let anyone who can log in take the model from everyone
+// else sharing it.
+func remoteControl(endpoint, command string) (int, error) {
+	dest, path, err := resolveSSHDest()
+	if err != nil {
+		return 2, err
+	}
+	if dest == "" {
+		return 2, fmt.Errorf("%s is served by another machine and %s names no login for it: "+
+			"write `user@host` there to drive it from here, or run `localcode %s` on that machine",
+			endpoint, path, command)
+	}
+	// ssh reads a leading dash as an option: `-V` there prints a version and exits 0, which
+	// would report a stop that never happened.
+	if strings.HasPrefix(dest, "-") {
+		return 2, fmt.Errorf("%s names %q, which ssh would read as an option, not a login", path, dest)
+	}
+	// BatchMode: a missing or locked key is an error rather than a password prompt nobody
+	// is watching for.
+	cmd := exec.Command(sshBin, "-o", "BatchMode=yes", "--", dest, remoteLauncher+" "+command)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode(), nil
+		}
+		return 2, fmt.Errorf("could not run %s on %s: %w", command, dest, err)
+	}
+	return 0, nil
 }
 
 // proxyAddr is where a model on another machine is served on this one. It is the address
@@ -1045,6 +1151,32 @@ func resolveEndpoint(flagValue string) (endpoint, from string, err error) {
 		return line, "from " + path, nil
 	}
 	return defaultEndpoint, "from the built-in default", nil
+}
+
+// sshConfigPath is where this machine says which login drives the server at its endpoint.
+// Beside the endpoint file, because the two are one machine's answer to where its model is
+// and how it is reached.
+func sshConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "ssh"), nil
+}
+
+// resolveSSHDest reads that file and says where it looked. An absent or empty one is the
+// normal case rather than an error: it is this machine saying no server elsewhere is its to
+// start or stop. One line — a second would be a second machine, and which of them a stop
+// reached would be unsaid.
+func resolveSSHDest() (dest, path string, err error) {
+	path, err = sshConfigPath()
+	if err != nil {
+		return "", "", err
+	}
+	if body, readErr := os.ReadFile(path); readErr == nil {
+		dest = strings.TrimSpace(strings.SplitN(string(body), "\n", 2)[0])
+	}
+	return dest, path, nil
 }
 
 // writableConfigPath is the one place a developer widens the policy. It is a list of

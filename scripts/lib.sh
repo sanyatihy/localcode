@@ -28,6 +28,28 @@ server_alive() { pgrep -f "$PROC" >/dev/null; }
 SERVE_DAEMON="${SERVE_DAEMON:-com.localcode.serve}"
 serve_daemon_loaded() { launchctl print "system/$SERVE_DAEMON" >/dev/null 2>&1; }
 
+# SERVE_SWITCH is the file that daemon is gated on (0061). launchd's KeepAlive PathState
+# holds the server up while it exists and leaves it down while it does not, so starting and
+# stopping are a file the serving user owns rather than a bootout needing root. The same path
+# is written into the plist, where scripts/node/install.sh substitutes this user's home.
+#
+# ${HOME:-}: launchd runs the cap daemon as root with no HOME at all, and every script here
+# sources this file under `set -u`. The first boot on this line left the node uncapped.
+SERVE_SWITCH="${SERVE_SWITCH:-${HOME:-}/.local/state/localcode/serve.on}"
+
+# Which route stops that daemon, read from the plist that is installed rather than from the
+# switch itself: a switched node with the server already stopped has no switch either, and
+# a stop that asked for root there would refuse the second time it was run.
+#
+# The path comes out of the plist too, not out of $HOME: under sudo HOME can be root's, and a
+# stop that missed the switch would boot the daemon out and leave the node set to serve again
+# at the next boot.
+SERVE_PLIST="${SERVE_PLIST:-/Library/LaunchDaemons/$SERVE_DAEMON.plist}"
+installed_switch() {
+  sed -n 's|.*<key>\(/[^<]*/serve\.on\)</key>.*|\1|p' "$SERVE_PLIST" 2>/dev/null | head -n 1
+}
+serve_daemon_switched() { [ -n "$(installed_switch)" ]; }
+
 # stop_server ends it and waits for the memory back. The trap: an 18 GB process does not
 # exit on a fixed sleep, and the next server binding while the old one still holds the port
 # measures the previous config under the next config's name.
@@ -35,11 +57,15 @@ serve_daemon_loaded() { launchctl print "system/$SERVE_DAEMON" >/dev/null 2>&1; 
 # STOP_CMD gives a runtime with a stop command of its own the chance to use it first.
 stop_server() {
   # On the node the server is a LaunchDaemon with KeepAlive, so a failed server is replaced
-  # and a stop has to end the service rather than the process. The bootout needs root: when
-  # it fails there is nothing useful left to do, and going on to pkill would report a stop
-  # that did not happen.
+  # and a stop has to end the service rather than the process. A switched daemon (0061) is
+  # ended by removing the file it is gated on, which the serving user owns; a plist that
+  # predates the switch still needs the bootout, and that needs root. When the bootout fails
+  # there is nothing useful left to do, and going on to pkill would report a stop that did
+  # not happen.
   if serve_daemon_loaded; then
-    if ! launchctl bootout "system/$SERVE_DAEMON" >/dev/null 2>&1; then
+    if serve_daemon_switched; then
+      rm -f "$(installed_switch)"
+    elif ! launchctl bootout "system/$SERVE_DAEMON" >/dev/null 2>&1; then
       echo "stop_server: $SERVE_DAEMON is loaded and booting it out failed — run this under sudo" >&2
       return 1
     fi
