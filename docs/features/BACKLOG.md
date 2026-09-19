@@ -157,4 +157,9 @@ trigger nobody watches is not an idea, it is a hedge.
   leaves the agent running against the endpoint; on 2026-09-15 that orphan shared the node's
   one slot with the next run and halved it. Promote when: the launcher gains any lifecycle
   change — it should end its process group on any exit, not only on SIGINT.
-
+- **Ternary Bonsai 2 27B, the same base model at 5.9 GB** — PrismML's 1.75-bit package of
+  Qwen3.8-27B frees about 11 GB at any context, which the node does not need and the laptop
+  does: every cap refusal TECH records there would lift. It loads only on the vendor's
+  llama.cpp fork, publishes no prefill figure, and its M5 workaround disables the Metal tensor
+  path the node's ingest lead likely rests on. Promote when: the laptop's desk is what binds a
+  real session again, or 0060 shows a second runtime can be driven through a chain.
