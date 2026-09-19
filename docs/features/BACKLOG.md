@@ -163,3 +163,11 @@ trigger nobody watches is not an idea, it is a hedge.
   llama.cpp fork, publishes no prefill figure, and its M5 workaround disables the Metal tensor
   path the node's ingest lead likely rests on. Promote when: the laptop's desk is what binds a
   real session again, or 0060 shows a second runtime can be driven through a chain.
+- **A task bigger than one session is re-planned by every session and finished by none** —
+  0062's real-work instruction needed a generator and a 32 KB report that together outgrow a
+  40,960-token session. On both runtimes each session re-read the inputs, wrote part of the
+  work, hit its ceiling and handed off a plan the next one began again, until the stall guards
+  (0036) ended the chain with the repository unchanged. Faster decode bought more such
+  sessions, not a result. Promote when: real work is next judged — a session should be told to
+  commit partial work to the repository before it plans, so the next one inherits files and
+  not intentions.

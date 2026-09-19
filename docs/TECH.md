@@ -1742,6 +1742,19 @@ to a drafted decoder and is not a reading; time per generated token is. The laun
 the forwarded port as a local endpoint and needs `-no-serve`, and Splash accepts the
 forward's `127.0.0.1:8000` Host header as it is.
 
+**0062's verdict: nothing measured stands against serving Splash, and one condition is still
+open.** Against the five conditions 0062 set: every handoff was inherited, 12 of 12; no
+session looped; nothing swapped, on the chain or anywhere since the node booted; wall and
+model time were lower, 2,337 s to 2,790 s and 15 ms to 49 ms a generated token; and Splash
+finished what llama.cpp finished only in the sense that neither finished anything. Beside
+them, headless: the memory reading that looked like MTPLX's failure was file cache at normal
+pressure, a side call evicts the conversation on neither runtime, and the bridge needs no
+session on the node. **0063 proceeds**, and its on-node box should drive a real-work
+instruction that llama.cpp is known to finish, because that is the one comparison this
+feature could not make. What stalled both chains is not a runtime's fault and is its own
+finding: a task whose artefact and inputs outgrow one 40,960-token session is re-planned by
+every session and finished by none, at any decode speed.
+
 **The one table**, the node, Qwen3.8-27B at 49,152, 2026-09-19, a console session logged in:
 
 | | llama.cpp b10809, `config/node.env` | Splash 1.0 |
@@ -1761,9 +1774,11 @@ forward's `127.0.0.1:8000` Host header as it is.
 
 **An adoption feature is warranted, and these are what it has to settle first.** Splash
 binds `127.0.0.1:8000` and takes no host flag, so the node cannot serve the laptop from it
-without a forwarder, which 0053's proxy is not. It refuses `presence_penalty`, the half of
-0005's settled pair that stops a non-thinking model looping, and nothing here ran long enough
-to say whether that matters. Thinking has to be held off at the harness, because the server
+without a forwarder, which 0053's proxy is not. It refuses `presence_penalty`, which is half of the model card's sampling pair
+for thinking off and which 0005 adopted with it; no row in this repository measures that the
+penalty prevents anything, and 0060's llama.cpp sides scored the same at 0 as at 1.5. 0062's
+real-work chain ran 140 calls without it and no session repeated itself to a timeout or a
+call budget. Thinking has to be held off at the harness, because the server
 has no switch for it. It reports no build, no served config and no server-side rates, so a
 row cannot be checked against its label. It leaves 0.25 GB free, which on this node has not
 swapped and on a busier one is MTPLX's failure. And the daemon, `stop_server` and `status`
