@@ -78,5 +78,18 @@ while stopped comes up not serving.
 - [x] `stop_server` stops a switched daemon as the serving user and still waits for the memory back, the bootout route stays for an older plist, and tests cover both
 - [x] `localcode serve` on a machine whose daemon is loaded creates the switch and waits for health, covered by a test
 - [x] `localcode stop` and `localcode serve` against a remote endpoint run the node's launcher over SSH to the destination in `~/.config/localcode/ssh`, refuse by name when that file is absent, and a test covers both with a stub `ssh`
-- [ ] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
 - [ ] README's node runbook gives the laptop commands and the `ssh` file, and TECH's daemon paragraph says what the switch is and why `SuccessfulExit` left
+- [ ] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
+
+## Log
+- 2026-09-19 — the documentation box is moved above the node box. The node box needs the new
+  plist installed under `sudo` on the node, the owner's password is what that needs and the
+  owner is away, and 0056's decision leaves no passwordless route. The runbook does not rest
+  on its finding: what it tells a reader to run is the same either way, and what launchd does
+  at load with the switch absent is recorded as not measured until it is.
+- 2026-09-19 — which route `stop_server` takes is read from the installed plist rather than
+  from the switch's presence. Design said the switch route applies when the daemon is loaded
+  and the switch exists, but a switched node whose server is already stopped has no switch
+  either, so that rule would send a second stop to the bootout and refuse for want of root.
+  `SERVE_PLIST` names the installed plist and the switch path in it is what says the daemon
+  is switched. The two outcomes Design asked for are unchanged.
