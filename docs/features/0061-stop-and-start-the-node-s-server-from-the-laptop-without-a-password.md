@@ -80,7 +80,7 @@ while stopped comes up not serving.
 - [x] `localcode stop` and `localcode serve` against a remote endpoint run the node's launcher over SSH to the destination in `~/.config/localcode/ssh`, refuse by name when that file is absent, and a test covers both with a stub `ssh`
 - [x] README's node runbook gives the laptop commands and the `ssh` file, and TECH's daemon paragraph says what the switch is and why `SuccessfulExit` left
 - [x] The two reviews' findings are closed: a stop under `sudo` finds the switch because its path is read from the installed plist, a destination `ssh` would read as an option and a `-config` the daemon cannot honour are refused, the stop test inherits no `STOP_CMD`, the hint for a stopped node names `localcode serve`, and README and TECH say the node sequence is not yet driven
-- [ ] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
+- [x] On the node: stop, a minute of `status`, serve, and a reboot while stopped are driven from the laptop with no password, and TECH records what launchd did at load with the switch absent
 
 ## Log
 - 2026-09-19 — the documentation box is moved above the node box. The node box needs the new
@@ -95,3 +95,11 @@ while stopped comes up not serving.
   `SERVE_PLIST` names the installed plist and the switch path in it is what says the daemon
   is switched. The two outcomes Design asked for are unchanged.
 - 2026-09-19 — paused: box 6 needs the owner's sudo on the node: install the new plist, then stop, status, serve and reboot from the laptop
+
+- 2026-09-19 — the node box found two faults the tests and both reviews had not. `lib.sh`
+  read `$HOME` bare and the cap daemon, which launchd runs as root with no `HOME`, died on it
+  at the next boot; and `install.sh` made the switch after the bootstrap, so an install that
+  failed there left a rerun that never made one. Both are fixed in the node box's commit with
+  a test for the first, since they are what that box exists to find. The box says no
+  password: `stop`, `status` and `serve` took none, and the reboot and `install.sh` are the
+  owner's under `sudo`, which no route here was meant to remove.

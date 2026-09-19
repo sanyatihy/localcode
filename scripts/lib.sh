@@ -32,7 +32,10 @@ serve_daemon_loaded() { launchctl print "system/$SERVE_DAEMON" >/dev/null 2>&1; 
 # holds the server up while it exists and leaves it down while it does not, so starting and
 # stopping are a file the serving user owns rather than a bootout needing root. The same path
 # is written into the plist, where scripts/node/install.sh substitutes this user's home.
-SERVE_SWITCH="${SERVE_SWITCH:-$HOME/.local/state/localcode/serve.on}"
+#
+# ${HOME:-}: launchd runs the cap daemon as root with no HOME at all, and every script here
+# sources this file under `set -u`. The first boot on this line left the node uncapped.
+SERVE_SWITCH="${SERVE_SWITCH:-${HOME:-}/.local/state/localcode/serve.on}"
 
 # Which route stops that daemon, read from the plist that is installed rather than from the
 # switch itself: a switched node with the server already stopped has no switch either, and

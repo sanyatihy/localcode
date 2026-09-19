@@ -101,6 +101,18 @@ if [ "$LINK_ONLY" = 0 ]; then
     FIRST_SERVE_INSTALL=1
 fi
 
+# Before any plist is written, not after the bootstrap: a run that wrote the new plist and
+# then failed left a node whose rerun read that plist as "installed before" and never made a
+# switch, which is a node that does not serve and does not say why. Seen on the first node.
+#
+# Created as the serving user rather than as root, even though this runs under sudo: what it
+# buys is a stop that needs no password, and a root-owned file is one only root can remove.
+if [ "$FIRST_SERVE_INSTALL" = 1 ]; then
+  sudo -u "$SERVE_USER" mkdir -p "$(dirname "$SERVE_SWITCH")"
+  sudo -u "$SERVE_USER" touch "$SERVE_SWITCH"
+  echo "install: the serving switch is $SERVE_SWITCH; removing it stops the server" >&2
+fi
+
 # The link first: an address the laptop can reach is what makes a failure of either of the
 # others visible from anywhere but the node's own console, which it does not have.
 LABELS="com.localcode.link com.localcode.gpucap com.localcode.serve"
@@ -130,20 +142,15 @@ for label in $LABELS; do
   chmod 644 "$dst"
   # Bootstrapping over a loaded service fails, and a reinstall is the usual case.
   launchctl bootout "system/$label" >/dev/null 2>&1 || true
+  # A server holding 20 GB is still exiting when bootout returns, and a bootstrap over a
+  # service that is not gone yet fails with an I/O error.
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+    launchctl print "system/$label" >/dev/null 2>&1 || break
+    sleep 1
+  done
   launchctl bootstrap system "$dst"
   echo "install: installed $dst" >&2
 done
-
-# After the bootstrap, because it is the switch that starts the server: the daemon is loaded
-# here whatever the switch says, and launchd runs it once at load either way.
-#
-# Created as the serving user rather than as root, even though this runs under sudo: what it
-# buys is a stop that needs no password, and a root-owned file is one only root can remove.
-if [ "$FIRST_SERVE_INSTALL" = 1 ]; then
-  sudo -u "$SERVE_USER" mkdir -p "$(dirname "$SERVE_SWITCH")"
-  sudo -u "$SERVE_USER" touch "$SERVE_SWITCH"
-  echo "install: the serving switch is $SERVE_SWITCH; removing it stops the server" >&2
-fi
 
 echo "install: the link is $LINK_IF at $LINK_ADDR, from $MACHINE; it reconciles every 30 s" >&2
 if [ "$LINK_ONLY" = 0 ]; then

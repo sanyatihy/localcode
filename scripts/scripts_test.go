@@ -557,3 +557,18 @@ func TestStopServerTakesTheSwitchRouteAndKeepsTheBootoutForAnOlderPlist(t *testi
 		})
 	}
 }
+
+// launchd runs the cap daemon as root with no HOME at all, and every script here sources
+// lib.sh under `set -u`. A default that read $HOME bare ended cap.sh before it capped anything
+// and left the first node uncapped after a reboot (0061).
+func TestLibSourcesWithNoHome(t *testing.T) {
+	cmd := exec.Command("bash", "-c", "set -euo pipefail; . ./lib.sh")
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("lib.sh must source under set -u with HOME unset: %v: %s", err, out)
+	}
+}

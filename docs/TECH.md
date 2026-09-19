@@ -156,10 +156,11 @@ that file and nothing else, so launchd holds the server up while the file exists
 it down while it does not — stopping the node is removing a file its own user owns, which
 needs no root, and the switch survives a reboot. `SuccessfulExit` left when `PathState`
 arrived: launchd ORs the keys under `KeepAlive`, and a server killed on purpose would be
-restarted as a failure. `KeepAlive` also implies a speculative launch at load. What launchd
-does at that launch with the switch absent has not been measured on the node, and
-`scripts/node/serve.sh` is what makes the outcome independent of it: it execs
-`scripts/serve.sh config/node.env` when the switch is there and exits 0 when it is not.
+restarted as a failure. `KeepAlive` also implies a speculative launch at load, and launchd
+does make it: rebooted on 2026-09-19 with the switch absent, the node's job ran once
+(`runs = 1`, exit 0) and was not run again. `scripts/node/serve.sh` is what makes that launch
+harmless: it execs `scripts/serve.sh config/node.env` when the switch is there and exits 0
+when it is not, so the node came up not serving.
 `install.sh` creates the switch as the serving user on a first install only — no installed
 plist, or one that predates the switch — so an upgrade does not restart a node that was
 stopped on purpose.
@@ -177,9 +178,18 @@ non-login shell ssh runs a command in reads no `~/.zprofile`. A destination is w
 rather than inferred from the endpoint's host: naming it is the owner saying that machine is
 theirs to stop. `serve` refuses a `-config` where the daemon or another machine serves, since
 the daemon serves `config/node.env` alone and a "server ready" would otherwise label a
-measurement with a config that never loaded. **None of this paragraph has been driven on the
-node**: the routes are covered by tests with stubs for `launchctl` and `ssh`, and stop,
-status, serve and a reboot while stopped are 0061's open box.
+measurement with a config that never loaded. Driven on the node from the laptop on 2026-09-19 with no
+password typed: `serve` created the switch and the model answered at 49,152 within 5 s from
+a warm page cache; `stop` returned in under 4 s with the process gone, and seven status reads
+over the next minute found no server, no restart and wired memory back at 1.4 GB; the node
+was then rebooted stopped and came up not serving. The reboot itself and `install.sh` are
+the owner's, under `sudo`. **Every script sources `scripts/lib.sh` under `set -u`, and a
+LaunchDaemon run as root has no `HOME`**: a default that read `$HOME` bare ended `cap.sh` at
+that boot and left the node at Metal's derived cap until it was fixed, which no test or
+review had caught and a test now holds. **`install.sh` creates the switch before it writes
+any plist**, because a run that wrote the new plist and then failed at the bootstrap left a
+rerun reading the node as already installed, and a node with no switch does not serve; it
+also waits for a booted-out service to be gone before bootstrapping over it.
 
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only

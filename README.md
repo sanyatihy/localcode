@@ -275,8 +275,7 @@ serving user's home: launchd keeps the server up while that file is there and le
 while it is not. `install.sh` creates it on a first install, and after that it is the node's
 on-off switch — `./scripts/stop.sh` removes it and waits for the memory back, `localcode
 serve` puts it back, and neither needs `sudo`, because the file belongs to the serving user.
-It survives a reboot, so a node stopped on purpose is meant to come up not serving; that and
-the sequence below are tested off the node and not yet driven on it (0061).
+It survives a reboot, so a node stopped on purpose comes up not serving.
 
 Every node script refuses without `LOCALCODE_NODE=1`, because each ruins a machine somebody
 works at.
