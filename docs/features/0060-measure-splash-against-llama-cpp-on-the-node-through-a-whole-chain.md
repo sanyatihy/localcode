@@ -104,3 +104,4 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
   to the staged snapshot and verifies it against the package manifest either way, so this
   is 0058's `LLAMA_ARG_OFFLINE=1` on the other side of the pair. Overridable, because the
   first install on a machine has to reach the Hub once.
+- 2026-09-19 — paused: box 2 needs the node's daemon server stopped, which needs the owner's sudo until 0061 is installed there
