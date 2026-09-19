@@ -1547,6 +1547,31 @@ are not one machine state: this one has a console session logged in, which holds
 more anonymous memory than the login window 0056's row was taken at, and its fill time
 includes eight generated tokens.
 
+**The 0.25 GB was free pages, not a margin, measured headless on 2026-09-20 (0062)**
+([screens](data/2026-09-20-m5max-36gb-0062-screen.jsonl),
+[decode](data/2026-09-20-m5max-36gb-0062-mem-decode.jsonl)). Splash was screened filled at
+49,152 with nobody logged in at three `--max-memory` ceilings, a sampler reading
+`memprobe.sh` every 2 s through each, then two streamed passes of the ranking suite:
+
+| `--max-memory` | peak wired | minimum free pages | swap | compressed | fill | decode |
+|---|---|---|---|---|---|---|
+| 30720M, the GPU cap | 19.96 GB | 0.06 GB | 0.0 MB | 0.00 GB | 69 s | 0.0077 s/tok |
+| 28672M | 19.97 GB | 0.18 GB | 0.0 | 0.00 | 70 s | 0.0079 |
+| 26624M | 20.16 GB | 0.15 GB | 0.0 | 0.00 | 69 s | 0.0079 |
+
+**The ceiling does not bind at this context, so lowering it buys nothing**, and the config
+keeps the cap. Where the memory sits, from `vm_stat` with the model loaded and the context
+filled: 21.4 GB wired, 2.8 GB anonymous, **12.1 GB file-backed and inactive**, 1.0 GB free,
+nothing in the compressor, `kern.memorystatus_vm_pressure_level` 1, which is normal, and
+Splash's own `/status` reporting `memory_pressure` `normal`. The file-backed pages are the
+17 GB package the runtime read at load, which the kernel keeps as cache and reclaims on
+demand. `free_gb` in `memprobe.sh` counts free pages only, so it reads near zero on any
+machine that has read a large file, and **0060's "spends the free pool as MTPLX did" was that
+metric and not memory pressure**; 0058's MTPLX and MLX rows carry the same column and should
+be read the same way, by swap and compression and not by free pages. Headless, the node idles
+at 1.6 GB anonymous and 1.9 GB wired before a load, against about 5 GB anonymous with the
+console session 0060 ran under.
+
 **Paired on the ranking suite, Splash decodes 2.6 to 2.9 times faster than llama.cpp, and
 pass rate does not separate them** ([rows](data/2026-09-19-m5max-36gb-0060-pair.jsonl)). Two pairs by
 `scripts/pair.sh`, three passes a side, thinking off on both sides, `presence_penalty` 0 sent

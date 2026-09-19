@@ -81,7 +81,7 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 
 - [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
 - [x] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
-- [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings with decode read at each, and TECH records where the node's memory sits under it and why the ceiling stays at the cap
+- [x] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings with decode read at each, and TECH records where the node's memory sits under it and why the ceiling stays at the cap
 - [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
 - [ ] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
 - [ ] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
