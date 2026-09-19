@@ -28,6 +28,12 @@ server_alive() { pgrep -f "$PROC" >/dev/null; }
 SERVE_DAEMON="${SERVE_DAEMON:-com.localcode.serve}"
 serve_daemon_loaded() { launchctl print "system/$SERVE_DAEMON" >/dev/null 2>&1; }
 
+# SERVE_SWITCH is the file that daemon is gated on (0061). launchd's KeepAlive PathState
+# holds the server up while it exists and leaves it down while it does not, so starting and
+# stopping are a file the serving user owns rather than a bootout needing root. The same path
+# is written into the plist, where scripts/node/install.sh substitutes this user's home.
+SERVE_SWITCH="${SERVE_SWITCH:-$HOME/.local/state/localcode/serve.on}"
+
 # stop_server ends it and waits for the memory back. The trap: an 18 GB process does not
 # exit on a fixed sleep, and the next server binding while the old one still holds the port
 # measures the previous config under the next config's name.

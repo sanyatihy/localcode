@@ -385,3 +385,107 @@ func TestLadderFillsEverySlotAtOnceAndOneFailureFailsTheRung(t *testing.T) {
 		t.Errorf("slot outcomes %v do not say which slot filled and which did not", row.SlotOutcomes)
 	}
 }
+
+// renderNodePlist substitutes the placeholders scripts/node/install.sh substitutes, so what
+// a test reads is what that script would install rather than the template. The values are a
+// test's own: install.sh refuses anything sed or XML would read as syntax, so a plain path
+// and a plain name are the whole range it passes through.
+func renderNodePlist(t *testing.T, label, home string) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("node", label+".plist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := strings.NewReplacer(
+		"__CHECKOUT__", "/opt/localcode",
+		"__MACHINE__", "config/machine-m5max-36gb.json",
+		"__USER__", "server",
+		"__HOME__", home,
+		"__PATH__", "/opt/homebrew/bin:/usr/bin:/bin",
+	).Replace(string(body))
+	path := filepath.Join(t.TempDir(), label+".plist")
+	if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// A plist launchd cannot parse is a node that does not serve, and the file is written by a
+// sed at install time: nothing between the template and /Library/LaunchDaemons reads XML.
+// The serving daemon's KeepAlive is read as well, because launchd ORs the keys under it —
+// SuccessfulExit left beside PathState would restart a server that was stopped on purpose.
+func TestTheNodesPlistsRenderValidAndTheServerIsGatedOnTheSwitchAlone(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("plutil is macOS's, and so are the daemons these describe")
+	}
+	home := "/Users/server"
+	for _, label := range []string{"com.localcode.link", "com.localcode.gpucap", "com.localcode.serve"} {
+		path := renderNodePlist(t, label, home)
+		if out, err := exec.Command("plutil", "-lint", path).CombinedOutput(); err != nil {
+			t.Errorf("%s does not lint: %v\n%s", label, err, out)
+		}
+	}
+
+	out, err := exec.Command("plutil", "-convert", "json", "-o", "-",
+		renderNodePlist(t, "com.localcode.serve", home)).Output()
+	if err != nil {
+		t.Fatalf("reading the serving plist: %v", err)
+	}
+	var plist struct {
+		ProgramArguments []string `json:"ProgramArguments"`
+		KeepAlive        map[string]any
+	}
+	if err := json.Unmarshal(out, &plist); err != nil {
+		t.Fatalf("serving plist: %v\n%s", err, out)
+	}
+	if len(plist.ProgramArguments) == 0 ||
+		!strings.HasSuffix(plist.ProgramArguments[0], "/scripts/node/serve.sh") {
+		t.Errorf("the daemon must run the switched wrapper, not the serving script: %v",
+			plist.ProgramArguments)
+	}
+	if _, ok := plist.KeepAlive["SuccessfulExit"]; ok {
+		t.Error("SuccessfulExit beside PathState: launchd ORs them, so a stopped server would be restarted")
+	}
+	state, ok := plist.KeepAlive["PathState"].(map[string]any)
+	if !ok {
+		t.Fatalf("KeepAlive is not gated on a path: %v", plist.KeepAlive)
+	}
+	if alive, ok := state[home+"/.local/state/localcode/serve.on"]; !ok || alive != true {
+		t.Errorf("KeepAlive watches %v, not the serving user's switch", state)
+	}
+}
+
+// The wrapper the daemon runs, which is what makes a stopped node stay stopped: launchd
+// launches this job at load whatever the switch says, so the switch has to decide here.
+func TestTheNodesServeWrapperServesOnlyWithTheSwitch(t *testing.T) {
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "stub-server")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script, err := filepath.Abs(filepath.Join("node", "serve.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	switchPath := filepath.Join(dir, "serve.on")
+	run := func() string {
+		t.Helper()
+		cmd := exec.Command(script)
+		cmd.Env = append(os.Environ(), "SERVER_BIN="+stub, "SERVE_SWITCH="+switchPath)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("node/serve.sh: %v: %s", err, out)
+		}
+		return string(out)
+	}
+
+	if out := run(); !strings.Contains(out, switchPath) || strings.Contains(out, "serving config/node.env") {
+		t.Errorf("with no switch the wrapper must start nothing and say why: %s", out)
+	}
+	if err := os.WriteFile(switchPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := run(); !strings.Contains(out, "serving config/node.env") {
+		t.Errorf("with the switch there the node must serve its own config: %s", out)
+	}
+}

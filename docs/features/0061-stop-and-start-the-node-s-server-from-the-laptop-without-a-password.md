@@ -73,7 +73,7 @@ while stopped comes up not serving.
 
 ## Tasks
 
-- [ ] `scripts/node/serve.sh` serves `config/node.env` when the switch exists and exits 0 when it does not, the plist keeps the job alive on `PathState` alone, and a test renders the plist and lints it with `plutil`
+- [x] `scripts/node/serve.sh` serves `config/node.env` when the switch exists and exits 0 when it does not, the plist keeps the job alive on `PathState` alone, and a test renders the plist and lints it with `plutil`
 - [ ] `scripts/node/install.sh` creates the switch on a first install only and replaces an installed plist that predates it, and a rerun restarts nothing
 - [ ] `stop_server` stops a switched daemon as the serving user and still waits for the memory back, the bootout route stays for an older plist, and tests cover both
 - [ ] `localcode serve` on a machine whose daemon is loaded creates the switch and waits for health, covered by a test
