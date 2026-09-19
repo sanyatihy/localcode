@@ -40,6 +40,13 @@ SAMPLING="${SAMPLING:-nonthinking}"
 CANDIDATE_SERVE="${CANDIDATE_SERVE:-./scripts/serve.sh}"
 CANDIDATE_PORT="${CANDIDATE_PORT:-$PORT}"
 
+# Scorer flags a runtime forces on the pair. EVAL_ARGS goes to both sides, because a setting
+# one side cannot take has to leave the other too or the pair measures the setting: Splash
+# refuses presence_penalty, so its pairs send 0 to both. CANDIDATE_EVAL_ARGS is for a toggle
+# the candidate spells differently, such as thinking off as `-reasoning-effort none`.
+EVAL_ARGS="${EVAL_ARGS:-}"
+CANDIDATE_EVAL_ARGS="${CANDIDATE_EVAL_ARGS:-}"
+
 # Readiness is judged by the pid this script started, not by lib.sh's pgrep for
 # llama-server. MTPLX's command line is just its interpreter and mlx_lm's is just python,
 # so the pattern finds nothing: past the health grace every such load was being called dead
@@ -72,7 +79,10 @@ wait_gone() { # pid
 for side in "$BASELINE" "$CANDIDATE"; do
   label=$(basename "$side" .env)
   serve="./scripts/serve.sh"; port="$PORT"
-  if [ "$side" = "$CANDIDATE" ]; then serve="$CANDIDATE_SERVE"; port="$CANDIDATE_PORT"; fi
+  extra="$EVAL_ARGS"
+  if [ "$side" = "$CANDIDATE" ]; then
+    serve="$CANDIDATE_SERVE"; port="$CANDIDATE_PORT"; extra="$EVAL_ARGS $CANDIDATE_EVAL_ARGS"
+  fi
   ENDPOINT="http://127.0.0.1:$port"
   echo "=== $label ===" >&2
   stop_server
@@ -85,8 +95,10 @@ for side in "$BASELINE" "$CANDIDATE"; do
     exit 2
   fi
   if [ -n "$TASK" ]; then set -- -task "$TASK"; else set -- -tasks "$TASKS"; fi
+  # shellcheck disable=SC2086 # $extra is a flag list, split on purpose
   "$(built eval)" "$@" -n "$REPEATS" -config "$label" -session "$SESSION" -endpoint "$ENDPOINT" \
-    -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" || true
+    -stream -fidelity -results "$RESULTS" -thinking "$THINKING" -sampling-profile "$SAMPLING" \
+    $extra || true
   # By pid and then by pattern: the next side must not start while this one still holds
   # memory, and stop_server alone cannot wait for a process it cannot see.
   wait_gone "$server_pid"
