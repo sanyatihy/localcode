@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -1590,5 +1591,74 @@ func TestTheRemoteRouteRefusesWhatItCannotCarryOut(t *testing.T) {
 	err = ensureServer(root, remote, "config/agent.env", false, false)
 	if err == nil || !strings.Contains(err.Error(), "localcode serve") || strings.Contains(err.Error(), "make serve") {
 		t.Errorf("with a login named, the hint is `localcode serve` and not a second server: %v", err)
+	}
+}
+
+// A runtime with no /props says what it serves on /status (0060: Splash). The context a
+// session is budgeted against is still read off the running server, and `status` names the
+// model from /v1/models.
+func TestTheServedContextIsReadFromStatusWhereThereIsNoProps(t *testing.T) {
+	ready := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status":
+			_, _ = fmt.Fprintf(w, `{"ready":%v,"maximum_context_tokens":49152}`, ready)
+		case "/v1/models":
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"vendor/model-package"}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	got, model, err := servedContext(srv.URL)
+	if err != nil || got != 49152 || model != "vendor/model-package" {
+		t.Fatalf("served context: got %d %q err %v, want 49152 and the model's id", got, model, err)
+	}
+	var out strings.Builder
+	if code, err := status(&out, srv.URL, "from a test"); err != nil || code != 0 {
+		t.Fatalf("status: code %d err %v", code, err)
+	}
+	if !strings.Contains(out.String(), "model-package at 49152 ctx") {
+		t.Errorf("status must name the model and the context: %s", out.String())
+	}
+
+	ready = false
+	if _, _, err := servedContext(srv.URL); !errors.Is(err, errNotReady) {
+		t.Errorf("a server that says it is not ready must read as not ready: %v", err)
+	}
+}
+
+// Two ways the /status route could start a session that is refused on its first call, or
+// mistake a llama.cpp that is still loading for another runtime (0060, review).
+func TestTheStatusRouteRefusesWhatItCannotName(t *testing.T) {
+	var statusAsked bool
+	noModels := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status":
+			_, _ = fmt.Fprint(w, `{"ready":true,"maximum_context_tokens":49152}`)
+		case "/v1/models":
+			_, _ = fmt.Fprint(w, `{"data":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(noModels.Close)
+	if _, _, err := servedContext(noModels.URL); err == nil || !strings.Contains(err.Error(), "/v1/models") {
+		t.Errorf("a server that names no model must be refused, naming where it was asked: %v", err)
+	}
+
+	loading := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" {
+			statusAsked = true
+		}
+		http.Error(w, `{"error":"Loading model"}`, http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(loading.Close)
+	if _, _, err := servedContext(loading.URL); !errors.Is(err, errNotReady) {
+		t.Errorf("a loading llama.cpp must read as not ready: %v", err)
+	}
+	if statusAsked {
+		t.Error("only a 404 from /props may send the launcher to /status")
 	}
 }

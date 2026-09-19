@@ -1,9 +1,9 @@
 ---
 id: 0060
 title: Measure Splash against llama.cpp on the node, through a whole chain
-status: Draft
+status: Submitted
 created: 2026-09-19
-submitted:
+submitted: 2026-09-19
 needs:
 ---
 
@@ -82,10 +82,58 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 
 ## Tasks
 
-- [ ] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
-- [ ] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
-- [ ] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
-- [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
-- [ ] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
-- [ ] `scripts/chainrun.sh` takes the serve command, and if Splash reports no context the launcher gains `-context`, refused whenever `/props` answers, covered by a test on both branches
-- [ ] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
+- [x] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
+- [x] The external review's findings on the first box are closed: `setup.sh` tells an absent Splash from one brew cannot list and never installs over it, a Splash that cannot print its version is not reported ready, `serve.sh` reads a relative config from the checkout only, and the offline claim is held to one snapshot
+- [x] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
+- [x] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
+- [x] `scripts/pair.sh` passes scorer flags a runtime forces on a pair, `EVAL_ARGS` to both sides and `CANDIDATE_EVAL_ARGS` to the candidate, since Splash refuses `presence_penalty` and spells thinking off as `reasoning_effort`
+- [x] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
+- [x] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
+- [x] `scripts/chainrun.sh` takes the serve command, and the launcher and `served_ctx` read the served context from `/status` where `/props` answers 404, covered by a test
+- [x] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
+- [x] The second external review's findings are closed: the launcher refuses a `/status` server that names no model, `served_ctx` goes to `/status` only on a 404 and only when it is ready, `chainrun.sh` judges its server alive by pid, the probe's raw output is published, and TECH's numbers and conclusions are held to the rows
+
+## Log
+
+- 2026-09-19: the config records the address Splash binds instead of setting it. The plan
+  has `splash-27b.env` pin host and port the way every other runtime's config does, and
+  `splash serve` takes neither flag: its launcher binds `127.0.0.1:8000` and refuses to
+  start when anything else owns that address. They stay in the file because a row has to
+  say where it was driven, and `serve.sh` refuses a config naming anything else rather
+  than let a row carry an address nothing bound.
+- 2026-09-19: `serve.sh` exports `HF_HUB_OFFLINE=1` and passes no flag for it. The plan has
+  it add no flags of its own, and Splash checks the Hub for the repository's `main` before
+  every load, which is the stall 0058 measured on this node's route. Offline it falls back
+  to the staged snapshot and verifies it against the package manifest either way, so this
+  is 0058's `LLAMA_ARG_OFFLINE=1` on the other side of the pair. Overridable, because the
+  first install on a machine has to reach the Hub once.
+- 2026-09-19 — paused: box 2 needs the node's daemon server stopped, which needs the owner's sudo until 0061 is installed there
+- 2026-09-19: a chain may be driven. Thinking can be turned off and a prompt past the window
+  is refused, which are the two conditions Design set. The served context is on `/status`, so
+  the launcher reads it from there when `/props` answers 404 and no `-context` flag is added:
+  a reading beats a typed number, which is Design's own reason for refusing a shim.
+- 2026-09-19: every pair runs at `presence_penalty` 0 on both sides. Splash refuses the
+  penalty with HTTP 400, so 0005's settled sampling cannot be sent to it, and a pair whose
+  sides sample differently measures the sampling. The baseline is sent an explicit 0 over the
+  1.5 its config serves. The chains are not held to this: they compare what each runtime
+  serves, and a runtime that cannot take the penalty 0005 found necessary is what is judged.
+- 2026-09-19: the node has a console session logged in for every row, recorded as condition
+  `logged-in`. 0058's state is nobody logged in, but the USB link needs a session on the node
+  after a reboot and the owner is away, so logging out risks the link for the whole run. Both
+  sides of every pair share the state; memory headroom reads about 3 GB worse than 0056's.
+- 2026-09-19: the DFlash2 baseline ran under the scorer's `-force`. With the node's machine
+  file the preflight refused it, 9.28 GB of headroom against the 10 GB floor, which a logged-in
+  session and a 23.6 GB config produce together. 0058 screened that config admissible on this
+  node with nothing swapped, and no row of the pair swapped. The first attempt at both pairs
+  is discarded and not published: its rows named the laptop, because the scorer defaults to
+  `config/machine.json` and the node's file has to be passed.
+- 2026-09-19: the published pair rows have the home directory in `served_backend` written as
+  `~`. The repository is public and the path names a user; no measurement is touched.
+- 2026-09-19: the chain box also passes the served model's id to the harness. Splash answers
+  404 to any model name but its own, and Claude Code asks by the name its committed file
+  carries, which llama.cpp ignores. The launcher reads the id from `/v1/models` beside the
+  context and the harness sets it; nothing is configured by hand.
+- 2026-09-19: the chains have a third arm, Splash with `MAX_THINKING_TOKENS=0` set for the
+  harness. The plan has three chains a side on what each runtime serves. Served as it is,
+  Splash thinks whenever Claude Code asks and llama.cpp never does, so the two planned arms
+  compare thinking and not the runtimes. Both planned arms are reported as run.

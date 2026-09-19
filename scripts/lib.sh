@@ -112,10 +112,32 @@ except (OSError, ValueError, KeyError) as e:
 # served_ctx asks the endpoint what it is serving, and prints `null` for a backend that does
 # not say. The guard against measuring one config under another's name, so a caller that
 # skips it is claiming rather than checking.
+#
+# llama.cpp says it on /props; Splash has no /props and says it on /status (0060). Only a 404
+# sends this to /status: a llama.cpp still loading answers 503, and reading another route
+# then would report a context for a server that is not serving one. A /status that is not
+# ready is not an answer either.
 served_ctx() {
-  curl -s -m 5 "$ENDPOINT/props" 2>/dev/null \
-    | python3 -c "import sys,json;print(json.load(sys.stdin)['default_generation_settings']['n_ctx'])" 2>/dev/null \
-    || echo null
+  python3 - "$ENDPOINT" <<'PY' 2>/dev/null || echo null
+import json, sys, urllib.error, urllib.request
+def get(path):
+    try:
+        with urllib.request.urlopen(sys.argv[1] + path, timeout=5) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, b""
+code, body = get("/props")
+if code == 200:
+    print(json.loads(body)["default_generation_settings"]["n_ctx"])
+elif code == 404:
+    code, body = get("/status")
+    status = json.loads(body)
+    if code != 200 or not status.get("ready"):
+        sys.exit(1)
+    print(status["maximum_context_tokens"])
+else:
+    sys.exit(1)
+PY
 }
 
 # The readings a script takes off the machine itself differ by platform, and each has one

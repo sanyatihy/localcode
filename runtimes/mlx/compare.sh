@@ -10,7 +10,13 @@ set -euo pipefail
 cd "$(dirname "$0")/../.." || exit 2
 LABEL="${1:?usage: compare.sh <label> <endpoint>}"
 EP="${2:?usage: compare.sh <label> <endpoint>}"
-RES="${RES:-results/0006-runtime.jsonl}"
+# The feature a comparison belongs to labels its rows. 0006 by default, which is what this
+# script was written for; 0058 and 0060 re-ran it for other runtimes on other machines.
+PREFIX="${PREFIX:-0006}"
+RES="${RES:-results/$PREFIX-runtime.jsonl}"
+# Scorer flags a runtime forces on the comparison, given to every invocation of it: both
+# sides have to be sent the same ones, or the difference is the flags (scripts/pair.sh).
+EVAL_ARGS="${EVAL_ARGS:-}"
 
 # Thinking off at the non-thinking sampling pair: 0005's settled config, and the one
 # setting both runtimes can be driven to identically. Effort is deliberately not sent —
@@ -18,8 +24,9 @@ RES="${RES:-results/0006-runtime.jsonl}"
 # chat_template_kwargs on MLX, so sending it would compare two reasoning levels.
 for suite in tasks tasks/depth; do
   echo "=== $LABEL: $suite ==="
-  go run ./cmd/eval -tasks "$suite" -n 3 -config "0006-$LABEL" \
+  # shellcheck disable=SC2086 # EVAL_ARGS is a flag list, split on purpose
+  go run ./cmd/eval -tasks "$suite" -n 3 -config "$PREFIX-$LABEL" \
      -thinking off -sampling-profile nonthinking \
-     -results "$RES" -endpoint "$EP" || true
+     -results "$RES" -endpoint "$EP" $EVAL_ARGS || true
 done
 echo "=== $LABEL complete ==="

@@ -28,6 +28,7 @@ Design arguments stay in the feature docs; this is the state of the machine.
 - [Reasoning effort is a four-point axis, and its default is the bad end](#reasoning-effort-is-a-four-point-axis-and-its-default-is-the-bad-end)
 - [Tool-call adherence is not a formatting problem](#tool-call-adherence-is-not-a-formatting-problem)
 - [llama.cpp against MLX](#llamacpp-against-mlx)
+- [Splash, installed and staged](#splash-installed-and-staged)
 - [Speculative decoding: adoptable at the top of the context, not the bottom](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom)
 - [Nothing displaces Claude Code, and the two axes disagree](#nothing-displaces-claude-code-and-the-two-axes-disagree)
 
@@ -1444,6 +1445,260 @@ repeating any, which is what forced the slot-count problem. A real agent session
 conversation resending a growing prefix, needing one or two slots — the configuration that is
 memory-safe. So this comparison understates MLX for the workload the project actually cares
 about, and the honest reading is that neither runtime is disqualified.
+
+## Splash, installed and staged
+
+The runtime [0060](features/0060-measure-splash-against-llama-cpp-on-the-node-through-a-whole-chain.md)
+measures against llama.cpp. It is a Homebrew bottle from the vendor's own tap,
+`incoai/tap/splash`, installed by [`runtimes/splash/setup.sh`](../runtimes/splash/setup.sh)
+and never upgraded by it: what pins this runtime is the version that script prints, **1.0**
+on the node. The bottle carries its own Python, its engine binary and `huggingface_hub`, so
+unlike MLX and MTPLX there is no venv here and no pins file. It needs an M3 or newer,
+macOS 26.4 or later and 36 GB, which excludes the laptop by its own requirements rather
+than by measurement.
+
+**`splash serve` takes no `--host` and no `--port`.** Its launcher binds `127.0.0.1:8000`,
+probes that address before it downloads or loads anything, refuses to start when another
+service owns it, and holds one server at a time under a lock file. Both flags exist on the
+server it execs and neither is reachable through the command, so the address is a fact a
+config records rather than a lever it sets. The flags it does take are `--model`,
+`--max-memory`, `--max-context`, `--max-image-pixels`, `--allowed-host`, `--api-key` and
+`--no-webui`. **`--max-memory` reads `K`, `M` and `G` as 1024, 1024² and 1024³**, so
+`30720M` is the same number of bytes `iogpu.wired_limit_mb` holds llama.cpp to;
+`--max-context` is a plain token count whose own ceiling is 262,144. Left unset, both are
+`auto` and tuned to the machine, which is the thing being compared.
+
+**The routes the installed server carries** are `/v1/chat/completions`, `/v1/responses`,
+`/v1/messages`, `/v1/messages/count_tokens`, `/v1/models`, `/tokenize`, `/apply-template`,
+`/metrics`, `/health`, `/ready` and `/status`. **There is no `/props`**, and `/status` is
+what Splash's own `splash claude` reads `maximum_context_tokens` from before it sets
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS`. What they report on a loaded server was probed on the node on 2026-09-19, Splash 1.0 at
+49,152, and each answer below is a reading whose raw output is
+[published](data/2026-09-19-m5max-36gb-0060-probe.txt):
+
+- **The served context is on `/status`**, as `maximum_context_tokens`: 49,152, the value
+  `--max-context` was given. `/props` answers 404. `/v1/models` names the package, and
+  `/status` also carries `memory_pressure` and the KV layout, which is symmetric int8.
+- **Every response carries usage and timings.** Chat completions return `usage` with cached
+  and reasoning token counts, and a `metrics` object with time to first token, stream
+  tokens per second and the prefix cache's `status` and `matched_tokens`. `/v1/messages`
+  returns `input_tokens`, `cache_read_input_tokens` and `output_tokens`, and
+  `/v1/messages/count_tokens` answers.
+- **Thinking is on by default on chat completions, at effort `xhigh`**, which
+  `/apply-template` shows as a system line the server adds. `"reasoning_effort": "none"`
+  turns it off. `chat_template_kwargs` with `enable_thinking` false is accepted and
+  ignored, so the scorer's own toggle does nothing here. `/v1/messages` does not think unless
+  asked to.
+- **`temperature`, `top_p`, `top_k`, `seed`, `stop` and `repetition_penalty` are accepted per
+  request, and sampling is applied**: one prompt at 0.7 gave two different sentences in three
+  tries and the same one twice at 0. **`presence_penalty` above 0, `frequency_penalty` and
+  `min_p` are refused with HTTP 400**, "the requested logits or output transformation is not
+  supported", and so are `n` and `logprobs`. 0005's settled pair for thinking off carries
+  `presence_penalty` 1.5, so it cannot be sent to this runtime.
+- **A prompt past the window is refused**, HTTP 400 `context_length_exceeded`, not truncated.
+- **It answers only to its own model id**: a request naming `Qwen3.8-27B-Q4_K_M.gguf`, which
+  is what `harness/claude-code/claude-code.env` carries and llama.cpp ignores, gets HTTP 404
+  on `/v1/messages` and on `count_tokens`. With its own id a Claude Code shaped request
+  works whole: system blocks with `cache_control`, tools, a `tool_result` turn, streaming and
+  `thinking`. Its `input_tokens` excludes `cache_read_input_tokens`, as Anthropic's does,
+  and the session gate already sums the two.
+- **A system message in the middle of a conversation is rendered in place**, so the template
+  override llama.cpp needs for Claude Code is not needed here, and a tool call comes back as
+  `tool_calls` with `finish_reason` `tool_calls`.
+- **It does not wire its weights at load**: the screen row below reads 1.73 GB wired, 7.33 GB
+  anonymous and 0.88 GB free with the model loaded and idle. It wires while it computes
+  instead. Its first load on the node took 23 s and later ones 8 s, the page cache being warm.
+
+**The launcher drives it with no configuration of its own.** Where `/props` answers 404 the
+launcher and `served_ctx` in `scripts/lib.sh` read `maximum_context_tokens` from `/status`,
+so a session's budget is still a reading off the running server; the launcher takes the
+model's id from `/v1/models` and the Claude Code harness asks by that name on all four of its
+model variables. `scripts/chainrun.sh` takes `SERVE_CMD` and stops it through `STOP_CMD`, as
+`scripts/pair.sh` does, and reads Splash's own names for the three token counters.
+
+**Screened filled at 49,152, Splash is admissible and fills in half the time**
+([row](data/2026-09-19-m5max-36gb-0060-screen.jsonl)), by `scripts/screen.sh` unchanged, the
+same 44,236-word prompt and 180 s of sampling as 0056's baseline row:
+
+| | llama.cpp, `config/node.env` (0056) | Splash 1.0 |
+|---|---|---|
+| admissible | yes | yes |
+| load, warm page cache | 3 s | 8 s |
+| cold fill of the 44,236-word prompt | 127 s | **67 s** |
+| peak wired | 19.91 GB | 19.83 GB |
+| headroom under the 30,720 MiB cap | 10.09 GB | 10.17 GB |
+| free memory after the window | 3.68 GB | **0.25 GB** |
+| swap delta | 0.0 MB | 0.0 MB |
+
+The two peaks agree to 0.09 GB, so holding Splash to `--max-memory 30720M` leaves it where
+the cap leaves llama.cpp. What differs is when: llama.cpp wires its weights at load and
+Splash wires only while it computes, 1.73 GB at load against 19.83 GB at the peak. **It spends
+the free pool as MTPLX did**, 0.25 GB free after the window with nothing swapped. The two rows
+are not one machine state: this one has a console session logged in, which holds about 2.5 GB
+more anonymous memory than the login window 0056's row was taken at, and its fill time
+includes eight generated tokens.
+
+**Paired on the ranking suite, Splash decodes 2.6 to 2.9 times faster than llama.cpp, and
+pass rate does not separate them** ([rows](data/2026-09-19-m5max-36gb-0060-pair.jsonl)). Two pairs by
+`scripts/pair.sh`, three passes a side, thinking off on both sides, `presence_penalty` 0 sent
+to both because Splash refuses the penalty:
+
+| | decode, client-side | acceptance | pass | tool-call valid | mean wall a task |
+|---|---|---|---|---|---|
+| `config/node.env`, the draft head at depth 3 | 0.0225 s/tok | 3.92 | 23/27 | 11/12 | 2.75 s |
+| Splash, in that session | **0.0079 — 2.85x** | not reported | 23/27 | 12/12 | 1.04 s |
+| `config/dflash2-node-49k.env`, DFlash2 on llama.cpp | 0.0209 s/tok | 6.84 | 23/27 | 12/12 | 2.74 s |
+| Splash, in that session | **0.0080 — 2.62x** | not reported | 23/27 | 12/12 | 1.05 s |
+
+**Both ratios are void as speculative ratios and the tool voided them**: Splash's greedy
+probes hash `b217bc2a13cf7769` against `0f4045cad664f4ac`, because it serves a 4-bit package
+of its own and not Q4_K_M. Read them as two runtimes, as 0058's MLX row is read.
+
+**The second pair holds the drafter's family fixed, and the gap stays.** llama.cpp with a
+DFlash2 drafter accepts 6.84 tokens a step and reads 0.0209 s/tok, 7% faster than the head
+that accepts 3.92; Splash with its own DFlash2 drafter reads 0.0080. That is consistent with
+the gain being in how the runtime verifies a drafted block, which is the vendor's claim, but
+these rows do not prove it: the target weights differ, the two drafters are separate files,
+and Splash reports no acceptance or verification time to split the step by. 0.0079 s/tok is about 127 tokens a
+second on a machine whose bandwidth bounds an undrafted Q4 decode near 28.
+
+**Pass rate does not separate them.** Every side reads 23/27, every failure is one of the two
+discriminating tasks, and the split differs: llama.cpp fails the contradicted specification
+three times in three and the read-only constraint once, and Splash the reverse. Splash's rows
+carry no reasoning, so `reasoning_effort` `none` did turn thinking off. No row swapped.
+Splash reports no served config, build or server-side rate, so `served_n_ctx` is 0 and
+`served_model` is `.` on its rows, the second thing TECH holds against MLX; its context is on
+`/status`, which the scorer does not read.
+
+**At depth the gap widens on decode and holds on prefill**
+([rows](data/2026-09-19-m5max-36gb-0060-runtime.jsonl)): `runtimes/mlx/compare.sh` over the
+ranking and depth suites, three passes, streamed so the client sees where prefill ends, the
+same flags to both runtimes and `config/node.env` as the llama.cpp side:
+
+| | llama.cpp, draft head | Splash | ratio |
+|---|---|---|---|
+| decode at ~200 tokens of prompt | 0.0226 s/tok | 0.0080 | 2.8x |
+| decode at 8,000 | 0.0293 | 0.0085 | 3.4x |
+| decode at 16,000 | 0.0299 | 0.0088 | 3.4x |
+| decode at 32,000 | 0.0355 | **0.0092** | **3.8x** |
+| cold prefill, 2,000 to 8,000 tokens | 407–428 tok/s | 598–684 tok/s | 1.4–1.6x |
+| cold prefill at 16,000 | 465 tok/s | 628–731 tok/s | 1.4–1.6x |
+| cold prefill at 32,000 | 358 tok/s | 567–647 tok/s | 1.6–1.8x |
+| `decode-32000` cold, whole request | 102.9 s | 52.9 s | 1.9x |
+| `decode-32000` repeated | 16.3 s, 31,548 of 32,064 reused | **3.9 s**, 32,032 reused | 4.2x |
+| depth fixtures passed | 27/27 | 27/27 | |
+| ranking fixtures passed | 25/27 | 22/27 | |
+
+**Splash's decode barely falls with depth**, 0.0080 to 0.0092 s/tok from 200 to 32,000 tokens
+where llama.cpp's falls from 0.0226 to 0.0355, so the ratio grows with the depth a session
+works at, which is where a session spends its time (0034). Prefill is a steadier 1.4 to 1.8
+times. Prefill rates are prompt tokens over the client's time to first token on every row with
+nothing cached, repeats included.
+
+**The two prefix caches fail in different places.** Splash reuses a repeated prompt almost
+whole and answers `retrieval-32000` in 0.4 s on a repeat, but the first time it saw that
+fixture it reused nothing and ingested for 56.7 s, where llama.cpp had 31,548 tokens of it
+cached from `decode-32000`, which shares its prefix, and answered in 2.7 s. llama.cpp in turn
+reused nothing on any repeat of `decode-8000` or `retrieval-distractor-8000`, 30 s and 20 s
+every time, where Splash took 3.6 s and 0.2 s. An interleaved suite of near-identical prompts
+is not a conversation (0058 says the same of this suite), so which failure a chain meets is
+the chains' reading and not this table's.
+
+**Ranking pass rate moved against Splash here and not in the pairs**: 22/27 against 25/27 in
+this session, 23/27 on every side of both pairs. All seven failures in the file are the two
+discriminating tasks. Across the three sessions Splash reads 68/81 and llama.cpp 71/81 over
+its three sides, which is one task a session and inside the spread TECH already records for
+one config against itself. No row swapped. The llama.cpp depth half ran under `-force`, for
+the reason the second pair's baseline did.
+
+**Through a whole chain Splash's mean wall is under half of llama.cpp's, once it is kept
+from thinking** ([rows](data/2026-09-19-m5max-36gb-0060-chain.jsonl)). The twenty-bug
+fixture through `scripts/chainrun.sh`, Claude Code 2.1.270 driving `/v1/messages` on the
+node itself, each chain from a cold server and a fresh fixture. The first two arms
+alternated; the third ran after them, so it shares no interleaving with its baseline:
+
+| arm | tests | sessions | wall, three chains | mean | generated | prompt ingested | prompt reused |
+|---|---|---|---|---|---|---|---|
+| llama.cpp, `config/node.env` | 20/20 ×3 | 1, 1, 1 | 154, 156, 155 s | **155 s** | 4,051–4,175 | 12,265–12,846 | 148–159k |
+| Splash, as Claude Code asks | 20/20 ×3 | 1, 1, 1 | 223, 299, 180 s | 234 s | 9,806–15,909 | 19,924–24,758 | 161–265k |
+| Splash, `MAX_THINKING_TOKENS=0` | 20/20 ×3 | 1, 1, 1 | 80, 87, 49 s | **72 s** | 2,594–5,314 | 10,867–16,754 | 46–175k |
+
+**Left alone, Splash is the slower of the two, and the reason is thinking, not speed.** Claude
+Code asks for thinking on every call. llama.cpp is served with `enable_thinking` false and
+ignores the request; Splash thinks when `/v1/messages` asks it to, and that arm generates two
+to four times the tokens of the other two. The third arm sets `MAX_THINKING_TOKENS=0` in the
+launcher's environment, which the harness passes through because it strips only
+`ANTHROPIC_*` and `CLAUDE_*`, and it is the arm that compares the runtimes: its session rows
+read 7 to 44 tool calls against llama.cpp's 29 to 44, and its generated tokens fall back to
+llama.cpp's range. The sessions' transcripts, which stay on the node and are not published,
+carry 18 thinking blocks in the first Splash chain's 18 calls and none in the two read from
+the third arm. **A mean of 72 s against 155 s is 2.2x on the unit this project judges by**,
+from three chains a side on one fixture: two of the three, 80 and 87 s, are just over half of
+the 154 to 156 s they are read against, and the third is 49 s because that session fixed the
+twenty in 7 calls. It is less than the 2.8 to 3.8 times decode reads alone, because a chain
+also ingests, runs tools and waits on the harness. The llama.cpp arm is itself down from 0056's 263 s mean, which
+was taken before the draft head was served.
+
+**Every chain finished in one session on both runtimes, so this fixture does not test the
+handoff on Splash**, nor a session deep enough for its prefix cache to be evicted by a side
+call (0018). Prompt reuse per chain is of the same order on both, 46–265k tokens reused
+against 11–25k ingested. The sampling differs between the arms as the Log says: llama.cpp
+serves `presence_penalty` 1.5 and Splash cannot take one, and no chain on either side looped.
+
+**The one table**, the node, Qwen3.8-27B at 49,152, 2026-09-19, a console session logged in:
+
+| | llama.cpp b10809, `config/node.env` | Splash 1.0 |
+|---|---|---|
+| admissible, filled | yes | yes |
+| peak wired | 19.91 GB (0056) | 19.83 GB |
+| free memory after the screen | 3.68 GB (0056) | 0.25 GB |
+| decode, ~200-token prompts | 0.0225 s/tok | 0.0079 s/tok |
+| decode at 32,000 | 0.0355 s/tok | 0.0092 s/tok |
+| cold prefill, 2k to 32k | 358–465 tok/s | 567–731 tok/s |
+| cold fill of the 44,236-word screen | 127 s (0056) | 67 s |
+| `decode-32000` repeated | 16.3 s | 3.9 s |
+| ranking pass, three sessions | 71/81 | 68/81 |
+| tool-call valid | 35/36 | 36/36 |
+| chain wall, mean of three | 155 s | 72 s thinking off, 234 s as asked |
+| sessions a chain | 1 | 1 |
+
+**An adoption feature is warranted, and these are what it has to settle first.** Splash
+binds `127.0.0.1:8000` and takes no host flag, so the node cannot serve the laptop from it
+without a forwarder, which 0053's proxy is not. It refuses `presence_penalty`, the half of
+0005's settled pair that stops a non-thinking model looping, and nothing here ran long enough
+to say whether that matters. Thinking has to be held off at the harness, because the server
+has no switch for it. It reports no build, no served config and no server-side rates, so a
+row cannot be checked against its label. It leaves 0.25 GB free, which on this node has not
+swapped and on a busier one is MTPLX's failure. And the daemon, `stop_server` and `status`
+all name llama.cpp. None of those is a measurement against it. What was measured is one
+fixture and three chains an arm: decode and prefill are faster on every row, a chain is
+faster on the mean only with thinking held off and slower without, pass rate reads 68/81
+against 71/81 and does not separate them, and the first sight of a prompt whose prefix
+llama.cpp had cached cost Splash 56.7 s against 2.7 s.
+
+**The package is one repository, and the Hub cache is the only copy of it.**
+`incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
+under `draft/`, a vision tower and the tokeniser — so there is no separate drafter
+repository to stage. `splash serve` resolves the repository's `main` with
+`huggingface_hub` into `~/.cache/huggingface/hub`, verifies every artifact against the
+package's `manifest.json`, and then **symlinks** `~/Library/Application Support/Splash/models/<owner>/<repo>`
+at that snapshot rather than copying it. Staging the cache directory is therefore staging
+the model, and the revision staged on the node is `9d27070b71f7142c6b6025f03ac011d70a73cb48`,
+82 files and 17,382,691,384 bytes, identical on both machines. **`huggingface_hub` 1.x keeps
+the bytes in a shared store at the cache root** and leaves symlinks into it under the
+repository, so the copy needs `rsync --copy-unsafe-links` or it stages 17.4 GB of dangling
+links.
+
+**`HF_HUB_OFFLINE=1` is the switch that keeps it off the node's route to the CDN**, which
+0058 measured at 8–130 KB/s and watched stall twice at zero. Splash checks the Hub for
+`main` before every load and falls back to the cached snapshot only when the Hub raises
+`OfflineModeIsEnabled` or the transport fails; it verifies that snapshot against the
+manifest either way, so for the same snapshot offline changes where the weights are found
+and not what is served; online, a `main` moved past the staged revision would be served
+instead, which is a second reason every row is taken offline.
+[`runtimes/splash/serve.sh`](../runtimes/splash/serve.sh) exports it, the way 0058's rows
+were taken under `LLAMA_ARG_OFFLINE=1`. The fallback resolves the snapshot through
+`refs/main`, so a cache staged at a pinned commit needs that ref file present.
 
 ## Speculative decoding: adoptable at the top of the context, not the bottom
 

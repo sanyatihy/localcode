@@ -572,3 +572,52 @@ func TestLibSourcesWithNoHome(t *testing.T) {
 		t.Fatalf("lib.sh must source under set -u with HOME unset: %v: %s", err, out)
 	}
 }
+
+// served_ctx reads llama.cpp's /props, and /status for a runtime that has no /props (0060).
+// Only a 404 may send it there: a llama.cpp still loading answers 503, and a context read off
+// another route then would label a run with a server that was not serving it.
+func TestServedCtxReadsStatusOnlyWhereThereIsNoProps(t *testing.T) {
+	cases := []struct {
+		name        string
+		propsCode   int
+		propsBody   string
+		statusBody  string
+		want        string
+		statusAsked bool
+	}{
+		{"llama.cpp", 200, `{"default_generation_settings":{"n_ctx":32768}}`, `{"ready":true,"maximum_context_tokens":1}`, "32768", false},
+		{"no props, ready", 404, ``, `{"ready":true,"maximum_context_tokens":49152}`, "49152", true},
+		{"no props, not ready", 404, ``, `{"ready":false,"maximum_context_tokens":49152}`, "null", true},
+		{"props still loading", 503, ``, `{"ready":true,"maximum_context_tokens":49152}`, "null", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var asked bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/props":
+					w.WriteHeader(c.propsCode)
+					_, _ = io.WriteString(w, c.propsBody)
+				case "/status":
+					asked = true
+					_, _ = io.WriteString(w, c.statusBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			cmd := exec.Command("bash", "-c", ". ./lib.sh; served_ctx")
+			cmd.Env = append(os.Environ(), "ENDPOINT="+srv.URL, "no_proxy=*", "NO_PROXY=*")
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("served_ctx: %v", err)
+			}
+			if got := strings.TrimSpace(string(out)); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+			if asked != c.statusAsked {
+				t.Errorf("/status asked: %v, want %v", asked, c.statusAsked)
+			}
+		})
+	}
+}

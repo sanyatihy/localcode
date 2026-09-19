@@ -1,0 +1,81 @@
+# Splash 1.0 endpoint probe, the node, 2026-09-19T17:38Z. Raw output of three probe scripts; bodies truncated.
+
+## GET endpoints
+== GET /props
+{"error":{"message":"not found","type":"invalid_request_error","code":"not_found"}}
+[http 404]
+== GET /status
+{"schema_version":5,"ready":true,"maximum_context_tokens":49152,"memory_pressure":"normal","admission":{"waiting":0,"waiting_memory":0,"waiting_concurrency":0,"suspended":0,"draining":false,"oldest_wait_ms":0},"identity":{"cache":{"loaded_model_layout_sha256":"21e559f8a93ebc2a8129ea8bed6bd6202ebc61b788985f9611d6f167ab16000a","runtime_cache_namespace":"aeae2cfa449bf65c462c25e92f8f32e2e4e3b659a58ca31cde2ff7e55aa69ed7","build_id":"src-3164a2a2308749b4f05a5839af9abc5b76e46b5c0ed1edc7feb2072c001209d7","dtype":"q8s8_f32_scale_per_token_head_k_token_major_v_dimension_major","block_tokens":32},"q8":{"
+[http 200]
+== GET /v1/models
+{"object":"list","data":[{"id":"incoai/Qwen3.8-27B-Splash","object":"model","created":0,"owned_by":"splash"}]}
+[http 200]
+== GET /health
+{"status":"ok"}
+[http 200]
+== GET /ready
+{"status":"ready"}
+[http 200]
+
+## generation probes
+== chat, default thinking: http 200 in 1.0s
+{"id": "chatcmpl-fa5e53ab942744a812373ecad540647f", "object": "chat.completion", "created": 1789839511, "model": "incoai/Qwen3.8-27B-Splash", "choices": [{"index": 0, "message": {"role": "assistant", "content": "\n\npong", "reasoning_content": "We need to reply with exactly the word: pong. User asked: \"Reply with exactly the word: pong\". Need final only pong. No analysis needed? Done.\n"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 59, "completion_tokens": 39, "total_tokens": 98, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 35}}, "metrics": {"prefill": {"tokens": 59}, "decode": {"tokens": 36}, "request_latency": {"start_to_first_token_ms": 360.497, "first_token_to_done_ms": 630.232, "wall_ms": 991.357, "ttft_ms": 361.125, "queue_to_start_ms": 0.6279999999999859, "stream_tokens_per_second": 57.12182180530345}, "cache": {"sta
+== chat, reasoning_effort none: http 200 in 0.2s
+{"id": "chatcmpl-3a01aaf0caa631e5a3adcbb6c63fba29", "object": "chat.completion", "created": 1789839512, "model": "incoai/Qwen3.8-27B-Splash", "choices": [{"index": 0, "message": {"role": "assistant", "content": "pong"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 19, "completion_tokens": 2, "total_tokens": 21, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 0}}, "metrics": {"prefill": {"tokens": 19}, "decode": {"tokens": 0}, "request_latency": {"start_to_first_token_ms": 156.77, "first_token_to_done_ms": 0.004, "wall_ms": 157.603, "ttft_ms": 157.59900000000002, "queue_to_start_ms": 0.8290000000000077}, "cache": {"status": "miss", "matched_tokens": 0, "capacity": 49152, "slot": 0}}}
+== chat, enable_thinking false via chat_template_kwargs: http 200 in 0.6s
+{"id": "chatcmpl-a438eb65f9b3c397801c723a44b56abf", "object": "chat.completion", "created": 1789839512, "model": "incoai/Qwen3.8-27B-Splash", "choices": [{"index": 0, "message": {"role": "assistant", "content": "\n\npong", "reasoning_content": "The user is asking me to reply with exactly the word \"pong\". This is a simple request to output a specific word.\n"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 59, "completion_tokens": 30, "total_tokens": 89, "prompt_tokens_details": {"cached_tokens": 32}, "completion_tokens_details": {"reasoning_tokens": 26}}, "metrics": {"prefill": {"tokens": 27}, "decode": {"tokens": 28}, "request_latency": {"start_to_first_token_ms": 156.154, "first_token_to_done_ms": 441.684, "wall_ms": 603.852, "ttft_ms": 162.16799999999995, "queue_to_start_ms": 6.013999999999953, "stream_tokens_per_second": 63.39373850988489}, "cache": {"status": "hit", "match
+== chat, sampling params sent per request: http 400 in 0.0s
+{"error":{"message":"the requested logits or output transformation is not supported","type":"invalid_request_error","code":"invalid_request_error"}}
+== chat, unknown param: http 200 in 0.2s
+{"usage": {"prompt_tokens": 19, "completion_tokens": 2, "total_tokens": 21, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 0}}}
+== messages: http 200 in 0.2s
+{"id": "msg_0bbb1f992afda34980ff4bde4d253c7b", "type": "message", "role": "assistant", "model": "incoai/Qwen3.8-27B-Splash", "content": [{"type": "text", "text": "pong"}], "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 28, "cache_read_input_tokens": 0, "output_tokens": 2}}
+== messages, thinking disabled: http 200 in 0.2s
+{"id": "msg_3cfb391b757780a77e64c89e0a30fdae", "type": "message", "role": "assistant", "model": "incoai/Qwen3.8-27B-Splash", "content": [{"type": "text", "text": "pong"}], "stop_reason": "end_turn", "stop_sequence": null, "usage": {"input_tokens": 19, "cache_read_input_tokens": 0, "output_tokens": 2}}
+== count_tokens: http 200 in 0.0s
+{"input_tokens": 19}
+== apply-template, system message mid-conversation: http 200 in 0.0s
+{"prompt": "<|im_start|>system\nReasoning effort is set to xhigh. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.<|im_end|>\n<|im_start|>user\nhi<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nhello<|im_end|>\n<|im_start|>system\nA reminder injected mid-conversation.<|im_end|>\n<|im_start|>user\nReply with exactly the word: pong<|im_end|>\n<|im_start|>assistant\n<think>\n"}
+== chat, system message mid-conversation: http 200 in 0.3s
+{"choices": [{"index": 0, "message": {"role": "assistant", "content": "pong"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 47, "completion_tokens": 2, "total_tokens": 49, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 0}}}
+== chat, tool call: http 200 in 0.7s
+{"choices": [{"index": 0, "message": {"role": "assistant", "content": null, "tool_calls": [{"id": "call_1c18a46c03a2e3ee4214d3f71a406130_0", "type": "function", "function": {"name": "read_file", "arguments": "{\"path\":\"/etc/hosts\"}"}}]}, "finish_reason": "tool_calls"}], "usage": {"prompt_tokens": 278, "completion_tokens": 27, "total_tokens": 305, "prompt_tokens_details": {"cached_tokens": 0}, "completion_tokens_details": {"reasoning_tokens": 0}}}
+== chat, prompt past max-context: http 400 in 0.0s
+{"error":{"message":"prompt exceeds the context window","type":"invalid_request_error","code":"context_length_exceeded"}}
+
+## sampling parameters
+temperature 0.7            http 200  'Red, Blue, Green'
+temperature 0              http 200  'Red, Blue, Green'
+top_p 0.8                  http 200  'Red, Blue, Green'
+top_k 20                   http 200  'Red, Blue, Green'
+presence_penalty 1.5       http 400  '{"error":{"message":"the requested logits or output transformation is not supported","type":"invalid_request_error","code":"invalid_request_error"}}'
+presence_penalty 0         http 200  'Red, Blue, Green'
+frequency_penalty 0.5      http 400  '{"error":{"message":"the requested logits or output transformation is not supported","type":"invalid_request_error","code":"invalid_request_error"}}'
+repetition_penalty 1.1     http 200  'Red, Blue, Green'
+min_p 0.05                 http 400  '{"error":{"message":"the requested logits or output transformation is not supported","type":"invalid_request_error","code":"invalid_request_error"}}'
+seed 7                     http 200  'Red, blue, green'
+temp+top_p+top_k           http 200  'Red, Blue, Green'
+logprobs                   http 400  '{"error":{"message":"n and logprobs are not currently supported","type":"invalid_request_error","code":"invalid_request_error"}}'
+n 2                        http 400  '{"error":{"message":"n and logprobs are not currently supported","type":"invalid_request_error","code":"invalid_request_error"}}'
+stop                       http 200  'Red, Blue, Green'
+response_format json       http 200  '{"red":"blue","green":"yellow"}'
+-- same prompt, temperature 0.7, three times (is sampling actually applied?)
+   The moon reflected off the rippling water, creating a shimmering path of silver across the
+   The moon cast a shimmering path of silver across the restless waves.
+   The moon reflected on the water like a shattered mirror.
+-- temperature 0, twice
+   The moonlight danced across the restless waves, turning the dark water into a shimmering p
+   The moonlight danced across the restless waves, turning the dark water into a shimmering p
+-- messages API with temperature + top_k + top_p
+(200, {'id': 'msg_6684d02be50882588107748003589434', 'type': 'message', 'role': 'assistant', 'model': 'incoai/Qwen3.8-27B-Splash', 'content': [{'type': 'text', 'text': 'Red, Blue, Green'}], 'stop_reason': 'end_turn', 'stop_sequence': None, 'usage': {'input_tokens': 19, 'cache_read_input_tokens': 0, 
+
+## Claude Code shaped requests, first with the harness file model name
+unknown model id, claude-code shaped: (404, '{"type":"error","error":{"type":"not_found_error","message":"model Qwen3.8-27B-Q4_K_M.gguf not found"}}')
+tool_result turn: (404, '{"type":"error","error":{"type":"not_found_error","message":"model Qwen3.8-27B-Q4_K_M.gguf not found"}}')
+stream: (404, '{"type":"error","error":{"type":"not_found_error","message":"model Qwen3.8-27B-Q4_K_M.gguf not found"}}')
+-- and with its own id
+unknown model id, claude-code shaped: (200, {'id': 'msg_8550de9490176e8b4aabdb62723030a4', 'type': 'message', 'role': 'assistant', 'model': 'incoai/Qwen3.8-27B-Splash', 'content': [{'type': 'tool_use', 'id': 'call_8550de9490176e8b4aabdb62723030a4_0', 'name': 'Bash', 'input': {'command': 'ls -la'}}], 'stop_reason': 'tool_use', 'stop_sequence': None, 'usage': {'input_tokens': 294, 'cache_read_input_tokens': 0, 'output_tokens': 28}})
+tool_result turn: (200, {'id': 'msg_6a6e528e16a209e105b56db291b1625b', 'type': 'message', 'role': 'assistant', 'model': 'incoai/Qwen3.8-27B-Splash', 'content': [{'type': 'text', 'text': 'Files in the current directory:\n- `a.go`\n- `b.go`'}], 'stop_reason': 'end_turn', 'stop_sequence': None, 'usage': {'input_tokens': 54, 'cache_read_input_tokens': 288, 'output_tokens': 19}})
+stream: (200, 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_d57b40f61421977fd3d40eecdade1b2e","type":"message","role":"assistant","model":"incoai/Qwen3.8-27B-Splash","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":6,"cache_read_input_tokens":288,"output_tokens":0}}}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_d57b40f61421977fd3d40eecdade1b2e_0","name":"Bash","in
+count_tokens w/ tools+system: (200, {'input_tokens': 294})
+thinking enabled: 200 ['thinking', 'tool_use']

@@ -241,9 +241,14 @@ func run(o opts) (int, error) {
 	// What is served is read off the server rather than off any file, because a file
 	// carries one number and `-config` chooses which context is served. What the harness
 	// makes of it is the harness's: the reservation it keeps for a reply is its own.
-	served, err := servedContext(o.endpoint)
+	served, modelID, err := servedContext(o.endpoint)
 	if err != nil {
 		return 2, err
+	}
+	// A server that answers only to its own model id has to be asked by that name, and only
+	// a harness that sends one needs telling.
+	if named, ok := agent.(interface{ ServedModel(id string) }); ok && modelID != "" {
+		named.ServedModel(modelID)
 	}
 	maxContext, maxOutput, err := agent.Window(served)
 	if err != nil {
@@ -459,7 +464,11 @@ var serverReachable = serverUp
 // running server rather than of a config file that may not be the one that started it.
 type props struct {
 	ModelPath string `json:"model_path"`
-	Settings  struct {
+	// ModelID is set only for a server that refuses any model name but its own (0060).
+	// llama.cpp answers to whatever name it is sent, so it is left empty there and the
+	// harness keeps the name its committed file carries.
+	ModelID  string `json:"-"`
+	Settings struct {
 		NCtx int `json:"n_ctx"`
 	} `json:"default_generation_settings"`
 }
@@ -473,6 +482,11 @@ func readProps(endpoint string) (*props, error) {
 		return nil, nil
 	}
 	defer resp.Body.Close() //nolint:errcheck // the body is decoded below or the call failed
+	// A runtime with no /props at all, as opposed to one still loading: Splash answers 404
+	// here and says what it serves on /status (0060).
+	if resp.StatusCode == http.StatusNotFound {
+		return readStatus(client, endpoint)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: server at %s answered HTTP %d", errNotReady, endpoint, resp.StatusCode)
 	}
@@ -483,23 +497,71 @@ func readProps(endpoint string) (*props, error) {
 	return &p, nil
 }
 
+// readStatus is the same reading off a server that reports it on /status instead. Still a
+// reading: the number comes from the running server, never from a flag or a file, which is
+// the rule servedContext exists to hold. The model's id is on /v1/models and is not optional:
+// a server that reports itself this way answers 404 to any other name, so a session started
+// without it would spend a launch to be refused on its first call.
+func readStatus(client *http.Client, endpoint string) (*props, error) {
+	resp, err := client.Get(endpoint + "/status")
+	if err != nil {
+		return nil, nil
+	}
+	defer resp.Body.Close() //nolint:errcheck // the body is decoded below or the call failed
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: server at %s answers neither /props nor /status (HTTP %d)",
+			errNotReady, endpoint, resp.StatusCode)
+	}
+	var st struct {
+		Ready bool `json:"ready"`
+		NCtx  int  `json:"maximum_context_tokens"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		return nil, fmt.Errorf("could not read %s/status: %w", endpoint, err)
+	}
+	if !st.Ready {
+		return nil, fmt.Errorf("%w: server at %s is not ready", errNotReady, endpoint)
+	}
+	var p props
+	p.Settings.NCtx = st.NCtx
+	models, err := client.Get(endpoint + "/v1/models")
+	if err != nil {
+		return nil, fmt.Errorf("could not read %s/v1/models: %w", endpoint, err)
+	}
+	defer models.Body.Close() //nolint:errcheck // the body is decoded below or the call failed
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if models.StatusCode != http.StatusOK || json.NewDecoder(models.Body).Decode(&list) != nil ||
+		len(list.Data) == 0 || list.Data[0].ID == "" {
+		return nil, fmt.Errorf("%s reports itself on /status and names no model on /v1/models "+
+			"(HTTP %d): it would refuse a request by any other name", endpoint, models.StatusCode)
+	}
+	p.ModelPath, p.ModelID = list.Data[0].ID, list.Data[0].ID
+	return &p, nil
+}
+
 // servedContext is what the endpoint says it is serving, which is the only number a
 // session can be budgeted against. The wall a session hits is the served context, and
 // `-config` moves it, so a context taken from a file is a claim about whichever server
 // that file was written for. Taking a file at face value is what killed the sessions the
 // enforcement was first measured on: a budget 3,072 tokens too generous let them edit four
 // files each and then die on `Prompt is too long` with no handoff written.
-func servedContext(endpoint string) (int, error) {
+//
+// The model id comes back with it and is empty for a server that takes any name.
+func servedContext(endpoint string) (int, string, error) {
 	p, err := readProps(endpoint)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if p == nil || p.Settings.NCtx <= 0 {
-		return 0, fmt.Errorf("%s serves no context it will report, so a session cannot be "+
+		return 0, "", fmt.Errorf("%s serves no context it will report, so a session cannot be "+
 			"budgeted against it: what a session may spend is derived from what is served",
 			endpoint)
 	}
-	return p.Settings.NCtx, nil
+	return p.Settings.NCtx, p.ModelID, nil
 }
 
 // errNotReady separates a server that is still loading from one whose answer could not be
