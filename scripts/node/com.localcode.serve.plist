@@ -7,14 +7,21 @@
      HOST is the one thing the environment overrides: config/node.env keeps loopback
      like every committed config, and a machine that serves the network says so where the
      server is started (0053). HOME is set explicitly because the weights are read from that
-     user's cache, and PATH because launchd's own does not carry Homebrew. -->
+     user's cache, and PATH because launchd's own does not carry Homebrew.
+
+     KeepAlive is PathState on the switch file and nothing else (0061): launchd holds the
+     server up while that file is there, so stopping the node is removing a file its own user
+     owns rather than a bootout needing root. SuccessfulExit cannot stay beside it, because
+     launchd ORs the KeepAlive keys and a server killed on purpose would be restarted as a
+     failure. The program is scripts/node/serve.sh rather than the serving script, since
+     KeepAlive implies a launch at load whatever the switch says. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>com.localcode.serve</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__CHECKOUT__/scripts/serve.sh</string>
+    <string>__CHECKOUT__/scripts/node/serve.sh</string>
     <string>config/node.env</string>
   </array>
   <key>WorkingDirectory</key>
@@ -34,8 +41,11 @@
   <true/>
   <key>KeepAlive</key>
   <dict>
-    <key>SuccessfulExit</key>
-    <false/>
+    <key>PathState</key>
+    <dict>
+      <key>__HOME__/.local/state/localcode/serve.on</key>
+      <true/>
+    </dict>
   </dict>
   <key>StandardOutPath</key>
   <string>/Library/Logs/localcode/serve.log</string>

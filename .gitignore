@@ -21,3 +21,5 @@ __pycache__/
 # than `go run` so a row can name the revision behind it; not committed, because the commit
 # is what the row names.
 .bin/
+# `go build ./cmd/localcode` from the root leaves this, and it embeds the builder's paths.
+/localcode

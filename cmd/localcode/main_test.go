@@ -1432,3 +1432,163 @@ func TestARemoteEndpointIsRefusedWhenTheLocalAddressIsBusy(t *testing.T) {
 		}
 	}
 }
+
+// On the node the server belongs to launchd, and a second one started from here would bind
+// nothing and load the weights for nothing. `serve` creates the switch the daemon is gated
+// on (0061) and waits for that server instead.
+func TestServeCreatesTheSwitchWhereTheDaemonHoldsTheServer(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+	old := serveDaemonLoaded
+	serveDaemonLoaded = func() bool { return true }
+	t.Cleanup(func() { serveDaemonLoaded = old })
+
+	if code, err := serveServer(root, healthy(t, http.StatusOK), "config/node.env", false); err != nil || code != 0 {
+		t.Fatalf("serve: code %d err %v", code, err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a machine whose daemon serves must not start a second server here")
+	}
+	path, err := serveSwitch()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the switch the daemon is gated on was not created: %v", err)
+	}
+
+	// Everywhere else the server is this machine's own, started in the foreground.
+	serveDaemonLoaded = func() bool { return false }
+	if code, err := serveServer(root, healthy(t, http.StatusOK), "config/agent.env", false); err != nil || code != 0 {
+		t.Fatalf("serve: code %d err %v", code, err)
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("serve.sh must have run: %v", err)
+	}
+	if !strings.Contains(string(got), "serve.sh") {
+		t.Errorf("serve.sh must have run: %s", got)
+	}
+}
+
+// The node is stopped and started over the login the owner wrote down, and over nothing
+// else: an endpoint with no destination named for it is still somebody else's server.
+func TestStopAndServeDriveTheNodeOverSSHOrRefuseByName(t *testing.T) {
+	root := fakeCheckout(t)
+	marker := markedScripts(t, root)
+	dir := t.TempDir()
+	argv := filepath.Join(dir, "argv")
+	stub := filepath.Join(dir, "ssh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> "+argv+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := sshBin
+	sshBin = stub
+	t.Cleanup(func() { sshBin = old })
+
+	const remote = "http://mac.local:8081"
+	commands := map[string]func() (int, error){
+		"stop":  func() (int, error) { return stopServer(root, remote) },
+		"serve": func() (int, error) { return serveServer(root, remote, "config/node.env", false) },
+	}
+
+	_, path, err := resolveSSHDest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, cmd := range commands {
+		code, err := cmd()
+		if code != 2 || err == nil {
+			t.Fatalf("%s with no destination named: code %d err %v", name, code, err)
+		}
+		if !strings.Contains(err.Error(), path) {
+			t.Errorf("%s must name the file that would name the login: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a refusal must not start or stop anything here")
+	}
+	if _, err := os.Stat(argv); err == nil {
+		t.Error("a refusal must not open a connection")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("server@mac.local\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, cmd := range commands {
+		if err := os.Remove(argv); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if code, err := cmd(); err != nil || code != 0 {
+			t.Fatalf("%s over ssh: code %d err %v", name, code, err)
+		}
+		got, err := os.ReadFile(argv)
+		if err != nil {
+			t.Fatalf("%s did not reach ssh: %v", name, err)
+		}
+		// BatchMode, the destination from the file, and the node's launcher by path: a
+		// non-login shell has no ~/.zprofile and so no ~/.local/bin on its PATH.
+		want := "-o\nBatchMode=yes\n--\nserver@mac.local\n~/.local/bin/localcode " + name + "\n"
+		if string(got) != want {
+			t.Errorf("ssh was run with\n%q\nwant\n%q", got, want)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the remote route must run nothing on this machine")
+	}
+}
+
+// Three ways the remote route could report something that did not happen (0061, review): a
+// destination ssh reads as an option exits 0 having stopped nothing, a `-config` the daemon
+// cannot honour would be answered "server ready", and a hint to `make serve` on a switched
+// node starts a second server the switch knows nothing about.
+func TestTheRemoteRouteRefusesWhatItCannotCarryOut(t *testing.T) {
+	root := fakeCheckout(t)
+	dir := t.TempDir()
+	argv := filepath.Join(dir, "argv")
+	stub := filepath.Join(dir, "ssh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> "+argv+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldSSH, oldReach := sshBin, serverReachable
+	sshBin = stub
+	serverReachable = func(string) error { return fmt.Errorf("nothing there") }
+	t.Cleanup(func() { sshBin, serverReachable = oldSSH, oldReach })
+
+	_, path, err := resolveSSHDest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(dest string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(dest+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const remote = "http://mac.local:8081"
+
+	write("-V")
+	if code, err := stopServer(root, remote); err == nil || code != 2 {
+		t.Errorf("a destination ssh would read as an option must be refused: code %d err %v", code, err)
+	}
+
+	write("server@mac.local")
+	code, err := serveServer(root, remote, "config/variant.env", true)
+	if err == nil || code != 2 || !strings.Contains(err.Error(), "config/variant.env") {
+		t.Errorf("a -config the daemon cannot honour must be refused by name: code %d err %v", code, err)
+	}
+	if _, statErr := os.Stat(argv); statErr == nil {
+		t.Error("neither refusal may reach ssh")
+	}
+
+	err = ensureServer(root, remote, "config/agent.env", false, false)
+	if err == nil || !strings.Contains(err.Error(), "localcode serve") || strings.Contains(err.Error(), "make serve") {
+		t.Errorf("with a login named, the hint is `localcode serve` and not a second server: %v", err)
+	}
+}

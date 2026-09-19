@@ -143,13 +143,53 @@ every lever applied and iCloud still signed in, the node idled at 2.60 GB anonym
 **A dedicated node serves from three LaunchDaemons** (0056, `scripts/node/`):
 `com.localcode.link` reconciles the link address at boot and every 30 s, since a replug drops it, `com.localcode.gpucap` applies the wired
 cap as root, since the sysctl needs root and no raise survives a reboot, and
-`com.localcode.serve` runs `serve.sh` on `config/node.env` as the serving user with
-`HOST=0.0.0.0` and `KeepAlive` on failure. `scripts/node/install.sh` substitutes the
+`com.localcode.serve` runs `scripts/node/serve.sh` on `config/node.env` as the serving user
+with `HOST=0.0.0.0`. `scripts/node/install.sh` substitutes the
 checkout, the serving user and the machine file's link into the plists and bootstraps them,
-refusing unless `LOCALCODE_NODE=1` and refusing a value `sed` or XML would read as syntax. Because a failed server is replaced,
-`stop_server` boots that service out when `launchctl` reports it loaded and fails rather than
-going on to the `pkill` when the bootout does — it needs root. `stop.sh` stops it whenever the
-daemon is loaded, since a daemon between restart attempts has no process to find.
+refusing unless `LOCALCODE_NODE=1` and refusing a value `sed` or XML would read as syntax.
+`stop.sh` stops the server whenever the daemon is loaded, since a daemon between restart
+attempts has no process to find.
+
+**The serving daemon is gated on a switch file** (0061): `serve.on` under
+`~/.local/state/localcode` in the serving user's home. Its `KeepAlive` is `PathState` over
+that file and nothing else, so launchd holds the server up while the file exists and leaves
+it down while it does not — stopping the node is removing a file its own user owns, which
+needs no root, and the switch survives a reboot. `SuccessfulExit` left when `PathState`
+arrived: launchd ORs the keys under `KeepAlive`, and a server killed on purpose would be
+restarted as a failure. `KeepAlive` also implies a speculative launch at load, and launchd
+does make it: rebooted on 2026-09-19 with the switch absent, the node's job ran once
+(`runs = 1`, exit 0) and was not run again. `scripts/node/serve.sh` is what makes that launch
+harmless: it execs `scripts/serve.sh config/node.env` when the switch is there and exits 0
+when it is not, so the node came up not serving.
+`install.sh` creates the switch as the serving user on a first install only — no installed
+plist, or one that predates the switch — so an upgrade does not restart a node that was
+stopped on purpose.
+
+**The node is stopped and started from the laptop, with no password.** `stop_server` removes
+the switch when the installed plist names it and keeps the bootout, which needs root, for a
+node whose plist predates it; the wait for the memory back is unchanged either way.
+`localcode serve` on a machine whose serving daemon is loaded creates the switch and waits
+for health, rather than starting a second server against a port launchd's own already holds.
+`localcode stop` and `localcode serve` against an endpoint that is not this machine's run
+`~/.local/bin/localcode` on the machine named in `~/.config/localcode/ssh`, one line of
+`user@host`, over `ssh -o BatchMode=yes` so a missing key is an error and never a prompt;
+with no such file they refuse and name it. The launcher is named by path because the
+non-login shell ssh runs a command in reads no `~/.zprofile`. A destination is written down
+rather than inferred from the endpoint's host: naming it is the owner saying that machine is
+theirs to stop. `serve` refuses a `-config` where the daemon or another machine serves, since
+the daemon serves `config/node.env` alone and a "server ready" would otherwise label a
+measurement with a config that never loaded. Driven on the node from the laptop on 2026-09-19 with no
+password typed: `serve` created the switch and the model answered at 49,152 within 5 s from
+a warm page cache; `stop` returned in under 4 s with the process gone, and seven status reads
+over the next minute found no server, no restart and wired memory back at 1.4 GB; the node
+was then rebooted stopped and came up not serving. The reboot itself and `install.sh` are
+the owner's, under `sudo`. **`cap.sh` and most scripts here source `scripts/lib.sh` under `set -u`, and a
+LaunchDaemon run as root has no `HOME`**: a default that read `$HOME` bare ended `cap.sh` at
+that boot and left the node at Metal's derived cap until it was fixed, which no test or
+review had caught and a test now holds. **`install.sh` creates the switch before it writes
+any plist**, because a run that wrote the new plist and then failed at the bootstrap left a
+rerun reading the node as already installed, and a node with no switch does not serve; it
+also waits up to 30 s for a booted-out service to be gone before bootstrapping over it.
 
 **A config may also drop the projector and pin the weights.** `NO_MMPROJ=1` passes
 `--no-mmproj`, which keeps `-hf` from loading the 888 MB multimodal projector a text-only

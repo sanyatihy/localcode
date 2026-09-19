@@ -186,10 +186,12 @@ localcode -endpoint http://mac.local:8081 "fix the failing test"
 
 Write that URL to `~/.config/localcode/endpoint` to make it this machine's default;
 `-endpoint` still wins, and `localcode status` reports which was used. A remote endpoint is
-never started or stopped from here: run `make serve` and `localcode stop` on the machine
-that serves. The session reaches loopback and, through the launcher, that endpoint, and
-nothing else; port 8081 on this machine must be free while the run lasts. Nothing
-authenticates, so serve only on a network you trust.
+started and stopped from here only when `~/.config/localcode/ssh` names a login for it, one
+line of `user@host`: `localcode serve` and `localcode stop` then run that machine's own
+launcher over SSH. With no such file they refuse and name it, and the commands to run are
+`make serve` and `localcode stop` on the machine that serves. The session reaches loopback
+and, through the launcher, that endpoint, and nothing else; port 8081 on this machine must be
+free while the run lasts. Nothing authenticates, so serve only on a network you trust.
 
 ### Dedicated node
 
@@ -266,9 +268,14 @@ sudo LOCALCODE_NODE=1 SERVE_USER=<user> ./scripts/node/install.sh
 
 `com.localcode.link` sets `anpi2` to `10.99.0.2` at every boot, `com.localcode.gpucap`
 applies the GPU wired cap as root, and `com.localcode.serve` serves `config/node.env` as the
-serving user bound to `0.0.0.0`, restarting it if it fails. All three log to
-`/Library/Logs/localcode/`. Stop the server with `sudo ./scripts/stop.sh`, which boots the
-daemon out; stopping the process leaves the daemon loaded and ready to serve again.
+serving user bound to `0.0.0.0`. All three log to `/Library/Logs/localcode/`.
+
+The serving daemon is gated on a switch file, `~/.local/state/localcode/serve.on` in the
+serving user's home: launchd keeps the server up while that file is there and leaves it down
+while it is not. `install.sh` creates it on a first install, and after that it is the node's
+on-off switch — `./scripts/stop.sh` removes it and waits for the memory back, `localcode
+serve` puts it back, and neither needs `sudo`, because the file belongs to the serving user.
+It survives a reboot, so a node stopped on purpose comes up not serving.
 
 Every node script refuses without `LOCALCODE_NODE=1`, because each ruins a machine somebody
 works at.
@@ -279,6 +286,22 @@ works at.
 ENDPOINT=http://10.99.0.2:8081 make smoke
 localcode -endpoint http://10.99.0.2:8081 "fix the failing test"
 ```
+
+Name the node's login once, beside the endpoint, and the laptop stops and starts it with no
+password:
+
+```sh
+echo 'http://10.99.0.2:8081' > ~/.config/localcode/endpoint
+echo '<user>@10.99.0.2' > ~/.config/localcode/ssh
+localcode stop      # over SSH: removes the switch, waits for the node's memory back
+localcode status    # nothing serving
+localcode serve     # puts the switch back, waits for the model to answer
+```
+
+Both run the node's own `~/.local/bin/localcode` over `ssh -o BatchMode=yes`, so the key from
+step 0 is what authorises them and a missing key is an error rather than a prompt. Without
+`~/.config/localcode/ssh` they refuse: an endpoint somebody else shares is not this laptop's
+to stop.
 
 The node is also on Wi-Fi at `<its Wi-Fi address>`. Nothing authenticates the endpoint — serve
 only on a network you trust.
