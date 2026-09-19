@@ -1549,7 +1549,8 @@ includes eight generated tokens.
 
 **The 0.25 GB was free pages, not a margin, measured headless on 2026-09-20 (0062)**
 ([screens](data/2026-09-20-m5max-36gb-0062-screen.jsonl),
-[decode](data/2026-09-20-m5max-36gb-0062-mem-decode.jsonl)). Splash was screened filled at
+[decode](data/2026-09-20-m5max-36gb-0062-mem-decode.jsonl),
+[memory samples and the one `vm_stat` reading](data/2026-09-20-m5max-36gb-0062-memory.jsonl)). Splash was screened filled at
 49,152 with nobody logged in at three `--max-memory` ceilings, a sampler reading
 `memprobe.sh` every 2 s through each, then two streamed passes of the ranking suite:
 
@@ -1560,12 +1561,13 @@ includes eight generated tokens.
 | 26624M | 20.16 GB | 0.15 GB | 0.0 | 0.00 | 69 s | 0.0079 |
 
 **The ceiling does not bind at this context, so lowering it buys nothing**, and the config
-keeps the cap. Where the memory sits, from `vm_stat` with the model loaded and the context
-filled: 21.4 GB wired, 2.8 GB anonymous, **12.1 GB file-backed and inactive**, 1.0 GB free,
+keeps the cap. Where the memory sits, from one `vm_stat` reading taken by hand with the model
+loaded and the context filled, outside the screens, which is why its wired figure is above
+their peaks: 21.4 GB wired, 2.8 GB anonymous, **12.1 GB file-backed and inactive**, 1.0 GB free,
 nothing in the compressor, `kern.memorystatus_vm_pressure_level` 1, which is normal, and
-Splash's own `/status` reporting `memory_pressure` `normal`. The file-backed pages are the
-17 GB package the runtime read at load, which the kernel keeps as cache and reclaims on
-demand. `free_gb` in `memprobe.sh` counts free pages only, so it reads near zero on any
+Splash's own `/status` reporting `memory_pressure` `normal`. The file-backed pages are most
+likely the 17 GB package the runtime read at load, kept as cache the kernel reclaims on
+demand; that attribution is an inference from their size and not a reading. `free_gb` in `memprobe.sh` counts free pages only, so it reads near zero on any
 machine that has read a large file, and **0060's "spends the free pool as MTPLX did" was that
 metric and not memory pressure**; 0058's MTPLX and MLX rows carry the same column and should
 be read the same way, by swap and compression and not by free pages. Headless, the node idles
@@ -1650,7 +1652,7 @@ condition on a server that had seen nothing:
 |---|---|---|
 | conversation alone | 79.6 s | 41.7 s |
 | conversation with a call between turns | 84.2 s | 44.0 s |
-| what the calls cost the conversation | 4.6 s | 2.3 s |
+| what the calls cost the conversation | 4.7 s | 2.3 s |
 | the calls themselves, four of them | 51.7 s | 31.5 s |
 | prefix reused on turns 2 to 5, either condition | 61.5, 72.2, 78.3, 82.2% | 61.5, 72.2, 78.1, 82.0% |
 
@@ -1703,8 +1705,8 @@ call (0018). Prompt reuse per chain is of the same order on both, 46–265k toke
 against 11–25k ingested. The sampling differs between the arms as the Log says: llama.cpp
 serves `presence_penalty` 1.5 and Splash cannot take one, and no chain on either side looped.
 
-**On real work neither runtime finished the instruction, and Splash did three times the
-work in the time, measured 2026-09-20 (0062)**
+**On real work neither runtime finished the instruction, and a generated token cost Splash a
+third of the model time, measured 2026-09-20 (0062)**
 ([rows](data/2026-09-20-m5max-36gb-0062-real-work.jsonl)). One instruction on a private
 real-work folder, five data files and a generated report, asking for a forecast recomputed,
 three forecast charts and the layout rechecked. Both runtimes started from one commit, the
@@ -1727,33 +1729,40 @@ through `ssh -L` to its loopback port:
 | session length | 194 to 1,262 s | 123 to 319 s |
 | node swap | 0 | 0 |
 
-**The instruction defeats a 40,960-token session on either runtime.** Each session spends its
-window re-reading a 32 KB report and the data, writes part of a generator, reaches the
-ceiling and hands off a plan the next one starts again; the launcher's stall guards (0036)
-ended both chains. So the pass condition that Splash finish what llama.cpp finishes is met
+**Both chains stalled, and these rows do not say why.** Every session ended at its ceiling,
+24,576 tokens of a 40,960 declared window, which the forked chain's settings carried, and
+handed off; the launcher's stall guards (0036) then ended both chains, each by a different
+rule. What the logs on the laptop show, and the published rows do not, is sessions re-reading
+a 32 KB report and the data, writing part of a generator and handing off a plan the next one
+began again. That the task outgrows a session at that ceiling is the likely cause and is a
+hypothesis: no arm was run at a higher ceiling. So the pass condition that Splash finish what llama.cpp finishes is met
 only because llama.cpp finished nothing, and what a finished real-work chain costs on Splash
-is still unmeasured. **What the run does establish is the rest**: twelve handoffs written and
-inherited through Splash with no empty or failed session, 140 calls over 39 minutes through
-an SSH forward with nothing in its log but the harness's own `HEAD /api/hello` probe answered
-404, no session ended on a timeout or a call budget, the node swapped nothing, and a
-generated token cost a third of the model time at the depth real sessions work at. The
+is still unmeasured. **What the run does establish is the rest.** From the `session_state` and
+`chain_end` rows: twelve Splash sessions and five llama.cpp ones, every one exiting 0 with a
+handoff of 1.7 to 4.8 KB, 122 and 44 tool calls, one Splash session moving the repository
+and no llama.cpp one. From the account rows: 140 calls in 1,410 s of model time against 55 in
+2,786 s, 15 ms a generated token against 49 ms, at the depth real sessions work at. Tokens
+generated per wall second are 1.95 times llama.cpp's; none of these is a measure of useful
+work, since neither chain produced the result. Observed on the machines and not in any
+published row: Splash's server log over those 39 minutes holds nothing but the harness's own
+`HEAD /api/hello` probe answered 404, and the node reported no swap-outs since its boot. The
 account's fitted decode rate for Splash, 403 tok/s, is an artefact of fitting a linear model
 to a drafted decoder and is not a reading; time per generated token is. The launcher treats
 the forwarded port as a local endpoint and needs `-no-serve`, and Splash accepts the
 forward's `127.0.0.1:8000` Host header as it is.
 
-**0062's verdict: nothing measured stands against serving Splash, and one condition is still
-open.** Against the five conditions 0062 set: every handoff was inherited, 12 of 12; no
+**0062's verdict: four conditions are met, and the one that matters most is not
+established.** Against the five conditions 0062 set: every handoff was inherited, 12 of 12; no
 session looped; nothing swapped, on the chain or anywhere since the node booted; wall and
 model time were lower, 2,337 s to 2,790 s and 15 ms to 49 ms a generated token; and Splash
 finished what llama.cpp finished only in the sense that neither finished anything. Beside
 them, headless: the memory reading that looked like MTPLX's failure was file cache at normal
 pressure, a side call evicts the conversation on neither runtime, and the bridge needs no
-session on the node. **0063 proceeds**, and its on-node box should drive a real-work
-instruction that llama.cpp is known to finish, because that is the one comparison this
-feature could not make. What stalled both chains is not a runtime's fault and is its own
-finding: a task whose artefact and inputs outgrow one 40,960-token session is re-planned by
-every session and finished by none, at any decode speed.
+session on the node. **Whether Splash completes real work that llama.cpp completes is unestablished**, so
+0063 is not cleared by measurement: it proceeds only on the owner's decision, and if it does,
+its on-node box has to drive a real-work instruction llama.cpp is known to finish and stop
+there if Splash does not. Lower wall here is two unsuccessful chains ended by two different
+guards, and is not a completed-work comparison.
 
 **The one table**, the node, Qwen3.8-27B at 49,152, 2026-09-19, a console session logged in:
 
@@ -1779,9 +1788,9 @@ for thinking off and which 0005 adopted with it; no row in this repository measu
 penalty prevents anything, and 0060's llama.cpp sides scored the same at 0 as at 1.5. 0062's
 real-work chain ran 140 calls without it and no session repeated itself to a timeout or a
 call budget. Thinking has to be held off at the harness, because the server
-has no switch for it. It reports no build, no served config and no server-side rates, so a
-row cannot be checked against its label. It leaves 0.25 GB free, which on this node has not
-swapped and on a busier one is MTPLX's failure. And the daemon, `stop_server` and `status`
+has no switch for it. It reports no server-side rates; 0060 also held that it reports no
+build or served config and leaves 0.25 GB free, and 0062 superseded both: the scorer reads
+them from `/status`, and the free figure was file cache at normal pressure. And the daemon, `stop_server` and `status`
 all name llama.cpp. None of those is a measurement against it. What was measured is one
 fixture and three chains an arm: decode and prefill are faster on every row, a chain is
 faster on the mean only with thinking held off and slower without, pass rate reads 68/81

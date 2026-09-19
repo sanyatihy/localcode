@@ -22,6 +22,24 @@ PROBE_ARGS="${PROBE_ARGS:-}"
 # A runtime that is not llama.cpp is started by a script of its own and stopped through
 # STOP_CMD, as in scripts/pair.sh and scripts/chainrun.sh.
 SERVE_CMD="${SERVE_CMD:-./scripts/serve.sh}"
+
+# The server this run started, ended by pid and waited for. stop_server waits on a pattern
+# that names llama-server, so for any other runtime it returns at once, and the next condition
+# would load beside a server still holding its port and its memory. The bound and the SIGKILL
+# are scripts/pair.sh's. On every way out, because a failed probe must not leave a model up.
+server_pid=""
+end_server() {
+  [ -n "$server_pid" ] || return 0
+  kill "$server_pid" 2>/dev/null || true
+  local deadline=$((SECONDS + 90))
+  while kill -0 "$server_pid" 2>/dev/null; do
+    [ $SECONDS -ge $deadline ] && { kill -9 "$server_pid" 2>/dev/null || true; sleep 3; break; }
+    sleep 1
+  done
+  server_pid=""
+  sleep 2
+}
+trap 'end_server; stop_server' EXIT
 # Which conditions to walk, in order. A re-walk usually asks about one of them, and each
 # costs a server load and every turn's ingest.
 CONDITIONS="${CONDITIONS:-clean interleaved}"
@@ -34,6 +52,9 @@ mkdir -p "$(dirname "$OUT")"
 # shellcheck disable=SC2086  # CONDITIONS is a list of conditions and must expand
 for condition in $CONDITIONS; do
   echo "=== $LABEL: $condition ===" >&2
+  # Machine-wide on purpose, whatever runtime is under test: a measurement node holds one
+  # model, so the llama.cpp daemon's server is stopped for a Splash probe too.
+  end_server
   stop_server
   log="results/serve-$LABEL-$condition.log"
   # shellcheck disable=SC2086 # SERVE_CMD is a command line, split on purpose
@@ -41,7 +62,7 @@ for condition in $CONDITIONS; do
   # Alive is this pid: lib.sh's pgrep looks for llama-server and calls any other runtime dead
   # once the health grace is past.
   server_pid=$!
-  server_alive() { kill -0 "$server_pid" 2>/dev/null; }
+  server_alive() { [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; }
   wait_healthy 300 || { echo "  server did not come up; see $log" >&2; exit 2; }
 
   case "$condition" in
@@ -52,7 +73,6 @@ for condition in $CONDITIONS; do
   esac
   # shellcheck disable=SC2086
   "$(built prefixprobe)" -endpoint "$ENDPOINT" -config "$LABEL" -results "$OUT" $flag $PROBE_ARGS
-  kill "$server_pid" 2>/dev/null || true
+  end_server
 done
-stop_server
 echo "=== rows in $OUT ===" >&2

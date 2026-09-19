@@ -85,6 +85,7 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 - [x] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
 - [x] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
 - [x] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
+- [x] The external review's findings are closed: `prefixrun.sh` ends the server it started by pid on every way out, the per-session counters and memory samples behind TECH's claims are published, and the verdict no longer clears 0063 on a comparison that was not made
 
 ## Log
 
