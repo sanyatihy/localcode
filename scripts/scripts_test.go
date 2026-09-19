@@ -489,3 +489,66 @@ func TestTheNodesServeWrapperServesOnlyWithTheSwitch(t *testing.T) {
 		t.Errorf("with the switch there the node must serve its own config: %s", out)
 	}
 }
+
+// Stopping the node's server is the switch's job wherever the installed plist is gated on
+// it, because that route needs no root and the bootout does. The bootout stays for a node
+// whose plist predates the switch, and a failed one is still a stop that did not happen.
+func TestStopServerTakesTheSwitchRouteAndKeepsTheBootoutForAnOlderPlist(t *testing.T) {
+	for _, c := range []struct {
+		name        string
+		switched    bool
+		bootoutCode string
+		wantCode    int
+		wantSwitch  bool
+		wantBootout bool
+	}{
+		{"a switched daemon is stopped by the file", true, "0", 0, false, false},
+		{"a plist that predates the switch is booted out", false, "0", 0, true, true},
+		{"a bootout that fails is not a stop", false, "1", 1, true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bootoutLog := filepath.Join(dir, "bootout.log")
+			stub := "#!/bin/sh\ncase \"$1\" in\n" +
+				"print) exit 0 ;;\n" +
+				"bootout) echo \"$@\" >> \"" + bootoutLog + "\"; exit " + c.bootoutCode + " ;;\n" +
+				"esac\nexit 1\n"
+			if err := os.WriteFile(filepath.Join(dir, "launchctl"), []byte(stub), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			switchPath := filepath.Join(dir, "serve.on")
+			if err := os.WriteFile(switchPath, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			plist := filepath.Join(dir, "com.localcode.serve.plist")
+			body := "<key>SuccessfulExit</key>"
+			if c.switched {
+				body = "<key>" + switchPath + "</key>"
+			}
+			if err := os.WriteFile(plist, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			cmd := exec.Command("bash", "-c", ". ./lib.sh; stop_server")
+			cmd.Env = append(os.Environ(),
+				"PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"SERVE_SWITCH="+switchPath, "SERVE_PLIST="+plist,
+				// A name nothing on the machine running this answers to: what is under test
+				// is which route was taken, and nothing here may kill a real server.
+				"PROC=localcode-stop-test-no-such-process")
+			out, err := cmd.CombinedOutput()
+			if err != nil && cmd.ProcessState == nil {
+				t.Fatalf("stop_server: %v", err)
+			}
+			if got := cmd.ProcessState.ExitCode(); got != c.wantCode {
+				t.Errorf("exit %d, want %d: %s", got, c.wantCode, out)
+			}
+			if _, err := os.Stat(switchPath); (err == nil) != c.wantSwitch {
+				t.Errorf("switch present = %v, want %v: %s", err == nil, c.wantSwitch, out)
+			}
+			if _, err := os.Stat(bootoutLog); (err == nil) != c.wantBootout {
+				t.Errorf("bootout ran = %v, want %v: %s", err == nil, c.wantBootout, out)
+			}
+		})
+	}
+}
