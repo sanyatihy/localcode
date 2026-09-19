@@ -1,9 +1,9 @@
 ---
 id: 0062
 title: Prove Splash on real work before the node serves it
-status: Submitted
+status: Draft
 created: 2026-09-20
-submitted: 2026-09-19
+submitted: 
 needs:
 ---
 
@@ -106,3 +106,4 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
   from one commit; the work also lived in a handoff and in files outside the folder, and an
   arm that inherited the other's edits to them would not have started where it did. The
   original folder's checksum is unchanged after both arms.
+- 2026-09-19 — reopen to Draft: TECH says the 24,576 ceiling came from the forked chain's settings; it is the launcher's default for a 49,152 window
