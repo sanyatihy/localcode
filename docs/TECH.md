@@ -28,6 +28,7 @@ Design arguments stay in the feature docs; this is the state of the machine.
 - [Reasoning effort is a four-point axis, and its default is the bad end](#reasoning-effort-is-a-four-point-axis-and-its-default-is-the-bad-end)
 - [Tool-call adherence is not a formatting problem](#tool-call-adherence-is-not-a-formatting-problem)
 - [llama.cpp against MLX](#llamacpp-against-mlx)
+- [Splash, installed and staged](#splash-installed-and-staged)
 - [Speculative decoding: adoptable at the top of the context, not the bottom](#speculative-decoding-adoptable-at-the-top-of-the-context-not-the-bottom)
 - [Nothing displaces Claude Code, and the two axes disagree](#nothing-displaces-claude-code-and-the-two-axes-disagree)
 
@@ -1404,6 +1405,57 @@ repeating any, which is what forced the slot-count problem. A real agent session
 conversation resending a growing prefix, needing one or two slots — the configuration that is
 memory-safe. So this comparison understates MLX for the workload the project actually cares
 about, and the honest reading is that neither runtime is disqualified.
+
+## Splash, installed and staged
+
+The runtime [0060](features/0060-measure-splash-against-llama-cpp-on-the-node-through-a-whole-chain.md)
+measures against llama.cpp. It is a Homebrew bottle from the vendor's own tap,
+`incoai/tap/splash`, installed by [`runtimes/splash/setup.sh`](../runtimes/splash/setup.sh)
+and never upgraded by it: what pins this runtime is the version that script prints, **1.0**
+on the node. The bottle carries its own Python, its engine binary and `huggingface_hub`, so
+unlike MLX and MTPLX there is no venv here and no pins file. It needs an M3 or newer,
+macOS 26.4 or later and 36 GB, which excludes the laptop by its own requirements rather
+than by measurement.
+
+**`splash serve` takes no `--host` and no `--port`.** Its launcher binds `127.0.0.1:8000`,
+probes that address before it downloads or loads anything, refuses to start when another
+service owns it, and holds one server at a time under a lock file. Both flags exist on the
+server it execs and neither is reachable through the command, so the address is a fact a
+config records rather than a lever it sets. The flags it does take are `--model`,
+`--max-memory`, `--max-context`, `--max-image-pixels`, `--allowed-host`, `--api-key` and
+`--no-webui`. **`--max-memory` reads `K`, `M` and `G` as 1024, 1024² and 1024³**, so
+`30720M` is the same number of bytes `iogpu.wired_limit_mb` holds llama.cpp to;
+`--max-context` is a plain token count whose own ceiling is 262,144. Left unset, both are
+`auto` and tuned to the machine, which is the thing being compared.
+
+**The routes the installed server carries** are `/v1/chat/completions`, `/v1/responses`,
+`/v1/messages`, `/v1/messages/count_tokens`, `/v1/models`, `/tokenize`, `/apply-template`,
+`/metrics`, `/health`, `/ready` and `/status`. **There is no `/props`**, and `/status` is
+what Splash's own `splash claude` reads `maximum_context_tokens` from before it sets
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS`. What any of those report on a loaded server is 0060's
+second box and not a reading yet.
+
+**The package is one repository, and the Hub cache is the only copy of it.**
+`incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
+under `draft/`, a vision tower and the tokeniser — so there is no separate drafter
+repository to stage. `splash serve` resolves the repository's `main` with
+`huggingface_hub` into `~/.cache/huggingface/hub`, verifies every artifact against the
+package's `manifest.json`, and then **symlinks** `~/Library/Application Support/Splash/models/<owner>/<repo>`
+at that snapshot rather than copying it. Staging the cache directory is therefore staging
+the model, and the revision staged on the node is `9d27070b71f7142c6b6025f03ac011d70a73cb48`,
+82 files and 17,382,691,384 bytes, identical on both machines. **`huggingface_hub` 1.x keeps
+the bytes in a shared store at the cache root** and leaves symlinks into it under the
+repository, so the copy needs `rsync --copy-unsafe-links` or it stages 17.4 GB of dangling
+links.
+
+**`HF_HUB_OFFLINE=1` is the switch that keeps it off the node's route to the CDN**, which
+0058 measured at 8–130 KB/s and watched stall twice at zero. Splash checks the Hub for
+`main` before every load and falls back to the cached snapshot only when the Hub raises
+`OfflineModeIsEnabled` or the transport fails; it verifies that snapshot against the
+manifest either way, so offline changes where the weights are found and not what is served.
+[`runtimes/splash/serve.sh`](../runtimes/splash/serve.sh) exports it, the way 0058's rows
+were taken under `LLAMA_ARG_OFFLINE=1`. The fallback resolves the snapshot through
+`refs/main`, so a cache staged at a pinned commit needs that ref file present.
 
 ## Speculative decoding: adoptable at the top of the context, not the bottom
 

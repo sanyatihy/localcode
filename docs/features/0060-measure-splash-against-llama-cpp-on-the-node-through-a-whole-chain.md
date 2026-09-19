@@ -82,10 +82,25 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 
 ## Tasks
 
-- [ ] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
+- [x] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
 - [ ] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
 - [ ] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
 - [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
 - [ ] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
 - [ ] `scripts/chainrun.sh` takes the serve command, and if Splash reports no context the launcher gains `-context`, refused whenever `/props` answers, covered by a test on both branches
 - [ ] Three cold chains a side run on the node, Splash against `config/node.env`, and TECH carries the one table and says whether an adoption feature is warranted, with the rows that decide it cited
+
+## Log
+
+- 2026-09-19: the config records the address Splash binds instead of setting it. The plan
+  has `splash-27b.env` pin host and port the way every other runtime's config does, and
+  `splash serve` takes neither flag: its launcher binds `127.0.0.1:8000` and refuses to
+  start when anything else owns that address. They stay in the file because a row has to
+  say where it was driven, and `serve.sh` refuses a config naming anything else rather
+  than let a row carry an address nothing bound.
+- 2026-09-19: `serve.sh` exports `HF_HUB_OFFLINE=1` and passes no flag for it. The plan has
+  it add no flags of its own, and Splash checks the Hub for the repository's `main` before
+  every load, which is the stall 0058 measured on this node's route. Offline it falls back
+  to the staged snapshot and verifies it against the package manifest either way, so this
+  is 0058's `LLAMA_ARG_OFFLINE=1` on the other side of the pair. Overridable, because the
+  first install on a machine has to reach the Hub once.
