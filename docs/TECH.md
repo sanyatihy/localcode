@@ -1568,6 +1568,63 @@ its three sides, which is one task a session and inside the spread TECH already 
 one config against itself. No row swapped. The llama.cpp depth half ran under `-force`, for
 the reason the second pair's baseline did.
 
+**Through a whole chain Splash finishes in under half of llama.cpp's wall, once it is kept
+from thinking** ([rows](data/2026-09-19-m5max-36gb-0060-chain.jsonl)). The twenty-bug
+fixture through `scripts/chainrun.sh`, Claude Code 2.1.270 driving `/v1/messages` on the
+node itself, each chain from a cold server and a fresh fixture, the two runtimes alternated:
+
+| arm | tests | sessions | wall, three chains | mean | generated | prompt ingested | prompt reused |
+|---|---|---|---|---|---|---|---|
+| llama.cpp, `config/node.env` | 20/20 ×3 | 1, 1, 1 | 154, 156, 155 s | **155 s** | 4,051–4,175 | 12,265–12,846 | 148–159k |
+| Splash, as Claude Code asks | 20/20 ×3 | 1, 1, 1 | 223, 299, 180 s | 234 s | 9,806–15,909 | 19,924–24,758 | 161–265k |
+| Splash, `MAX_THINKING_TOKENS=0` | 20/20 ×3 | 1, 1, 1 | 80, 87, 49 s | **72 s** | 2,594–5,314 | 10,867–16,754 | 46–175k |
+
+**Left alone, Splash is the slower of the two, and the reason is thinking, not speed.** Claude
+Code asks for thinking on every call. llama.cpp is served with `enable_thinking` false and
+ignores the request; Splash thinks when `/v1/messages` asks it to, and the first chain's
+transcript carries 18 thinking blocks in 18 calls and three times the generated tokens. The
+third arm sets `MAX_THINKING_TOKENS=0` in the launcher's environment, which the harness
+passes through because it strips only `ANTHROPIC_*` and `CLAUDE_*`: its transcripts carry no
+thinking block, the two transcripts read made 17 and 7 calls where the llama.cpp one read
+made 16, and it is the arm that compares the runtimes. **72 s against 155 s is 2.2x on the unit this project judges
+by**, less than the 2.8 to 3.9 times decode reads alone, because a chain also ingests, runs
+tools and waits on the harness. The llama.cpp arm is itself down from 0056's 263 s mean, which
+was taken before the draft head was served.
+
+**Every chain finished in one session on both runtimes, so this fixture does not test the
+handoff on Splash**, nor a session deep enough for its prefix cache to be evicted by a side
+call (0018). Prompt reuse per chain is of the same order on both, 46–265k tokens reused
+against 11–25k ingested. The sampling differs between the arms as the Log says: llama.cpp
+serves `presence_penalty` 1.5 and Splash cannot take one, and no chain on either side looped.
+
+**The one table**, the node, Qwen3.8-27B at 49,152, 2026-09-19, a console session logged in:
+
+| | llama.cpp b10809, `config/node.env` | Splash 1.0 |
+|---|---|---|
+| admissible, filled | yes | yes |
+| peak wired | 19.91 GB (0056) | 19.83 GB |
+| free memory after the screen | 4.09 GB at load (0056) | 0.25 GB |
+| decode, ~200-token prompts | 0.0225 s/tok | 0.0079 s/tok |
+| decode at 32,000 | 0.0355 s/tok | 0.0092 s/tok |
+| cold prefill, 2k to 32k | 358–465 tok/s | 567–731 tok/s |
+| cold fill of the 44,236-word screen | 127 s (0056) | 67 s |
+| `decode-32000` repeated | 16.3 s | 3.9 s |
+| ranking pass, three sessions | 71/81 | 68/81 |
+| tool-call valid | 35/36 | 36/36 |
+| chain wall, mean of three | 155 s | 72 s thinking off, 234 s as asked |
+| sessions a chain | 1 | 1 |
+
+**An adoption feature is warranted, and these are what it has to settle first.** Splash
+binds `127.0.0.1:8000` and takes no host flag, so the node cannot serve the laptop from it
+without a forwarder, which 0053's proxy is not. It refuses `presence_penalty`, the half of
+0005's settled pair that stops a non-thinking model looping, and nothing here ran long enough
+to say whether that matters. Thinking has to be held off at the harness, because the server
+has no switch for it. It reports no build, no served config and no server-side rates, so a
+row cannot be checked against its label. It leaves 0.25 GB free, which on this node has not
+swapped and on a busier one is MTPLX's failure. And the daemon, `stop_server` and `status`
+all name llama.cpp. None of those is a measurement against it: on every reading taken here
+it is faster, and it scores the same.
+
 **The package is one repository, and the Hub cache is the only copy of it.**
 `incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
 under `draft/`, a vision tower and the tokeniser — so there is no separate drafter
