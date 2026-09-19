@@ -84,7 +84,7 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
 
 - [x] `runtimes/splash/setup.sh` installs Splash on the node idempotently and prints its version, the weights are staged over the link, and `runtimes/splash/serve.sh` serves `runtimes/splash/config/splash-27b.env`, covered by shellcheck and the gate
 - [x] The external review's findings on the first box are closed: `setup.sh` tells an absent Splash from one brew cannot list and never installs over it, a Splash that cannot print its version is not reported ready, `serve.sh` reads a relative config from the checkout only, and the offline claim is held to one snapshot
-- [ ] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
+- [x] Splash's endpoints, usage reporting, thinking switch, per-request sampling, behaviour past `--max-context` and template handling are probed on the node, and TECH records each answer and whether a chain may be driven
 - [ ] Splash is screened filled at 49,152 and TECH records admissibility, peak wired, minimum free memory and swap delta beside 0056's baseline row
 - [ ] Splash is paired on the ranking suite against `config/node.env` and against `config/dflash2-node-49k.env`, three passes a side, and TECH records decode, pass rate and tool-call validity with the ratios marked as runtime comparisons
 - [ ] `runtimes/mlx/compare.sh` takes its label prefix from the environment, and the depth suite is scored on both runtimes with TECH recording cold prefill by depth and the repeated 32k fixture
@@ -106,3 +106,16 @@ TECH gets one table: runtime, admissible, peak wired, minimum free, decode short
   is 0058's `LLAMA_ARG_OFFLINE=1` on the other side of the pair. Overridable, because the
   first install on a machine has to reach the Hub once.
 - 2026-09-19 — paused: box 2 needs the node's daemon server stopped, which needs the owner's sudo until 0061 is installed there
+- 2026-09-19: a chain may be driven. Thinking can be turned off and a prompt past the window
+  is refused, which are the two conditions Design set. The served context is on `/status`, so
+  the launcher reads it from there when `/props` answers 404 and no `-context` flag is added:
+  a reading beats a typed number, which is Design's own reason for refusing a shim.
+- 2026-09-19: every pair runs at `presence_penalty` 0 on both sides. Splash refuses the
+  penalty with HTTP 400, so 0005's settled sampling cannot be sent to it, and a pair whose
+  sides sample differently measures the sampling. The baseline is sent an explicit 0 over the
+  1.5 its config serves. The chains are not held to this: they compare what each runtime
+  serves, and a runtime that cannot take the penalty 0005 found necessary is what is judged.
+- 2026-09-19: the node has a console session logged in for every row, recorded as condition
+  `logged-in`. 0058's state is nobody logged in, but the USB link needs a session on the node
+  after a reboot and the owner is away, so logging out risks the link for the whole run. Both
+  sides of every pair share the state; memory headroom reads about 3 GB worse than 0056's.

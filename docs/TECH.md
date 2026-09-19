@@ -1432,8 +1432,36 @@ config records rather than a lever it sets. The flags it does take are `--model`
 `/v1/messages`, `/v1/messages/count_tokens`, `/v1/models`, `/tokenize`, `/apply-template`,
 `/metrics`, `/health`, `/ready` and `/status`. **There is no `/props`**, and `/status` is
 what Splash's own `splash claude` reads `maximum_context_tokens` from before it sets
-`CLAUDE_CODE_MAX_CONTEXT_TOKENS`. What any of those report on a loaded server is 0060's
-second box and not a reading yet.
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS`. What they report on a loaded server was probed on the node on 2026-09-19, Splash 1.0 at
+49,152, and each answer below is a reading:
+
+- **The served context is on `/status`**, as `maximum_context_tokens`: 49,152, the value
+  `--max-context` was given. `/props` answers 404. `/v1/models` names the package, and
+  `/status` also carries `memory_pressure` and the KV layout, which is symmetric int8.
+- **Every response carries usage and timings.** Chat completions return `usage` with cached
+  and reasoning token counts, and a `metrics` object with time to first token, stream
+  tokens per second and the prefix cache's `status` and `matched_tokens`. `/v1/messages`
+  returns `input_tokens`, `cache_read_input_tokens` and `output_tokens`, and
+  `/v1/messages/count_tokens` answers.
+- **Thinking is on by default on chat completions, at effort `xhigh`**, which
+  `/apply-template` shows as a system line the server adds. `"reasoning_effort": "none"`
+  turns it off. `chat_template_kwargs` with `enable_thinking` false is accepted and
+  ignored, so the scorer's own toggle does nothing here. `/v1/messages` does not think unless
+  asked to.
+- **`temperature`, `top_p`, `top_k`, `seed`, `stop` and `repetition_penalty` are accepted per
+  request, and sampling is applied**: one prompt at 0.7 gave two different sentences in three
+  tries and the same one twice at 0. **`presence_penalty` above 0, `frequency_penalty` and
+  `min_p` are refused with HTTP 400**, "the requested logits or output transformation is not
+  supported", and so are `n` and `logprobs`. 0005's settled pair for thinking off carries
+  `presence_penalty` 1.5, so it cannot be sent to this runtime.
+- **A prompt past the window is refused**, HTTP 400 `context_length_exceeded`, not truncated.
+- **A system message in the middle of a conversation is rendered in place**, so the template
+  override llama.cpp needs for Claude Code is not needed here, and a tool call comes back as
+  `tool_calls` with `finish_reason` `tool_calls`.
+- **It loads in 23 s from a warm page cache and does not wire its weights**: loaded and idle
+  the node read 1.73 GB wired and 0.25 GB free, against 8.0 GB anonymous. Peak wired is
+  therefore not a number the two runtimes share, and free memory and swap are what a screen
+  of this runtime is read by.
 
 **The package is one repository, and the Hub cache is the only copy of it.**
 `incoai/Qwen3.8-27B-Splash` is 17.4 GB over 82 files — a 4-bit target, the DFlash2 drafter
