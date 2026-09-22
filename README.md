@@ -303,6 +303,12 @@ step 0 is what authorises them and a missing key is an error rather than a promp
 `~/.config/localcode/ssh` they refuse: an endpoint somebody else shares is not this laptop's
 to stop.
 
+What this machine runs the harness with that the committed file does not goes in
+`~/.config/localcode/claude-code.env`, applied over
+[`harness/claude-code/claude-code.env`](harness/claude-code/claude-code.env): for example
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS="16384"` where the served model can afford a longer reply. The
+repository holds defaults; a setting one machine runs is that machine's state.
+
 The node is also on Wi-Fi at `<its Wi-Fi address>`. Nothing authenticates the endpoint — serve
 only on a network you trust.
 

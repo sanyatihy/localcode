@@ -177,7 +177,12 @@ for health, rather than starting a second server against a port launchd's own al
 with no such file they refuse and name it. The launcher is named by path because the
 non-login shell ssh runs a command in reads no `~/.zprofile`. A destination is written down
 rather than inferred from the endpoint's host: naming it is the owner saying that machine is
-theirs to stop. `serve` refuses a `-config` where the daemon or another machine serves, since
+theirs to stop. `EnvFromFile` applies `~/.config/localcode/claude-code.env` over the
+committed harness file, last entry winning, so the output cap a machine drives with is its
+own and the repository holds defaults. On 2026-09-22 a session on the node retried one
+`Write` five times at five minutes each because the file's JSON ran past the 8,192-token cap
+and the truncated call could not be parsed; the context it had did not matter.
+`serve` refuses a `-config` where the daemon or another machine serves, since
 the daemon serves `config/node.env` alone and a "server ready" would otherwise label a
 measurement with a config that never loaded. Driven on the node from the laptop on 2026-09-19 with no
 password typed: `serve` created the switch and the model answered at 49,152 within 5 s from
