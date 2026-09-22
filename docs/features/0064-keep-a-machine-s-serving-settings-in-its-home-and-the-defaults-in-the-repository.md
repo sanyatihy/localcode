@@ -1,9 +1,9 @@
 ---
 id: 0064
 title: Keep a machine's serving settings in its home and the defaults in the repository
-status: Draft
+status: Submitted
 created: 2026-09-22
-submitted:
+submitted: 2026-09-22
 needs:
 ---
 
