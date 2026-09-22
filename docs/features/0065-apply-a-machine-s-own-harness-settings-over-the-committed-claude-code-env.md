@@ -9,18 +9,24 @@ needs:
 
 ## Problem
 
-<!-- What was this for? The tension that made it worth doing, in one to three sentences.
-     The diff says what was built and cannot say why it was worth building. -->
+A session on the node retried one `Write` five times at five minutes each: the file's JSON
+ran past the 8,192-token output cap, the truncated call could not be parsed, and the model
+sent it again. The cap is a harness setting in the committed file, so raising it on the
+machine that can afford it meant a commit, against 0064's rule that the repository holds
+defaults and what one machine runs is its state.
 
 ## Non-goals
 
-<!-- What this deliberately does not do, and where that lives instead. Delete the section
-     if nothing was ruled out. -->
+- Raising the committed default. The laptop's 9 tok/s makes a 16,384-token reply a half
+  hour, and 0059 chose 8,192 for it.
+- A launcher guard on a `Write` that fails to parse twice for the same reason. BACKLOG.
 
 ## Design
 
-<!-- What was chosen and what it beat: an alternative rejected, a constraint that shaped
-     the answer, a cost accepted. Only what a reader cannot recover from the code. -->
+`EnvFromFile` appends the machine's `~/.config/localcode/claude-code.env` after the committed
+file's variables, so the last entry of a name wins, which is what `declared` and the harness
+already read. Beside `endpoint`, `ssh` and 0064's `serve.env`. A missing file changes
+nothing; a malformed one is an error, as the committed file's would be.
 
 ## Tasks
 
@@ -28,5 +34,4 @@ needs:
 
 ## Log
 
-<!-- What the doing taught that a plan would not have predicted: a premise falsified, an
-     approach abandoned, a measurement that changed the shape. -->
+- 2026-09-22: none.

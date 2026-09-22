@@ -163,3 +163,10 @@ trigger nobody watches is not an idea, it is a hedge.
   llama.cpp fork, publishes no prefill figure, and its M5 workaround disables the Metal tensor
   path the node's ingest lead likely rests on. Promote when: the laptop's desk is what binds a
   real session again, or 0060 shows a second runtime can be driven through a chain.
+- **A `Write` that fails to parse twice for the same reason is a loop the launcher can see** —
+  on 2026-09-22 a session retried one file write five times at five minutes each, every
+  reply cut at the output cap and refused by the harness as unparsable JSON, until its
+  ceiling ended it. The launcher reads the transcript already; two identical unparsable calls
+  in a row should end the session with that reason named in the handoff, and a handoff that
+  says "the file is too big for one reply" is what the next session needs. Promote when: the
+  launcher's gate next changes, or a chain loses another half hour to this.
