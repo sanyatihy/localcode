@@ -164,7 +164,11 @@ harmless: it execs `scripts/serve.sh config/node.env` when the switch is there a
 when it is not, so the node came up not serving.
 `install.sh` creates the switch as the serving user on a first install only — no installed
 plist, or one that predates the switch — so an upgrade does not restart a node that was
-stopped on purpose.
+stopped on purpose. **A machine's own serving settings live beside the switch and not in a
+commit**: the wrapper applies `~/.config/localcode/serve.env` over `config/node.env`, writes
+the merged file to `~/.local/state/localcode/serving.env` and serves that, so the repository
+holds defaults, a raised context is one machine's state, and what is served is one file the
+banner names. Measurement scripts start `scripts/serve.sh` directly and see no override.
 
 **The node is stopped and started from the laptop, with no password.** `stop_server` removes
 the switch when the installed plist names it and keeps the bootout, which needs root, for a
