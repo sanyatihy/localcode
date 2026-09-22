@@ -9,18 +9,26 @@ needs:
 
 ## Problem
 
-<!-- What was this for? The tension that made it worth doing, in one to three sentences.
-     The diff says what was built and cannot say why it was worth building. -->
+Raising what the node serves meant a commit, a branch and the node's checkout moved onto
+it, and the setting lasted only as long as the checkout stayed there. A measurement then
+depended on which branch the node happened to be on. The repository should hold defaults,
+and what one machine runs should be that machine's state.
 
 ## Non-goals
 
-<!-- What this deliberately does not do, and where that lives instead. Delete the section
-     if nothing was ruled out. -->
+- Overrides for the measurement scripts. `scripts/serve.sh` reads the config it is given
+  and nothing else, so a row's config is the file it names.
+- Choosing the runtime. 0063's state file, beside this one.
 
 ## Design
 
-<!-- What was chosen and what it beat: an alternative rejected, a constraint that shaped
-     the answer, a cost accepted. Only what a reader cannot recover from the code. -->
+The daemon's wrapper, `scripts/node/serve.sh`, applies `~/.config/localcode/serve.env` over
+`config/node.env` and serves the merged file it writes to
+`~/.local/state/localcode/serving.env`, naming it in the banner. Sourcing the override into
+the environment was rejected: `scripts/serve.sh` sources its config with `set -a` and would
+overwrite it, and a merged file is one thing a reader can open to see what is served. The
+override lives under `~/.config` beside `endpoint` and `ssh`, and the merged file beside the
+switch, since both are the serving user's and the daemon sets `HOME` to that user's.
 
 ## Tasks
 
@@ -28,5 +36,5 @@ needs:
 
 ## Log
 
-<!-- What the doing taught that a plan would not have predicted: a premise falsified, an
-     approach abandoned, a measurement that changed the shape. -->
+- 2026-09-22: the spike began as a one-line context change committed to `config/node.env`
+  and reverted: the owner ruled that the repository holds defaults only.
