@@ -75,7 +75,11 @@ func isAgentVar(name string) bool {
 // parseEnvFile reads the shell-sourceable KEY="value" form this repo's config files use.
 // Strict on purpose: a silently dropped variable serves a different configuration under
 // the same label.
-func parseEnvFile(path string) ([]string, error) {
+func parseEnvFile(path string) ([]string, error) { return ParseEnvFile(path) }
+
+// ParseEnvFile reads one of this repository's KEY="value" files into NAME=value entries.
+// Exported for the launcher's own settings file, which uses the same form.
+func ParseEnvFile(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("claude-code environment not readable: %w", err)

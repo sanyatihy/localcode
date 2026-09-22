@@ -107,12 +107,15 @@ const (
 
 // NewLimits derives a session's budget from what the harness was declared, or refuses.
 // A calls of 0 asks for the derived budget; anything above it is the caller's own number.
+// resultCap is the most one tool result may add in tokens, 0 for the derived quarter share:
+// a machine that serves a window far above the 40,960 the reserve was measured at may set
+// it, since a result does not grow with the window and the derived share does.
 //
 // It refuses rather than clamping because a window too small to work in is a
 // configuration mistake with a one-line fix, and the session that discovers it instead
 // spends a cold ingest to say `Prompt is too long`: declaring 8,192 against a 4,096
 // output reservation leaves 3,072, which is less than the preamble.
-func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
+func NewLimits(maxContext, maxOutput, ceilingPct, calls, resultCap int) (Limits, error) {
 	if maxContext <= 0 || maxOutput <= 0 {
 		return Limits{}, fmt.Errorf("a declared window and an output reservation are both "+
 			"needed to size a session: got %d and %d", maxContext, maxOutput)
@@ -122,6 +125,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	}
 	if calls < 0 {
 		return Limits{}, fmt.Errorf("a budget of %d tool calls runs nothing", calls)
+	}
+	if resultCap < 0 {
+		return Limits{}, fmt.Errorf("a result cap of %d tokens is not one", resultCap)
 	}
 
 	// The prompt budget, which is the number a session actually has: the reply shares the
@@ -133,6 +139,9 @@ func NewLimits(maxContext, maxOutput, ceilingPct, calls int) (Limits, error) {
 	// rejects.
 	window := maxContext - max(maxOutput, outputFloor)
 	perCall := window / (resultShare * batchLimit)
+	if resultCap > 0 {
+		perCall = resultCap
+	}
 
 	// What the gate can permit and still be sure the session survives to write its handoff.
 	// Two things land after the reading it decides on, and they are bounded differently:

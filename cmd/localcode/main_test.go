@@ -827,7 +827,7 @@ func TestRunRefusesAServerThatReportsNoContext(t *testing.T) {
 // The gate end to end: the harness's payload in, the harness's exit code out.
 func TestHookRefusesWithExitTwoAndPermitsWithZero(t *testing.T) {
 	dir := t.TempDir()
-	limits, err := chain.NewLimits(45056, 4096, 50, 2)
+	limits, err := chain.NewLimits(45056, 4096, 50, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1660,5 +1660,31 @@ func TestTheStatusRouteRefusesWhatItCannotName(t *testing.T) {
 	}
 	if statusAsked {
 		t.Error("only a 404 from /props may send the launcher to /status")
+	}
+}
+
+// A machine's own launcher settings come from ~/.config/localcode/localcode.env: absent or
+// silent it changes nothing, a count is read, and a value that is not one is refused before
+// a session is budgeted on it.
+func TestLocalResultCapIsReadFromTheMachinesSettings(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if got, err := localResultCap(); err != nil || got != 0 {
+		t.Fatalf("no file: got %d err %v", got, err)
+	}
+	path, _ := localSettingsPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("RESULT_CAP_TOKENS=\"2560\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := localResultCap(); err != nil || got != 2560 {
+		t.Errorf("got %d err %v, want 2560", got, err)
+	}
+	if err := os.WriteFile(path, []byte("RESULT_CAP_TOKENS=\"lots\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := localResultCap(); err == nil {
+		t.Error("a value that is not a count must be refused")
 	}
 }

@@ -16,7 +16,7 @@ func TestCeilingLeavesRoomForTheHandoffAfterIt(t *testing.T) {
 	for _, w := range []struct{ maxContext, maxOutput int }{
 		{49152, 4096}, {45056, 4096}, {32768, 4096}, {28672, 2048},
 	} {
-		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30)
+		l, err := NewLimits(w.maxContext, w.maxOutput, 100, 30, 0)
 		if err != nil {
 			t.Fatalf("%d/%d: %v", w.maxContext, w.maxOutput, err)
 		}
@@ -44,7 +44,7 @@ const worstGenerated = 2774
 // context that follows still lands under the window.
 func TestTheCeilingPlusTheWorstGrowthStaysUnderTheWindow(t *testing.T) {
 	for _, maxContext := range []int{49152, 45056, 32768} {
-		l, err := NewLimits(maxContext, 4096, 100, 0)
+		l, err := NewLimits(maxContext, 4096, 100, 0, 0)
 		if err != nil {
 			t.Fatalf("%d: %v", maxContext, err)
 		}
@@ -59,7 +59,7 @@ func TestTheCeilingPlusTheWorstGrowthStaysUnderTheWindow(t *testing.T) {
 // what any session spent it on. The first term is the four maximum-sized results the gate
 // itself permits, which is a bound rather than an observation and is not judged here.
 func TestTheTurnReserveStandsAtTwiceTheWorstGeneration(t *testing.T) {
-	l, err := NewLimits(49152, 4096, 100, 0)
+	l, err := NewLimits(49152, 4096, 100, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestTheTurnReserveStandsAtTwiceTheWorstGeneration(t *testing.T) {
 // would size a session in one produces a ceiling at or below zero. Refuse it where the
 // number is, rather than let the preamble floor report it as a different problem.
 func TestNewLimitsRefusesAWindowTheReserveFillsOnItsOwn(t *testing.T) {
-	_, err := NewLimits(12288, 4096, 100, 0)
+	_, err := NewLimits(12288, 4096, 100, 0, 0)
 	if err == nil {
 		t.Fatal("an 8,192-token window is the whole reserve and must be refused")
 	}
@@ -86,10 +86,10 @@ func TestNewLimitsRefusesAWindowTheReserveFillsOnItsOwn(t *testing.T) {
 // A window too small to work in is refused rather than clamped: the session that discovers
 // it instead pays a cold ingest to say `Prompt is too long`, having done nothing.
 func TestNewLimitsRefusesAWindowNothingFitsIn(t *testing.T) {
-	if _, err := NewLimits(8192, 4096, 50, 30); err == nil {
+	if _, err := NewLimits(8192, 4096, 50, 30, 0); err == nil {
 		t.Fatal("8,192 against a 4,096 reservation leaves less than the preamble and must be refused")
 	}
-	if _, err := NewLimits(45056, 4096, 50, 30); err != nil {
+	if _, err := NewLimits(45056, 4096, 50, 30, 0); err != nil {
 		t.Fatalf("the shipped window must be workable: %v", err)
 	}
 }
@@ -98,14 +98,14 @@ func TestNewLimitsRefusesAWindowNothingFitsIn(t *testing.T) {
 // headroom is what binds when it is not. Both have to, or the flag either does nothing or
 // can be set to something unsafe.
 func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
-	half, err := NewLimits(45056, 4096, 40, 30)
+	half, err := NewLimits(45056, 4096, 40, 30, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := 40960 * 40 / 100; half.Ceiling != want {
 		t.Fatalf("40%% of a 40,960 window is %d, got %d", want, half.Ceiling)
 	}
-	all, err := NewLimits(45056, 4096, 100, 30)
+	all, err := NewLimits(45056, 4096, 100, 30, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +118,11 @@ func TestCeilingIsTheSmallerOfWhatWasAskedForAndWhatIsSafe(t *testing.T) {
 // The point of the feature: one constant fitted neither end of the range served, so the
 // budget follows the ceiling the same way every other bound here does.
 func TestTheCallBudgetFollowsTheCeiling(t *testing.T) {
-	small, err := NewLimits(32768, 4096, 100, 0)
+	small, err := NewLimits(32768, 4096, 100, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	large, err := NewLimits(49152, 4096, 100, 0)
+	large, err := NewLimits(49152, 4096, 100, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,14 +140,14 @@ func TestTheCallBudgetFollowsTheCeiling(t *testing.T) {
 // An explicit number is what makes a measurement repeatable, so it is taken as given —
 // including below the floor the derived one is held to.
 func TestAnExplicitCallBudgetOverridesTheDerivedOne(t *testing.T) {
-	l, err := NewLimits(45056, 4096, 100, 3)
+	l, err := NewLimits(45056, 4096, 100, 3, 0)
 	if err != nil {
 		t.Fatalf("a named budget must be taken as given: %v", err)
 	}
 	if l.Calls != 3 {
 		t.Fatalf("a named budget of 3 must survive, got %d", l.Calls)
 	}
-	if _, err := NewLimits(45056, 4096, 100, -1); err == nil {
+	if _, err := NewLimits(45056, 4096, 100, -1, 0); err == nil {
 		t.Fatal("a negative budget runs nothing and must be refused")
 	}
 }
@@ -158,7 +158,7 @@ func TestAnExplicitCallBudgetOverridesTheDerivedOne(t *testing.T) {
 func TestNewLimitsRefusesACeilingWithNoRoomToWorkIn(t *testing.T) {
 	// 12% of the shipped window clears the preamble floor and little else, which is the
 	// band this refusal exists for: the old one passed it.
-	_, err := NewLimits(45056, 4096, 12, 0)
+	_, err := NewLimits(45056, 4096, 12, 0, 0)
 	if err == nil {
 		t.Fatal("a ceiling with room for one call must be refused")
 	}
@@ -171,7 +171,7 @@ const handoffPath = "/state/01/HANDOFF.md"
 
 func limits(t *testing.T) Spec {
 	t.Helper()
-	l, err := NewLimits(24576, 1024, 100, 3)
+	l, err := NewLimits(24576, 1024, 100, 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,5 +488,26 @@ func TestDoneReadsTheFirstClauseAndNotTheWholeLine(t *testing.T) {
 	// A handoff with no Next line at all is not a finished one.
 	if Done([]byte("# Handoff\n")) {
 		t.Fatal("a handoff carrying no Next is not done")
+	}
+}
+
+// A machine may cap what one result adds, which is what sizes the reserve above the ceiling:
+// at a window far above the one the quarter share was measured at, the derived share takes
+// more than the same measured overshoot needs. Zero is the derived share, unchanged.
+func TestAResultCapSetsTheReserveAndZeroLeavesItDerived(t *testing.T) {
+	derived, err := NewLimits(98304, 16384, 100, 0, 0)
+	if err != nil || derived.Ceiling != 55296 || derived.ResultCap != 5120*bytesPerToken {
+		t.Fatalf("derived: %+v %v", derived, err)
+	}
+	capped, err := NewLimits(98304, 16384, 100, 0, 2560)
+	if err != nil || capped.Ceiling != 65536 || capped.ResultCap != 2560*bytesPerToken {
+		t.Fatalf("capped: %+v %v", capped, err)
+	}
+	spent := capped.Ceiling + capped.Batch*(capped.ResultCap/bytesPerToken) + turnReserve
+	if spent > capped.Window {
+		t.Errorf("a capped session permitted at %d needs %d of a %d window", capped.Ceiling, spent, capped.Window)
+	}
+	if _, err := NewLimits(98304, 16384, 100, 0, -1); err == nil {
+		t.Error("a negative cap must be refused")
 	}
 }

@@ -303,6 +303,13 @@ step 0 is what authorises them and a missing key is an error rather than a promp
 `~/.config/localcode/ssh` they refuse: an endpoint somebody else shares is not this laptop's
 to stop.
 
+The launcher's own settings go in `~/.config/localcode/localcode.env`, `KEY="value"` lines;
+the repository holds defaults, and a setting one machine runs is that machine's state.
+`RESULT_CAP_TOKENS="2560"` caps what one tool result may add to a session, which is what
+sizes the reserve above its ceiling: derived, the reserve is a quarter of the window and
+grows with it, so at 98,304 served the cap measured at 49,152 gives a 65,536-token ceiling
+instead of 55,296.
+
 The node is also on Wi-Fi at `<its Wi-Fi address>`. Nothing authenticates the endpoint — serve
 only on a network you trust.
 
