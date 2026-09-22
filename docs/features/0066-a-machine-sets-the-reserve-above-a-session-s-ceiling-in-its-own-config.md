@@ -1,9 +1,9 @@
 ---
 id: 0066
 title: A machine sets the reserve above a session's ceiling in its own config
-status: Draft
+status: Submitted
 created: 2026-09-22
-submitted:
+submitted: 2026-09-22
 needs:
 ---
 
