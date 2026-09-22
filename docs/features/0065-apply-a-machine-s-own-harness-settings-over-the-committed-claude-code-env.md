@@ -1,9 +1,9 @@
 ---
 id: 0065
 title: Apply a machine's own harness settings over the committed claude-code.env
-status: Draft
+status: Submitted
 created: 2026-09-22
-submitted:
+submitted: 2026-09-22
 needs:
 ---
 
