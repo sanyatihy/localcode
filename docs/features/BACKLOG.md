@@ -173,3 +173,10 @@ sessions' last turns used three quarters of the reserve above it, so the lever i
 served context and not a smaller reserve; that was not tried. Promote when: real work is next judged — a session should be told to
   commit partial work to the repository before it plans, so the next one inherits files and
   not intentions.
+- **A `Write` that fails to parse twice for the same reason is a loop the launcher can see** —
+  on 2026-09-22 a session retried one file write five times at five minutes each, every
+  reply cut at the output cap and refused by the harness as unparsable JSON, until its
+  ceiling ended it. The launcher reads the transcript already; two identical unparsable calls
+  in a row should end the session with that reason named in the handoff, and a handoff that
+  says "the file is too big for one reply" is what the next session needs. Promote when: the
+  launcher's gate next changes, or a chain loses another half hour to this.
