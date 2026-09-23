@@ -277,6 +277,13 @@ on-off switch — `./scripts/stop.sh` removes it and waits for the memory back, 
 serve` puts it back, and neither needs `sudo`, because the file belongs to the serving user.
 It survives a reboot, so a node stopped on purpose comes up not serving.
 
+What the node serves that the committed config does not goes in `~/.config/localcode/serve.env`
+in the serving user's home, `KEY="value"` lines applied over `config/node.env`, for example
+`CTX_SIZE="65536"`. The repository holds defaults; a setting one machine runs is that
+machine's state. The daemon writes the merged file to `~/.local/state/localcode/serving.env`
+and names it in its banner, so what is being served is one file a reader can open. Restart
+with `localcode stop` and `localcode serve` to apply a change.
+
 Every node script refuses without `LOCALCODE_NODE=1`, because each ruins a machine somebody
 works at.
 

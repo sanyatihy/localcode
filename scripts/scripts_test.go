@@ -471,7 +471,8 @@ func TestTheNodesServeWrapperServesOnlyWithTheSwitch(t *testing.T) {
 	run := func() string {
 		t.Helper()
 		cmd := exec.Command(script)
-		cmd.Env = append(os.Environ(), "SERVER_BIN="+stub, "SERVE_SWITCH="+switchPath)
+		cmd.Env = append(os.Environ(), "SERVER_BIN="+stub, "SERVE_SWITCH="+switchPath,
+			"SERVE_OVERRIDES="+filepath.Join(dir, "serve.env"), "SERVING="+filepath.Join(dir, "serving.env"))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("node/serve.sh: %v: %s", err, out)
@@ -487,6 +488,20 @@ func TestTheNodesServeWrapperServesOnlyWithTheSwitch(t *testing.T) {
 	}
 	if out := run(); !strings.Contains(out, "serving config/node.env") {
 		t.Errorf("with the switch there the node must serve its own config: %s", out)
+	}
+
+	// A machine's own settings are applied over the committed config, from a file in its
+	// home, and what is served is one merged file the banner names.
+	if err := os.WriteFile(filepath.Join(dir, "serve.env"), []byte("CTX_SIZE=\"65536\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := run()
+	if !strings.Contains(out, "ctx=65536") || !strings.Contains(out, "serving "+filepath.Join(dir, "serving.env")) {
+		t.Errorf("an override must be served and the merged file named: %s", out)
+	}
+	merged, err := os.ReadFile(filepath.Join(dir, "serving.env"))
+	if err != nil || !strings.Contains(string(merged), "MODEL_HF=") || !strings.Contains(string(merged), "CTX_SIZE=\"65536\"") {
+		t.Errorf("the merged file must carry the config and the override: %v %s", err, merged)
 	}
 }
 

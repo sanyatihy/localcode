@@ -163,6 +163,16 @@ trigger nobody watches is not an idea, it is a hedge.
   llama.cpp fork, publishes no prefill figure, and its M5 workaround disables the Metal tensor
   path the node's ingest lead likely rests on. Promote when: the laptop's desk is what binds a
   real session again, or 0060 shows a second runtime can be driven through a chain.
+- **A chain can re-plan the same work every session and finish none of it** — on 0062's
+  real-work instruction, at a 24,576-token ceiling, sessions on both runtimes re-read a 32 KB
+  report and the data, wrote part of a generator, hit the ceiling and handed off a plan the
+  next one began again, until the stall guards (0036) ended both chains; one Splash session
+  changed five lines and no other session changed anything. Faster decode bought more such
+  sessions, not a result. The ceiling is already all the launcher's arithmetic allows at a served 49,152, and the
+sessions' last turns used three quarters of the reserve above it, so the lever is a larger
+served context and not a smaller reserve; that was not tried. Promote when: real work is next judged — a session should be told to
+  commit partial work to the repository before it plans, so the next one inherits files and
+  not intentions.
 - **A `Write` that fails to parse twice for the same reason is a loop the launcher can see** —
   on 2026-09-22 a session retried one file write five times at five minutes each, every
   reply cut at the output cap and refused by the harness as unparsable JSON, until its

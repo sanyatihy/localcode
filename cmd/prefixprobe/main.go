@@ -74,9 +74,10 @@ func run(args []string, stdout, stderr *os.File) error {
 	client := eval.NewClient(*endpoint, *timeout)
 	client.API = eval.APIMessages
 
-	// Unlike the scorer, this refuses to run without /props. Every row it writes is a
-	// claim about one serving config against another, and a run that cannot name what
-	// served it cannot support that claim.
+	// Unlike the scorer, this refuses to run against a server that does not say what it
+	// serves, on /props or on /status (0062). Every row it writes is a claim about one
+	// serving config against another, and a run that cannot name what served it cannot
+	// support that claim.
 	props, err := client.Props(ctx)
 	if err != nil {
 		return fmt.Errorf("%s does not say what it serves (%w); a cache figure that cannot be "+
