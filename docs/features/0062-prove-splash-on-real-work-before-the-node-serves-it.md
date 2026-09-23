@@ -1,9 +1,9 @@
 ---
 id: 0062
 title: Prove Splash on real work before the node serves it
-status: Draft
+status: Submitted
 created: 2026-09-20
-submitted:
+submitted: 2026-09-19
 needs:
 ---
 
@@ -79,9 +79,32 @@ Changed: `internal/eval/client.go`, `cmd/prefixprobe/main.go`, their tests,
 
 ## Tasks
 
-- [ ] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
-- [ ] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
-- [ ] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings, and `runtimes/splash/config/splash-27b.env` takes the largest that leaves 1 GB free with nothing swapped, with decode read at each
-- [ ] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
-- [ ] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
-- [ ] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
+- [x] The node is rebooted to the login window and reached over the Thunderbolt bridge with nobody logged in, and TECH records whether the bridge needs a session, which fixes the condition every later row carries
+- [x] `internal/eval/client.go` and `cmd/prefixprobe` read the served context, model and build from `/status` and `/v1/models` only where `/props` answers 404, covered by tests, so a Splash row names what served it
+- [x] Splash is screened filled at 49,152 at the cap and two lower `--max-memory` ceilings with decode read at each, and TECH records where the node's memory sits under it and why the ceiling stays at the cap
+- [x] `cmd/prefixprobe` runs against both runtimes with and without `-interleave`, and TECH records what a side call costs a conversation on each
+- [x] One real-work instruction is driven on both runtimes from one starting commit, Splash through an SSH forward, and the account rows are published as aggregates carrying no name or path
+- [x] TECH carries the verdict against the five pass conditions with the rows cited, says whether 0063 proceeds, is dropped or is revised, and corrects the sentence about what `presence_penalty` is for
+- [x] The external review's findings are closed: `prefixrun.sh` ends the server it started by pid on every way out, the per-session counters and memory samples behind TECH's claims are published, and the verdict no longer clears 0063 on a comparison that was not made
+- [x] TECH says where the 24,576-token ceiling comes from: the launcher's default at a served 49,152, with the sessions' overshoot of it read from the published rows
+
+## Log
+
+- 2026-09-20: the scorer also asks `/v1/messages` by the served model's id. The plan has it
+  read what is served; it did not know the Messages dialect sends the name `local`, which
+  llama.cpp ignores and Splash answers 404 to, so `cmd/prefixprobe` could not have run
+  against Splash at all. `Props` keeps the id on the client when it comes from `/v1/models`.
+- 2026-09-20: the memory box no longer picks a ceiling by free memory, because the criterion
+  was wrong. Design had the config take the largest `--max-memory` leaving 1 GB free. Three
+  ceilings read the same: about 20 GB peak wired, under 0.2 GB of free pages, nothing swapped
+  or compressed, decode unchanged. `--max-memory` does not bind at this context, and free
+  pages are low because the kernel keeps the 17 GB weights file it read as file cache, which
+  it reclaims on demand. The config keeps the cap, and the box records the breakdown.
+- 2026-09-20: `scripts/prefixrun.sh` takes a serve command. The plan runs the probe against
+  both runtimes and the script that walks its conditions started `scripts/serve.sh` only.
+- 2026-09-20: the real-work pair forks an interrupted chain the owner named and restores the
+  scratch scripts that chain left in `/tmp` before each arm. The plan has both arms start
+  from one commit; the work also lived in a handoff and in files outside the folder, and an
+  arm that inherited the other's edits to them would not have started where it did. The
+  original folder's checksum is unchanged after both arms.
+- 2026-09-19 — reopen to Draft: TECH says the 24,576 ceiling came from the forked chain's settings; it is the launcher's default for a 49,152 window

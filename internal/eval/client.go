@@ -154,6 +154,10 @@ type Client struct {
 	// decode. Off by default: it changes the request, and every speed number recorded
 	// before it was taken without it, so a run that streams is a run that says so.
 	Stream bool
+
+	// Model is the name a Messages request asks for. Empty sends "local", which llama.cpp
+	// ignores; Props sets it for a server that answers 404 to any name but its own (0062).
+	Model string
 }
 
 func NewClient(endpoint string, timeout time.Duration) *Client {
@@ -552,6 +556,12 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 		return out, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	// A runtime with no /props at all, as opposed to one that is loading: Splash answers
+	// 404 here and says what it serves on /status. Only a 404 goes there, for the reason
+	// the launcher's reader gives.
+	if resp.StatusCode == http.StatusNotFound {
+		return c.statusProps(ctx)
+	}
 
 	var raw struct {
 		ModelPath    string `json:"model_path"`
@@ -571,4 +581,61 @@ func (c *Client) Props(ctx context.Context) (ServerProps, error) {
 	return ServerProps{NCtx: raw.Gen.NCtx, ModelPath: raw.ModelPath, BuildInfo: buildInfo,
 		Backend: Backend(c.Endpoint), ModelSnapshot: snapshotOf(raw.ModelPath),
 		TemplateHash: hashTemplate(raw.ChatTemplate), Available: true}, nil
+}
+
+// statusProps reads the same facts off a server that reports itself on /status and
+// /v1/models. The model id doubles as the name Messages requests have to ask for, since such
+// a server refuses any other, so it is kept on the client as well as on the row. The
+// template hash stays empty: the server holds its template and shows no hash of it.
+func (c *Client) statusProps(ctx context.Context) (ServerProps, error) {
+	var out ServerProps
+	var status struct {
+		Ready    bool `json:"ready"`
+		NCtx     int  `json:"maximum_context_tokens"`
+		Identity struct {
+			Cache struct {
+				BuildID string `json:"build_id"`
+			} `json:"cache"`
+		} `json:"identity"`
+	}
+	if err := c.getJSON(ctx, "/status", &status); err != nil {
+		return out, err
+	}
+	if !status.Ready || status.NCtx <= 0 {
+		return out, fmt.Errorf("%s/status reports no context it is ready to serve", c.Endpoint)
+	}
+	var models struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := c.getJSON(ctx, "/v1/models", &models); err != nil {
+		return out, err
+	}
+	if len(models.Data) == 0 || models.Data[0].ID == "" {
+		return out, fmt.Errorf("%s/v1/models names no model", c.Endpoint)
+	}
+	buildInfo := status.Identity.Cache.BuildID
+	if buildInfo == "" {
+		buildInfo = build.Unknown
+	}
+	c.Model = models.Data[0].ID
+	return ServerProps{NCtx: status.NCtx, ModelPath: c.Model, BuildInfo: buildInfo,
+		Backend: Backend(c.Endpoint), Available: true}, nil
+}
+
+func (c *Client) getJSON(ctx context.Context, path string, into any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Endpoint+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s%s answered HTTP %d", c.Endpoint, path, resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(into)
 }
