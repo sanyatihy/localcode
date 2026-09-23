@@ -34,6 +34,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -254,7 +255,11 @@ func run(o opts) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls)
+	resultCap, err := localResultCap()
+	if err != nil {
+		return 2, err
+	}
+	limits, err := chain.NewLimits(maxContext, maxOutput, o.ceiling, o.calls, resultCap)
 	if err != nil {
 		return 2, err
 	}
@@ -1151,6 +1156,44 @@ func resolveEndpoint(flagValue string) (endpoint, from string, err error) {
 		return line, "from " + path, nil
 	}
 	return defaultEndpoint, "from the built-in default", nil
+}
+
+// localSettingsPath is this machine's own launcher settings, KEY="value" lines beside the
+// endpoint and ssh files. The repository holds defaults; what one machine runs with is its
+// state. RESULT_CAP_TOKENS is the one key read so far.
+func localSettingsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "localcode", "localcode.env"), nil
+}
+
+// localResultCap reads RESULT_CAP_TOKENS from that file: 0 with no file or no such key,
+// which is the derived share, and an error for a value that is not a count.
+func localResultCap() (int, error) {
+	path, err := localSettingsPath()
+	if err != nil {
+		return 0, err
+	}
+	vars, err := harness.ParseEnvFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil // no file is the default
+	}
+	if err != nil {
+		return 0, err
+	}
+	cap := 0
+	for _, kv := range vars {
+		if name, value, _ := strings.Cut(kv, "="); name == "RESULT_CAP_TOKENS" {
+			n, err := strconv.Atoi(value)
+			if err != nil || n <= 0 {
+				return 0, fmt.Errorf("%s: RESULT_CAP_TOKENS is %q, not a count of tokens", path, value)
+			}
+			cap = n
+		}
+	}
+	return cap, nil
 }
 
 // sshConfigPath is where this machine says which login drives the server at its endpoint.

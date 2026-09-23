@@ -12,7 +12,7 @@ import (
 func budgeted(t *testing.T, calls int) (dir string, spec Spec) {
 	t.Helper()
 	dir = t.TempDir()
-	l, err := NewLimits(45056, 4096, 50, calls)
+	l, err := NewLimits(45056, 4096, 50, calls, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
