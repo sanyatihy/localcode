@@ -277,6 +277,13 @@ on-off switch — `./scripts/stop.sh` removes it and waits for the memory back, 
 serve` puts it back, and neither needs `sudo`, because the file belongs to the serving user.
 It survives a reboot, so a node stopped on purpose comes up not serving.
 
+What the node serves that the committed config does not goes in `~/.config/localcode/serve.env`
+in the serving user's home, `KEY="value"` lines applied over `config/node.env`, for example
+`CTX_SIZE="65536"`. The repository holds defaults; a setting one machine runs is that
+machine's state. The daemon writes the merged file to `~/.local/state/localcode/serving.env`
+and names it in its banner, so what is being served is one file a reader can open. Restart
+with `localcode stop` and `localcode serve` to apply a change.
+
 Every node script refuses without `LOCALCODE_NODE=1`, because each ruins a machine somebody
 works at.
 
@@ -303,8 +310,13 @@ step 0 is what authorises them and a missing key is an error rather than a promp
 `~/.config/localcode/ssh` they refuse: an endpoint somebody else shares is not this laptop's
 to stop.
 
-The launcher's own settings go in `~/.config/localcode/localcode.env`, `KEY="value"` lines;
-the repository holds defaults, and a setting one machine runs is that machine's state.
+What this machine runs the harness with that the committed file does not goes in
+`~/.config/localcode/claude-code.env`, applied over
+[`harness/claude-code/claude-code.env`](harness/claude-code/claude-code.env): for example
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS="16384"` where the served model can afford a longer reply. The
+repository holds defaults; a setting one machine runs is that machine's state.
+
+The launcher's own settings go in `~/.config/localcode/localcode.env`, in the same form.
 `RESULT_CAP_TOKENS="2560"` caps what one tool result may add to a session, which is what
 sizes the reserve above its ceiling: derived, the reserve is a quarter of the window and
 grows with it, so at 98,304 served the cap measured at 49,152 gives a 65,536-token ceiling

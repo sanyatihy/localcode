@@ -77,8 +77,11 @@ func (c *Client) completeMessages(ctx context.Context, req chatRequest) (*Respon
 	out.MaxTokens = req.MaxTokens
 	// Required by the protocol and ignored by llama-server, which serves whatever it
 	// loaded. What was actually served is read from /props and recorded on the row, so
-	// nothing rests on this string.
+	// nothing rests on this string there. A server that checks it has told Props its id.
 	out.Model = "local"
+	if c.Model != "" {
+		out.Model = c.Model
+	}
 	for _, m := range req.Messages {
 		if m.Role == "system" {
 			// This API carries the system prompt beside the conversation rather than
