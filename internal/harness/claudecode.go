@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sanyatihy/localcode/internal/eval"
@@ -51,10 +52,24 @@ func (c *ClaudeCode) Drive(ctx context.Context, r eval.Run) error {
 // ANTHROPIC_API_KEY outranks the file's credential, and a session launched from inside
 // Claude Code exports CLAUDE_CODE_* variables that change the tool set — one such
 // environment produced 21 tools where a clean one produced 18.
+//
+// A machine's own settings come after the committed file's, from
+// ~/.config/localcode/claude-code.env when it exists (0064's rule: the repository holds
+// defaults, what one machine runs is its state). Same syntax, and a variable set in both
+// takes the machine's value, since the harness reads the last entry of a name.
 func EnvFromFile(path string) ([]string, error) {
 	vars, err := parseEnvFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if local := LocalEnvFile(); local != "" {
+		if _, statErr := os.Stat(local); statErr == nil {
+			own, err := parseEnvFile(local)
+			if err != nil {
+				return nil, err
+			}
+			vars = append(vars, own...)
+		}
 	}
 	var env []string
 	for _, kv := range os.Environ() {
@@ -64,6 +79,17 @@ func EnvFromFile(path string) ([]string, error) {
 		env = append(env, kv)
 	}
 	return append(env, vars...), nil
+}
+
+// LocalEnvFile is where this machine keeps what it runs the harness with that the
+// committed file does not. Beside the endpoint and ssh files. Overridable for tests, and
+// empty when there is no home to look in.
+var LocalEnvFile = func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "localcode", "claude-code.env")
 }
 
 func isAgentVar(name string) bool {

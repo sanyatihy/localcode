@@ -334,3 +334,30 @@ func TestTheSessionStartHookNamesThePathItWants(t *testing.T) {
 		t.Fatalf("the injected instruction must name the real path:\n%s", out)
 	}
 }
+
+// A machine's own harness settings are applied over the committed file's (0064's rule), and
+// the last entry of a name is the one declared() and the harness read.
+func TestEnvFromFileAppliesTheMachinesOwnFileLast(t *testing.T) {
+	committed := writeEnv(t, "CLAUDE_CODE_MAX_CONTEXT_TOKENS=\"45056\"\nCLAUDE_CODE_MAX_OUTPUT_TOKENS=\"8192\"\n")
+	local := writeEnv(t, "CLAUDE_CODE_MAX_OUTPUT_TOKENS=\"16384\"\n")
+	old := LocalEnvFile
+	LocalEnvFile = func() string { return local }
+	t.Cleanup(func() { LocalEnvFile = old })
+
+	env, err := EnvFromFile(committed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, output, err := declared(env); err != nil || output != 16384 {
+		t.Errorf("the machine's output cap must win: got %d err %v", output, err)
+	}
+
+	LocalEnvFile = func() string { return local + ".absent" }
+	env, err = EnvFromFile(committed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, output, err := declared(env); err != nil || output != 8192 {
+		t.Errorf("with no machine file the committed cap stands: got %d err %v", output, err)
+	}
+}
