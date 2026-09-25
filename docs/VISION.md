@@ -19,7 +19,7 @@ One developer on an M2 Max doing agentic coding — multi-turn, tool-calling, re
 edits — who wants the grind to happen on-device: no per-token cost, no vendor
 dependency for the build loop. The same developer with a second machine on a trusted
 network — another Mac, or a GB10 — who wants the grind to happen there while the
-laptop stays usable. A small team, four to begin with, sharing that GB10 as their
+laptop stays usable, or who retires the laptop and works at that Mac while it serves. A small team, four to begin with, sharing that GB10 as their
 model endpoint. Secondarily, anyone reproducing the same choices on comparable
 hardware, which is why every number here is committed rather than remembered.
 
@@ -106,6 +106,8 @@ hardware, which is why every number here is committed rather than remembered.
   limits live in its own `config/machine*.json` rather than in code. No config may make a
   Mac unusable for the editor and browser its developer is running while the agent works;
   the GB10 and a Mac kept only to serve are headless, and the rule does not reach them.
+  A Mac's role decides which it is: the same machine may switch between node and desk,
+  set up from one command and a config naming each lever, and a rerun changes nothing.
 - **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
   quality, and whatever else emerges are candidates, and which one binds depends on the
   envelope — model, quant, context, and the machine. A constraint asserted in advance is
