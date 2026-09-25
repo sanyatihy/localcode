@@ -13,14 +13,15 @@ needs:
 `LOCALCODE_NODE=1`, applies every lever in `prepare.sh` and all three daemons in
 `install.sh`. No lever can be kept or dropped on its own, and nothing turns a lever back on,
 so the node cannot become the owner's workstation without work by hand, which 0056 ruled
-out. The observable result is that one command sets any Mac to either role, and a second
-run reports that nothing changed.
+out. The scripts also offer no interface another repository could call. The observable
+result is that one command, run by hand or from `mac-iac`, sets any Mac to either role, and
+a second run reports that nothing changed.
 
 ## Non-goals
 
 - Apps, dotfiles and macOS preferences that serving does not need. These belong to the
-  owner's private repository, which runs `bootstrap.sh` as one of its steps. This repository
-  is public, and VISION limits it to how the model is launched, served and driven.
+  owner's own `mac-iac` repository, which installs localcode as a dependency. This
+  repository is public, and VISION limits it to how the model is launched, served and driven.
 - A new engine such as nix-darwin or Ansible. The bash scripts already check state before
   acting and are proven on the node, and a rewrite would not change what they do.
 - Renaming `scripts/node/`. README, TECH and seven feature docs cite that path, and
@@ -67,6 +68,16 @@ Some levers are role-specific:
 Both scripts can still be run on their own. The role parser is one function in
 `scripts/lib.sh`, so all three scripts read the same files the same way.
 
+`bootstrap.sh` is also the dependency interface for `mac-iac`. The file it reads comes from
+`SETUP_ENV`, which defaults to `~/.config/localcode/setup.env`. This lets `mac-iac` keep a
+single config and pass its localcode section through, without the owner's settings living
+in two places. The revision comes from `LOCALCODE_REF`, which already exists, so `mac-iac`
+pins the version it installs. With sudo already cached the script runs without prompting.
+It exits 0 when every step applied or was already in place, 1 when a lever did not apply,
+and 2 when it refused to run. Each macOS setting has one owner: a setting that a localcode
+lever names is changed only through that lever, and `mac-iac` never writes it directly. If
+both repositories wrote the same setting, each run would undo the other's change.
+
 Files: `scripts/node/bootstrap.sh`, `scripts/node/prepare.sh`, `scripts/node/install.sh`,
 `scripts/lib.sh`, `scripts/scripts_test.go`, `config/roles/node.env`,
 `config/roles/workstation.env`, `README.md`, `docs/TECH.md`.
@@ -76,7 +87,7 @@ Files: `scripts/node/bootstrap.sh`, `scripts/node/prepare.sh`, `scripts/node/ins
 - [ ] `config/roles/node.env` and `config/roles/workstation.env` set every lever. `scripts/lib.sh` reads `ROLE` and per-lever overrides from `~/.config/localcode/setup.env`, and refuses an unknown lever or a role that leaves a lever out, covered by `scripts_test.go`
 - [ ] Every `prepare.sh` lever reads its state, converges to the role's value in either direction and reports whether it acted. `--check` changes nothing and exits 1 on drift, and on the node as it stands it reports no drift against the node role
 - [ ] `install.sh` installs the daemons the role turns on and boots out and removes the ones it turns off. `LOCALCODE_NODE=1` and `--link-only` are retired in favour of the role
-- [ ] `bootstrap.sh` runs `prepare.sh` and `install.sh` for the role, and a second run reports every step as already in place
+- [ ] `bootstrap.sh` reads the setup file `SETUP_ENV` names, runs `prepare.sh` and `install.sh` for the role without prompting, and exits 0, 1 or 2 as the Design says. A second run reports every step as already in place
 - [ ] The node is converted to the workstation role by `bootstrap.sh`. A second run and `--check` both report no change, and README and TECH describe how to set up a new Mac for either role
 
 ## Log
