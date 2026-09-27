@@ -18,14 +18,14 @@ context it can carry in attended use.
 ## Non-goals
 
 - Deleting the link daemon or the remote-endpoint path. The GB10 (0054) and any future node
-  use them. The workstation role simply turns the link off.
+  use them. The workstation role releases the link daemon (0067).
 - Retiring the laptop's measurements. They remain the record of the M2 Max envelope.
 - Changing `config/node.env`. If the attended ceiling is below its context, the lower value
   goes in the workstation's own `~/.config/localcode/serve.env`, following 0064.
 
 ## Design
 
-The model is served on demand. In the workstation role `SERVE_DAEMON` is off, and the
+The model is served on demand. The workstation role releases `SERVE_DAEMON`, and the
 launcher starts and stops the server for each session, as it did on the laptop. This frees
 the memory whenever the owner is not coding. The launcher serves `config/node.env` with
 `serve.env` applied. The code that merges the two moves out of `scripts/node/serve.sh` into
@@ -36,7 +36,7 @@ The reserve moves into each desk profile of the machine file. A headless node an
 the same hardware keep different amounts back, and one top-level `reserve_gb` cannot hold
 both. The role file names the profile (`DESK_PROFILE`). `cap.sh`, `gpuraise.sh` and
 `rungs.sh` read that profile's reserve. The existing values stay as they are: the laptop's
-8 and the node's headless 6. The GPU cap daemon stays on in the workstation role, with the
+8 and the node's headless 6. The workstation role applies the GPU cap daemon, with the
 reserve of the `attended` profile.
 
 The attended numbers are measured the way the laptop's were, and the laptop's are not

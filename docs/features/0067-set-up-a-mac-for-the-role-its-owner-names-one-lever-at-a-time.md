@@ -1,6 +1,6 @@
 ---
 id: 0067
-title: Set up a Mac for the role its owner names, one lever at a time
+title: Apply or release localcode's own levers by role, callable from another repository
 status: Draft
 created: 2026-09-25
 submitted:
@@ -9,85 +9,91 @@ needs:
 
 ## Problem
 
-`scripts/node/` sets a Mac up as a dedicated node or not at all. A single variable,
-`LOCALCODE_NODE=1`, applies every lever in `prepare.sh` and all three daemons in
-`install.sh`. No lever can be kept or dropped on its own, and nothing turns a lever back on,
-so the node cannot become the owner's workstation without work by hand, which 0056 ruled
-out. The scripts also offer no interface another repository could call. The observable
-result is that one command, run by hand or from `mac-iac`, sets any Mac to either role, and
-a second run reports that nothing changed.
+`scripts/node/` applies every lever in `prepare.sh` and all three daemons in `install.sh`
+behind a single variable, `LOCALCODE_NODE=1`. Nothing can undo them, so the node cannot stop
+being a node without work by hand, which 0056 ruled out. The owner's `mac-iac` repository
+now sets up their Macs and installs localcode as a dependency. For that to work, localcode
+has to manage only what it applied itself, through an interface another repository can
+call. The observable result is that `bootstrap.sh` puts a Mac in the node role or releases
+it, a second run reports that nothing changed, and `--check` exits 0 on a machine that
+matches its role.
 
 ## Non-goals
 
-- Apps, dotfiles and macOS preferences that serving does not need. These belong to the
-  owner's own `mac-iac` repository, which installs localcode as a dependency. This
-  repository is public, and VISION limits it to how the model is launched, served and driven.
-- A new engine such as nix-darwin or Ansible. The bash scripts already check state before
-  acting and are proven on the node, and a rewrite would not change what they do.
-- Renaming `scripts/node/`. README, TECH and seven feature docs cite that path, and
-  renaming it changes nothing else.
+- Setting up a Mac: apps, dotfiles, macOS preferences, and the Command Line Tools and
+  Homebrew as a machine's own tools. `mac-iac` does that. `bootstrap.sh` keeps its existing
+  check-before-install steps for those two, so a reader without `mac-iac` can still
+  reproduce the node. Under `mac-iac` both steps find them already in place.
+- Choosing a desk's preferences for anything a lever touches, such as sleep, Bluetooth,
+  Spotlight or the firewall. A released lever belongs to whoever sets up the desk.
+- A new engine or a rename of `scripts/node/`. Neither changes what the scripts do.
 - What the workstation serves and at which context: 0068.
 
 ## Design
 
-Two committed role files, `config/roles/node.env` and `config/roles/workstation.env`,
-set every lever in `KEY="value"` form. A lever is named after the thing it controls, and its
-value says whether that thing runs: `SPOTLIGHT_INDEXING="off"` on a node and `"on"` on a
-workstation. The daemons are levers too: `LINK_DAEMON`, `GPU_CAP_DAEMON` and `SERVE_DAEMON`.
-The machine's own `~/.config/localcode/setup.env` names `ROLE` and may override any single
-lever, following 0064: the repository holds the defaults and the machine holds its own
-choices. A lever name that neither role file declares is refused, and so is a role file that
-leaves one of the levers out. Either one would otherwise be a setting that silently does
-nothing.
+Each lever has two values. `apply` puts the node's setting in force. `release` undoes what
+localcode applied and then stops managing that setting. Two role files set every lever:
+- `config/roles/node.env` applies all of them.
+- `config/roles/workstation.env` releases every OS lever, the link daemon and the serving
+  daemon, and applies the GPU cap daemon, which 0068 needs.
 
-`ROLE` replaces `LOCALCODE_NODE=1`. A run with no role named refuses and names the file to
-write, so the old gate's protection remains: nothing is applied to a machine by accident.
-`install.sh --link-only` is retired. A machine that wants only the link sets
-`LINK_DAEMON="on"` in its own file.
+`SETUP_ENV` names the machine's own file, which defaults to `~/.config/localcode/setup.env`.
+That file names `ROLE` and may override any single lever, following 0064. A lever name that
+no role declares is refused, and so is a role file that leaves a lever out.
 
-Every lever reads its current state, acts only when that state differs from the role's
-value, and reports that it acted or that the state was already in place. Before this,
-`prepare.sh` re-applied every lever on every run. Levers now converge in both directions.
-Turning a lever back on restores macOS's default: where `prepare.sh` wrote a `defaults`
-key, the key is deleted, not written with the opposite value. A daemon turned off is
-booted out and its plist removed. `--check` reads every lever and daemon without changing
-anything and exits 1 on drift. It is the plan step that IaC tools provide, and it is the
-evidence that a machine matches its role.
+A third value that restores macOS's defaults was rejected. It would make localcode the owner
+of a desk's preferences, which `mac-iac` or the owner set, and each would undo the other's
+changes on every run.
 
-Some levers are role-specific:
-- On a workstation the firewall stays on and in stealth mode, but its allowance list is not
-  managed. On a node the list is replaced with exactly sshd and the server, which would
-  remove what the owner has allowed on their own desk.
-- Remote Login is never turned off from inside an SSH session. The run refuses and names
-  the lever, because the session making the change is the only way in.
-- The idle reading runs only for the node role. It is compared with the machine file's
-  record, and a desk has no record to compare against.
+Release needs to know what localcode applied. `~/.local/state/localcode/levers` records each
+lever when it applies, and a release acts only on a lever recorded there. A second release
+therefore finds nothing to do. A preference the desk's owner set later is never touched,
+because it was never recorded.
 
-`bootstrap.sh` becomes the single command. After the checkout and the build it runs
-`prepare.sh` and `install.sh` for the role, reusing the sudo credential it already holds.
-Both scripts can still be run on their own. The role parser is one function in
-`scripts/lib.sh`, so all three scripts read the same files the same way.
+What each release does is listed per lever in TECH:
+- Where the lever wrote a `defaults` key, the key is deleted.
+- Services localcode disabled are re-enabled.
+- `disablesleep` goes back to 0.
+- A daemon's plist is booted out and removed.
+- The firewall and Remote Login are handed over exactly as they stand. Changing either one
+  on release could lock out the session doing the release, so neither is touched.
 
-`bootstrap.sh` is also the dependency interface for `mac-iac`. The file it reads comes from
-`SETUP_ENV`, which defaults to `~/.config/localcode/setup.env`. This lets `mac-iac` keep a
-single config and pass its localcode section through, without the owner's settings living
-in two places. The revision comes from `LOCALCODE_REF`, which already exists, so `mac-iac`
-pins the version it installs. With sudo already cached the script runs without prompting.
-It exits 0 when every step applied or was already in place, 1 when a lever did not apply,
-and 2 when it refused to run. Each macOS setting has one owner: a setting that a localcode
-lever names is changed only through that lever, and `mac-iac` never writes it directly. If
-both repositories wrote the same setting, each run would undo the other's change.
+Every applied lever reads its state, acts only on a difference, and reports whether it
+acted. `--check` changes nothing and exits 1 on drift. For an applied lever, drift means its
+value is not in force. For a released lever, drift means localcode still records it as
+applied.
+
+`bootstrap.sh` installs its packages from `scripts/node/Brewfile` with `brew bundle`: go,
+python, llama.cpp and `claude-code@latest`. Before this they were a list inside the script.
+The file is the contract with `mac-iac`, whose engine reads it and refuses a module that
+declares the same package, so each package has one owner. The move away from the lagging
+`claude-code` cask stays a step of its own.
+
+The lines `bootstrap.sh` appends to `~/.zprofile` (Homebrew's shellenv and
+`~/.local/bin` on `PATH`) become the lever `SHELL_PROFILE`. `mac-iac` releases it because
+its own profile carries those lines. A profile that `mac-iac` links from its checkout would
+otherwise gain an append on every run.
+
+`ROLE` replaces `LOCALCODE_NODE=1`. A run with no role refuses and names the file to write.
+`install.sh --link-only` is retired, and a machine that wants only the link overrides that
+one lever. After the build, `bootstrap.sh` runs `prepare.sh` and `install.sh` for the role,
+reusing the sudo credential it holds. Both scripts can still be run on their own, and all
+three read the role through one parser in `scripts/lib.sh`.
+
+The interface another repository calls is `bootstrap.sh` with `SETUP_ENV` and
+`LOCALCODE_REF`. With sudo cached it runs without prompting. It exits 0 when every step is in
+place, 1 when a lever did not apply or release, and 2 when it refused.
 
 Files: `scripts/node/bootstrap.sh`, `scripts/node/prepare.sh`, `scripts/node/install.sh`,
-`scripts/lib.sh`, `scripts/scripts_test.go`, `config/roles/node.env`,
-`config/roles/workstation.env`, `README.md`, `docs/TECH.md`.
+`scripts/node/Brewfile`, `scripts/lib.sh`, `scripts/scripts_test.go`,
+`config/roles/node.env`, `config/roles/workstation.env`, `README.md`, `docs/TECH.md`.
 
 ## Tasks
 
-- [ ] `config/roles/node.env` and `config/roles/workstation.env` set every lever. `scripts/lib.sh` reads `ROLE` and per-lever overrides from `~/.config/localcode/setup.env`, and refuses an unknown lever or a role that leaves a lever out, covered by `scripts_test.go`
-- [ ] Every `prepare.sh` lever reads its state, converges to the role's value in either direction and reports whether it acted. `--check` changes nothing and exits 1 on drift, and on the node as it stands it reports no drift against the node role
-- [ ] `install.sh` installs the daemons the role turns on and boots out and removes the ones it turns off. `LOCALCODE_NODE=1` and `--link-only` are retired in favour of the role
-- [ ] `bootstrap.sh` reads the setup file `SETUP_ENV` names, runs `prepare.sh` and `install.sh` for the role without prompting, and exits 0, 1 or 2 as the Design says. A second run reports every step as already in place
-- [ ] The node is converted to the workstation role by `bootstrap.sh`. A second run and `--check` both report no change, and README and TECH describe how to set up a new Mac for either role
+- [ ] `config/roles/node.env` and `config/roles/workstation.env` set every lever to apply or release. `scripts/lib.sh` reads `ROLE` and per-lever overrides from the file `SETUP_ENV` names, and refuses an unknown lever or a role that leaves one out, covered by `scripts_test.go`
+- [ ] Every `prepare.sh` lever records what it applies and releases only what it recorded, as TECH's per-lever table says. `--check` changes nothing and exits 1 on drift, and on the node as it stands it reports no drift against the node role
+- [ ] `install.sh` installs the daemons the role applies and boots out and removes the ones it releases. `LOCALCODE_NODE=1` and `--link-only` are retired in favour of the role
+- [ ] `bootstrap.sh` installs from `scripts/node/Brewfile`, touches `~/.zprofile` only while `SHELL_PROFILE` is applied, runs `prepare.sh` and `install.sh` for the role without prompting, and exits 0, 1 or 2 as the Design says. A second run reports every step as already in place
+- [ ] The node is released to the workstation role by `bootstrap.sh`. A second run and `--check` report no change, and README and TECH describe the two roles and the interface
 
 ## Log

@@ -106,8 +106,9 @@ hardware, which is why every number here is committed rather than remembered.
   limits live in its own `config/machine*.json` rather than in code. No config may make a
   Mac unusable for the editor and browser its developer is running while the agent works;
   the GB10 and a Mac kept only to serve are headless, and the rule does not reach them.
-  A Mac's role decides which it is: the same machine may switch between node and desk,
-  set up from one command and a config naming each lever, and a rerun changes nothing.
+  A Mac's role decides which it is: the same machine may switch between node and desk.
+  localcode applies its own levers for a node and releases them for a desk, and setting
+  up the rest of a desk is not this project's.
 - **The job is to find which constraint binds, not to assume one.** Memory, ingest time,
   quality, and whatever else emerges are candidates, and which one binds depends on the
   envelope — model, quant, context, and the machine. A constraint asserted in advance is
